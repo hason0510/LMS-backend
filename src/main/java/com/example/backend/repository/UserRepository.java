@@ -9,16 +9,23 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecificationExecutor<User> {
-    User findByGmail(String gmail);
+    Optional<User> findFirstByGmailOrderByIdAsc(String gmail);
 
-    User findByUserName(String userName);
+    Optional<User> findFirstByUserNameOrderByIdAsc(String userName);
 
-    User findByUserNameAndRefreshToken(String userName, String refreshToken);
+    Optional<User> findFirstByUserNameAndRefreshTokenOrderByIdAsc(String userName, String refreshToken);
 
-    User findByStudentNumber(String studentNumber);
+    Optional<User> findFirstByStudentNumberOrderByIdAsc(String studentNumber);
+
+    boolean existsByGmail(String gmail);
+
+    boolean existsByUserName(String userName);
+
+    boolean existsByStudentNumber(String studentNumber);
 
     @Query("""
         SELECT u

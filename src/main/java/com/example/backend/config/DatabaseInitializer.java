@@ -28,6 +28,12 @@ public class DatabaseInitializer implements CommandLineRunner {
             Role teacher = new Role(); teacher.setRoleName(RoleType.TEACHER);
             roleRepository.saveAll(List.of(admin, user, teacher));
         }
+        Role adminRole = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.ADMIN)
+                .orElseThrow(() -> new IllegalStateException("Admin role not found"));
+        Role teacherRole = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.TEACHER)
+                .orElseThrow(() -> new IllegalStateException("Teacher role not found"));
+        Role studentRole = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.STUDENT)
+                .orElseThrow(() -> new IllegalStateException("Student role not found"));
         if (userRepository.count() == 0) {
             User admin = new User();
             admin.setUserName("admin");
@@ -37,7 +43,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             admin.setStudentNumber("20052015");
             admin.setAddress("Hà Nội");
             admin.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            admin.setRole(roleRepository.findByRoleName(RoleType.ADMIN));
+            admin.setRole(adminRole);
             admin.setVerified(true);
             User teacher1 = new User();
             teacher1.setUserName("teacher1");
@@ -47,7 +53,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             teacher1.setStudentNumber("20050123");
             teacher1.setAddress("Hà Nội");
             teacher1.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            teacher1.setRole(roleRepository.findByRoleName(RoleType.TEACHER));
+            teacher1.setRole(teacherRole);
             teacher1.setVerified(true);
             User teacher2 = new User();
             teacher2.setUserName("teacher2");
@@ -57,7 +63,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             teacher2.setStudentNumber("20225174");
             teacher2.setAddress("Hà Nội");
             teacher2.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            teacher2.setRole(roleRepository.findByRoleName(RoleType.TEACHER));
+            teacher2.setRole(teacherRole);
             teacher2.setVerified(true);
             User student0 = new User();
             student0.setUserName("student");
@@ -66,8 +72,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             student0.setPhoneNumber("0962644908");
             student0.setStudentNumber("20220123");
             student0.setAddress("Hà Nội");
-            student0.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            student0.setRole(roleRepository.findByRoleName(RoleType.STUDENT));
+            student0.setPassword(new BCryptPasswordEncoder().encode("123"));
+            student0.setRole(studentRole);
             student0.setVerified(true);
             User student1 = new User();
             student1.setUserName("hayson");
@@ -76,8 +82,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             student1.setPhoneNumber("0962644907");
             student1.setStudentNumber("20225388");
             student1.setAddress("Hà Nội");
-            student1.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            student1.setRole(roleRepository.findByRoleName(RoleType.STUDENT));
+            student1.setPassword(new BCryptPasswordEncoder().encode("123"));
+            student1.setRole(studentRole);
             student1.setVerified(true);
             User student2 = new User();
             student2.setUserName("quando");
@@ -86,8 +92,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             student2.setPhoneNumber("0123456799");
             student2.setStudentNumber("20225384");
             student2.setAddress("Hà Nội");
-            student2.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            student2.setRole(roleRepository.findByRoleName(RoleType.STUDENT));
+            student2.setPassword(new BCryptPasswordEncoder().encode("123"));
+            student2.setRole(studentRole);
             student2.setVerified(true);
             User student3 = new User();
             student3.setUserName("thuannguyen123");
@@ -96,8 +102,8 @@ public class DatabaseInitializer implements CommandLineRunner {
             student3.setPhoneNumber("0365373464");
             student3.setStudentNumber("20225413");
             student3.setAddress("Hà Nội");
-            student3.setPassword(new BCryptPasswordEncoder().encode("123456"));
-            student3.setRole(roleRepository.findByRoleName(RoleType.STUDENT));
+            student3.setPassword(new BCryptPasswordEncoder().encode("123"));
+            student3.setRole(studentRole);
             student3.setVerified(true);
             userRepository.saveAll(List.of(admin, teacher1, teacher2, student0, student1, student2, student3));
         }

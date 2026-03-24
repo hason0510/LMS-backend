@@ -83,10 +83,8 @@ public class RoleServiceImpl implements RoleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + roleId));
         role.getPermissions().forEach(permission -> permission.getRoles().remove(role));
         role.getUsers().forEach(user -> {
-            Role defaultRole = roleRepository.findByRoleName(RoleType.STUDENT);
-            if(defaultRole == null) {
-                throw new ResourceNotFoundException("Role with id " + defaultRole.getRoleID() + " not found");
-            }
+            Role defaultRole = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.STUDENT)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role not found with name: STUDENT"));
             user.setRole(defaultRole);
             userRepository.save(user);
         });
@@ -116,7 +114,8 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public void updateUserRole(UserRoleRequest request){
         if(roleRepository.existsByRoleName(RoleType.valueOf(request.getRoleName()))){
-            Role roleUpdated = roleRepository.findByRoleName(RoleType.valueOf(request.getRoleName()));
+            Role roleUpdated = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.valueOf(request.getRoleName()))
+                    .orElseThrow(() -> new ResourceNotFoundException("Role not found with name: " + request.getRoleName()));
             request.getUserIds().stream()
                     .map(userId -> userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId)))
                     .forEach(user -> {

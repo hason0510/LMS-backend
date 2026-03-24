@@ -32,13 +32,13 @@ public class User extends BaseEntity {
     private String phoneNumber;
     @Column(name = "birthday")
     private String birthday;
-    @Column(name = "student_number")
+    @Column(name = "student_number", unique = true)
     private String studentNumber;
     @Column(name = "address")
     private String address;
     @Column(name = "refresh_token", columnDefinition = "MEDIUMTEXT")
     private String refreshToken;
-    @Column(name = "gmail")
+    @Column(name = "gmail", unique = true)
     private String gmail;
     @Column(name = "is_verified", nullable = false)
     private boolean isVerified = false;

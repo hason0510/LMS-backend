@@ -11,6 +11,7 @@ import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.user.UserInfoResponse;
 import com.example.backend.dto.response.user.UserViewResponse;
 import com.example.backend.entity.Otp;
+import com.example.backend.entity.Role;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
@@ -61,28 +62,21 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User handleGetUserByGmail(String email) {
-        User user = userRepository.findByGmail(email); // trả về User, có thể null
-        if (user == null) {
-            throw new ResourceNotFoundException("Người dùng không tồn tại");
-        }
-        return user;
+        return userRepository.findFirstByGmailOrderByIdAsc(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Nguoi dung khong ton tai"));
     }
 
     @Override
     public User handleGetUserByUserName(String username) {
-        User user = userRepository.findByUserName(username); // trả về User, có thể null
-        if (user == null) {
-            throw new ResourceNotFoundException("Người dùng không tồn tại");
-        }
-        return user;
+        return userRepository.findFirstByUserNameOrderByIdAsc(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Nguoi dung khong ton tai"));
     }
-
 
     @Override
     public boolean isCurrentUser(Integer userId) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Jwt jwt) {
-            Integer currentUserId = Integer.valueOf(jwt.getSubject()); // sub = userId
+            Integer currentUserId = Integer.valueOf(jwt.getSubject());
             return userId.equals(currentUserId);
         }
         return false;
@@ -92,23 +86,22 @@ public class UserServiceImpl implements UserService {
     public User getCurrentUser() {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Jwt jwt) {
-            Integer currentUserId = Integer.valueOf(jwt.getSubject()); // sub = userId
+            Integer currentUserId = Integer.valueOf(jwt.getSubject());
             return userRepository.findById(currentUserId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         }
         return null;
     }
 
-
     @Override
     public User handleGetUserByUserNameAndRefreshToken(String userName, String refreshToken) {
-        return userRepository.findByUserNameAndRefreshToken(userName, refreshToken);
+        return userRepository.findFirstByUserNameAndRefreshTokenOrderByIdAsc(userName, refreshToken).orElse(null);
     }
 
     @Override
     public void updateUserToken(String refreshToken, String userName) {
         User currentUser = handleGetUserByUserName(userName);
-        if(currentUser != null) {
+        if (currentUser != null) {
             currentUser.setRefreshToken(refreshToken);
             userRepository.save(currentUser);
         }
@@ -117,10 +110,10 @@ public class UserServiceImpl implements UserService {
     @Override
     public void deleteUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
-        if(user == null){
+        if (user == null) {
             throw new ResourceNotFoundException("User not found");
         }
-        if(isCurrentUser(id) || getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
+        if (isCurrentUser(id) || getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
             userRepository.deleteById(id);
         }
     }
@@ -132,47 +125,54 @@ public class UserServiceImpl implements UserService {
                 .password("123")
                 .fullName(username)
                 .gmail(email)
-                .role(roleRepository.findByRoleName(RoleType.STUDENT))
+                .role(getRequiredRole(RoleType.STUDENT))
                 .isVerified(true)
                 .build();
         return userRepository.save(googleUser);
     }
 
-
     @Override
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
 
-        if(!isCurrentUser(id) && !getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN) ){
+        if (!isCurrentUser(id) && !getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
             throw new UnauthorizedException("You have no permission");
         }
-        if(updatedUser == null){
+        if (updatedUser == null) {
             throw new ResourceNotFoundException("User not found");
         }
 
         if (request.getUserName() != null && !request.getUserName().equals(updatedUser.getUserName())) {
-            if(userRepository.findByUserName(request.getUserName()) != null){
-                throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
-            } else updatedUser.setUserName(request.getUserName());
-        } else if(request.getUserName() != null){
+            if (userRepository.existsByUserName(request.getUserName())) {
+                throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+            } else {
+                updatedUser.setUserName(request.getUserName());
+            }
+        } else if (request.getUserName() != null) {
             updatedUser.setUserName(request.getUserName());
-        } else{
+        } else {
             updatedUser.setUserName(updatedUser.getUserName());
         }
 
-        if(request.getStudentNumber() != null && !request.getStudentNumber().equals(updatedUser.getStudentNumber())) {
-            if(userRepository.findByStudentNumber(request.getStudentNumber()) != null){
-                throw new BusinessException("Mã số này đã được sử dụng");
-            } else updatedUser.setStudentNumber(request.getStudentNumber());
-        } else if(request.getStudentNumber() != null){
+        if (request.getStudentNumber() != null && !request.getStudentNumber().equals(updatedUser.getStudentNumber())) {
+            if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
+                throw new BusinessException("Ma so nay da duoc su dung");
+            } else {
+                updatedUser.setStudentNumber(request.getStudentNumber());
+            }
+        } else if (request.getStudentNumber() != null) {
             updatedUser.setStudentNumber(request.getStudentNumber());
-        } else updatedUser.setStudentNumber(updatedUser.getStudentNumber());
+        } else {
+            updatedUser.setStudentNumber(updatedUser.getStudentNumber());
+        }
 
-        if(request.getGmail() != null && !request.getGmail().equals(updatedUser.getGmail())) {
-            if(userRepository.findByGmail(request.getGmail()) != null){
-                throw new BusinessException("Gmail này đã được sử dụng");
-            } else updatedUser.setGmail(request.getGmail());
-        } else if(request.getGmail() != null){
+        if (request.getGmail() != null && !request.getGmail().equals(updatedUser.getGmail())) {
+            if (userRepository.existsByGmail(request.getGmail())) {
+                throw new BusinessException("Gmail nay da duoc su dung");
+            } else {
+                updatedUser.setGmail(request.getGmail());
+            }
+        } else if (request.getGmail() != null) {
             updatedUser.setGmail(request.getGmail());
         }
 
@@ -184,13 +184,12 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getPhoneNumber() != null) {
             updatedUser.setPhoneNumber(request.getPhoneNumber());
-        } else updatedUser.setPhoneNumber(updatedUser.getPhoneNumber());
-        
+        } else {
+            updatedUser.setPhoneNumber(updatedUser.getPhoneNumber());
+        }
         if (request.getFullName() != null) {
             updatedUser.setFullName(request.getFullName());
         }
-        
-        // Update teacher-specific fields
         if (request.getWorkPlace() != null) {
             updatedUser.setWorkPlace(request.getWorkPlace());
         }
@@ -209,9 +208,9 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Object getUserById(Integer id){
+    public Object getUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
-        if(user == null){
+        if (user == null) {
             throw new ResourceNotFoundException("User not found");
         }
         return convertUserInfoToDTO(user);
@@ -223,7 +222,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         FileUploadUtil.assertAllowed(file, "image");
         final String cloudinaryImageId = avatarUser.getCloudinaryImageId();
-        if(StringUtils.hasText(cloudinaryImageId)) {
+        if (StringUtils.hasText(cloudinaryImageId)) {
             cloudinaryService.deleteFile(cloudinaryImageId, ResourceType.IMAGE);
         }
         final String fileName = FileUploadUtil.getFileName(file.getOriginalFilename());
@@ -238,38 +237,42 @@ public class UserServiceImpl implements UserService {
     public PageResponse<UserInfoResponse> getUserPage(Pageable pageable) {
         Page<User> userPage = userRepository.findAll(pageable);
         Page<UserInfoResponse> userResponse = userPage.map(this::convertUserInfoToDTO);
-        PageResponse<UserInfoResponse> pageDTO = new PageResponse<>(
+        return new PageResponse<>(
                 userResponse.getNumber() + 1,
                 userResponse.getTotalPages(),
                 userResponse.getNumberOfElements(),
                 userResponse.getContent()
         );
-        return pageDTO;
     }
 
     @Override
-    public UserInfoResponse registerUser(RegisterRequest request){
+    public UserInfoResponse registerUser(RegisterRequest request) {
         User user = new User();
-        if(userRepository.findByUserName(request.getUserName()) != null){
-            throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
-        } else user.setUserName(request.getUserName());
+        if (userRepository.existsByUserName(request.getUserName())) {
+            throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+        } else {
+            user.setUserName(request.getUserName());
+        }
 
-        if(userRepository.findByGmail(request.getGmail()) != null){
-            throw new BusinessException("Gmail này đã được sử dụng");
-        } else user.setGmail(request.getGmail());
+        if (userRepository.existsByGmail(request.getGmail())) {
+            throw new BusinessException("Gmail nay da duoc su dung");
+        } else {
+            user.setGmail(request.getGmail());
+        }
 
-        if(userRepository.findByStudentNumber(request.getStudentNumber()) != null){
-            throw new BusinessException("Mã số này đã được sử dụng");
-        } else user.setStudentNumber(request.getStudentNumber());
+        if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
+            throw new BusinessException("Ma so nay da duoc su dung");
+        } else {
+            user.setStudentNumber(request.getStudentNumber());
+        }
 
-        user.setRole(roleRepository.findByRoleName(RoleType.valueOf(request.getRoleName())));
+        user.setRole(getRequiredRole(RoleType.valueOf(request.getRoleName())));
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setPhoneNumber(request.getPhoneNumber());
         user.setAddress(request.getAddress());
         user.setFullName(request.getFullName());
         user.setVerified(false);
-        
-        // Set teacher-specific fields if provided
+
         if (request.getWorkPlace() != null) {
             user.setWorkPlace(request.getWorkPlace());
         }
@@ -282,40 +285,43 @@ public class UserServiceImpl implements UserService {
         if (request.getBio() != null) {
             user.setBio(request.getBio());
         }
-        
+
         userRepository.save(user);
         return convertUserInfoToDTO(user);
     }
 
     @Override
-    public UserInfoResponse createUser(UserCreateRequest request){
+    public UserInfoResponse createUser(UserCreateRequest request) {
         User user = new User();
-        if(userRepository.findByUserName(request.getUserName()) != null){
-            throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
-        } else user.setUserName(request.getUserName());
+        if (userRepository.existsByUserName(request.getUserName())) {
+            throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+        } else {
+            user.setUserName(request.getUserName());
+        }
 
-        if(userRepository.findByGmail(request.getGmail()) != null){
-            throw new BusinessException("Gmail này đã được sử dụng");
-        } else user.setGmail(request.getGmail());
+        if (userRepository.existsByGmail(request.getGmail())) {
+            throw new BusinessException("Gmail nay da duoc su dung");
+        } else {
+            user.setGmail(request.getGmail());
+        }
 
-        if(userRepository.findByStudentNumber(request.getStudentNumber()) != null){
-            throw new BusinessException("Mã số này đã được sử dụng");
-        } else user.setStudentNumber(request.getStudentNumber());
+        if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
+            throw new BusinessException("Ma so nay da duoc su dung");
+        } else {
+            user.setStudentNumber(request.getStudentNumber());
+        }
 
-        // Generate random password
         String generatedPassword = generateRandomPassword();
-        
-        user.setRole(roleRepository.findByRoleName(RoleType.valueOf(request.getRoleName())));
+
+        user.setRole(getRequiredRole(RoleType.valueOf(request.getRoleName())));
         user.setPassword(passwordEncoder.encode(generatedPassword));
         user.setPhoneNumber(request.getPhoneNumber());
         user.setAddress(request.getAddress());
         user.setFullName(request.getFullName());
         user.setVerified(true);
         userRepository.save(user);
-        
-        // Send password to email
+
         sendPasswordEmail(user.getGmail(), generatedPassword);
-        
         return convertUserInfoToDTO(user);
     }
 
@@ -362,46 +368,41 @@ public class UserServiceImpl implements UserService {
         otpService.sendOtpEmail(user.getGmail(), otp.getCode());
     }
 
-    /**
-     * Generate a random password with 12 characters
-     * Contains uppercase, lowercase, digits, and special characters
-     */
     private String generateRandomPassword() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         StringBuilder password = new StringBuilder();
         Random random = new Random();
-        
         for (int i = 0; i < 12; i++) {
             password.append(chars.charAt(random.nextInt(chars.length())));
         }
-        
         return password.toString();
     }
 
-    /**
-     * Send password to user email
-     */
+    private Role getRequiredRole(RoleType roleType) {
+        return roleRepository.findFirstByRoleNameOrderByRoleIDAsc(roleType)
+                .orElseThrow(() -> new ResourceNotFoundException("Role not found with name: " + roleType.name()));
+    }
+
     private void sendPasswordEmail(String toGmail, String password) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromGmail);
             message.setTo(toGmail);
-            message.setSubject("Thông tin tài khoản của bạn");
-            message.setText("Chào bạn,\n\n" +
-                    "Tài khoản của bạn đã được tạo thành công.\n" +
-                    "Mật khẩu tạm thời của bạn là: " + password + "\n\n" +
-                    "Vui lòng đăng nhập và đổi mật khẩu khi lần đầu sử dụng.\n\n" +
-                    "Trân trọng,\n" +
-                    "Hệ thống LMS");
+            message.setSubject("Thong tin tai khoan cua ban");
+            message.setText("Chao ban,\n\n" +
+                    "Tai khoan cua ban da duoc tao thanh cong.\n" +
+                    "Mat khau tam thoi cua ban la: " + password + "\n\n" +
+                    "Vui long dang nhap va doi mat khau khi lan dau su dung.\n\n" +
+                    "Tran trong,\n" +
+                    "He thong LMS");
             mailSender.send(message);
         } catch (Exception e) {
-            // Log error but don't fail the user creation if email sending fails
             System.err.println("Failed to send password email to " + toGmail + ": " + e.getMessage());
         }
     }
 
     @Override
-    public UserInfoResponse convertUserInfoToDTO(User user){
+    public UserInfoResponse convertUserInfoToDTO(User user) {
         UserInfoResponse userDTO = new UserInfoResponse();
         userDTO.setId(user.getId());
         userDTO.setUserName(user.getUserName());
@@ -422,7 +423,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserViewResponse convertUserViewToDTO(User user){
+    public UserViewResponse convertUserViewToDTO(User user) {
         UserViewResponse userDTO = new UserViewResponse();
         userDTO.setId(user.getId());
         userDTO.setUserName(user.getUserName());
@@ -437,7 +438,4 @@ public class UserServiceImpl implements UserService {
         userDTO.setBio(user.getBio());
         return userDTO;
     }
-
-
-
 }
