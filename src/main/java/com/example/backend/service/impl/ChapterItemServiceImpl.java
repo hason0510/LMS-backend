@@ -42,11 +42,9 @@ public class ChapterItemServiceImpl implements ChapterItemService {
     @Transactional
     @Override
     public void updateOrder(Integer chapterId, List<Integer> orderedItemIds) {
-        // 1. Lấy tất cả item hiện có trong DB thuộc chapter này
         List<ChapterItem> items = chapterItemRepository.findByChapter_Id(chapterId);
 
         // 2. Tạo Map để truy xuất nhanh item theo ID
-        // Key: ID, Value: ChapterItem Entity
         Map<Integer, ChapterItem> itemMap = items.stream()
                 .collect(Collectors.toMap(ChapterItem::getId, Function.identity()));
 
@@ -54,7 +52,6 @@ public class ChapterItemServiceImpl implements ChapterItemService {
         for (int i = 0; i < orderedItemIds.size(); i++) {
             Integer itemId = orderedItemIds.get(i);
             ChapterItem item = itemMap.get(itemId);
-
             if (item != null) {
                 // Cập nhật orderIndex = vị trí trong mảng + 1
                 item.setOrderIndex(i + 1);
@@ -65,25 +62,19 @@ public class ChapterItemServiceImpl implements ChapterItemService {
 
     @Override
     public List<ChapterItemResponse> getItemsByChapterForStudent(Integer chapterId) {
-        // 1. Lấy User hiện tại
         User currentUser = userService.getCurrentUser();
-
         Chapter chapter = chapterRepository.findById(chapterId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chương!"));
-
         if(!enrollmentRepository.existsByStudent_IdAndCourse_IdAndApprovalStatus(
                 currentUser.getId(), chapter.getCourse().getId(), EnrollmentStatus.APPROVED)){
             throw new UnauthorizedException("Bạn không nằm trong khóa học này!");
         }
-        // 2. Lấy danh sách ID bài đã học xong (Query mới thêm)
         List<Integer> completedIds = progressRepository.findCompletedItemIdsByUserAndChapter(
                 currentUser.getId(),
                 chapterId
         );
-        // 3. Lấy danh sách Items từ DB (Logic cũ)
         List<ChapterItem> items = chapterItemRepository.findByChapter_IdOrderByOrderIndexAsc(chapterId);
         if (items.isEmpty()) return new ArrayList<>();
 
-        // 4. Batch query để lấy chi tiết Lesson/Quiz (Logic cũ)
         List<Integer> lessonIds = items.stream().filter(i -> i.getType() == ItemType.LESSON).map(ChapterItem::getRefId).toList();
         List<Integer> quizIds = items.stream().filter(i -> i.getType() == ItemType.QUIZ).map(ChapterItem::getRefId).toList();
 
@@ -92,7 +83,7 @@ public class ChapterItemServiceImpl implements ChapterItemService {
 
         Map<Integer, Quiz> quizMap = quizRepository.findAllById(quizIds).stream()
                 .collect(Collectors.toMap(Quiz::getId, Function.identity()));
-        // 5. Map sang DTO và set isCompleted
+
         return items.stream().map(ci -> {
             Object detail = null;
             if (ci.getType() == ItemType.LESSON) {
@@ -103,7 +94,7 @@ public class ChapterItemServiceImpl implements ChapterItemService {
                 Quiz quiz = quizMap.get(ci.getRefId());
                 if (quiz != null) detail = quizService.convertQuizToDTO(quiz);
             }
-            // --- ĐOẠN KHÁC BIỆT ---
+
             boolean isCompleted = completedIds.contains(ci.getId());
             return buildResponseForStudent(ci, detail, isCompleted);
         }).toList();

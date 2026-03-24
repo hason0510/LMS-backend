@@ -10,11 +10,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 public class BackendApplication {
 
     public static void main(String[] args) {
-        // Load Dotenv của bạn
-        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-        dotenv.entries().forEach(entry -> {
-            System.setProperty(entry.getKey(), entry.getValue());
-        });
+
+        String profile = System.getenv("SPRING_PROFILES_ACTIVE");
+        if (profile == null || profile.equals("dev")) {
+            Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+            dotenv.entries().forEach(entry -> {
+                System.setProperty(entry.getKey(), entry.getValue());
+            });
+        }
 
         SpringApplication.run(BackendApplication.class, args);
 
