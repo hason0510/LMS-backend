@@ -4,12 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="commit">
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/db-forest-config.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/db-forest-config.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dbnavigator.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dbnavigator.xml" afterDir="false" />
+    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="change properties">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" afterDir="false" />
@@ -18,8 +14,7 @@
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" afterDir="false" />
@@ -160,7 +155,7 @@
       <workItem from="1774365633535" duration="4226000" />
       <workItem from="1774419559405" duration="6662000" />
       <workItem from="1774450776343" duration="5567000" />
-      <workItem from="1774496179675" duration="1565000" />
+      <workItem from="1774496179675" duration="3527000" />
     </task>
     <task id="LOCAL-00001" summary="fix bug ko tạo được STUDENT">
       <option name="closed" value="true" />
@@ -178,7 +173,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774367488541</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="change properties">
+      <option name="closed" value="true" />
+      <created>1774498494515</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1774498494515</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -187,7 +190,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="fix bug ko tạo được STUDENT" />
     <MESSAGE value="commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="commit" />
+    <MESSAGE value="change properties" />
+    <option name="LAST_COMMIT_MESSAGE" value="change properties" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
