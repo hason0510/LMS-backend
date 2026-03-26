@@ -13,11 +13,11 @@
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="db_lms@lms-20252-abetterman0510-ee7b.c.aivencloud.com" uuid="125ead1a-21b3-4477-9e9a-ef311f2cd4ec">
+    <data-source source="LOCAL" name="defaultdb@lms-20252-abetterman0510-ee7b.c.aivencloud.com" uuid="6a37ecc8-0931-4163-ab90-35ca862a40ab">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://lms-20252-abetterman0510-ee7b.c.aivencloud.com:24222/db_lms</jdbc-url>
+      <jdbc-url>jdbc:mysql://lms-20252-abetterman0510-ee7b.c.aivencloud.com:24222/defaultdb</jdbc-url>
       <jdbc-additional-properties>
         <property name="com.intellij.clouds.kubernetes.db.host.port" />
         <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />

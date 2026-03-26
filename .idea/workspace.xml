@@ -4,19 +4,36 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="fix bug ko tạo được STUDENT">
+    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="commit">
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/db-forest-config.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/db-forest-config.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dbnavigator.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dbnavigator.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/BackendApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/BackendApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/ChapterItemServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/ChapterItemServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Quiz.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Quiz.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizAttempt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizAttempt.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-dev.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-dev.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application-prod.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application-prod.properties" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/config/DatabaseInitializer.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/config/DatabaseInitializer.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Meeting.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Meeting.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Quiz.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Quiz.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt$QuizAttemptBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt$QuizAttemptBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizQuestion.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizQuestion.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress$StudentChapterItemProgressBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress$StudentChapterItemProgressBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User$UserBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User$UserBuilder.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/ChapterItemServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/ChapterItemServiceImpl.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/RoleServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/RoleServiceImpl.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/UserServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/UserServiceImpl.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,7 +41,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="231" />
+    <option name="cachedIndexableFilesCount" value="258" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -93,7 +110,7 @@
     &quot;project.structure.last.edited&quot;: &quot;Project&quot;,
     &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
     &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.LLMThirdPartyAiProvidersConfigurable&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settings.ide.settings.uml&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
@@ -140,7 +157,10 @@
       <workItem from="1774278388113" duration="1762000" />
       <workItem from="1774316454942" duration="5740000" />
       <workItem from="1774325664568" duration="13163000" />
-      <workItem from="1774365633535" duration="1578000" />
+      <workItem from="1774365633535" duration="4226000" />
+      <workItem from="1774419559405" duration="6662000" />
+      <workItem from="1774450776343" duration="5567000" />
+      <workItem from="1774496179675" duration="1565000" />
     </task>
     <task id="LOCAL-00001" summary="fix bug ko tạo được STUDENT">
       <option name="closed" value="true" />
@@ -150,7 +170,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774340746187</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="commit">
+      <option name="closed" value="true" />
+      <created>1774367488541</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1774367488541</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -158,7 +186,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="fix bug ko tạo được STUDENT" />
-    <option name="LAST_COMMIT_MESSAGE" value="fix bug ko tạo được STUDENT" />
+    <MESSAGE value="commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
