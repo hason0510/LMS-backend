@@ -42,4 +42,8 @@ public class Assignment extends BaseEntity {
     @Column(name = "allow_late_submission", nullable = false)
     private boolean allowLateSubmission = false;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_section_id")
+    private ClassSection classSection;
+
 }

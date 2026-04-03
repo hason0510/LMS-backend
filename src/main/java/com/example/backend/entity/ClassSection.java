@@ -79,6 +79,4 @@ public class ClassSection extends BaseEntity {
     @OneToMany(mappedBy = "classSection")
     private List<Quiz> quizzes;
 
-    @OneToMany(mappedBy = "classSection")
-    private List<Assignment> assignments;
 }
