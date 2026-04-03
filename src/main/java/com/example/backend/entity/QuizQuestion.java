@@ -30,6 +30,10 @@ public class QuizQuestion extends BaseEntity {
     @JoinColumn(name = "quiz_id")
     private Quiz quiz;
 
+    @ManyToOne
+    @JoinColumn(name = "source_bank_question_id")
+    private BankQuestion sourceBankQuestion;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private QuestionType type;

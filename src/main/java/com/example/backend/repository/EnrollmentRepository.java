@@ -26,9 +26,20 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     Enrollment findByStudent_IdAndCourse_IdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
 
+    Enrollment findByStudent_IdAndClassSection_Id(Integer studentId, Integer classSectionId);
+
+    Enrollment findByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
+
     boolean existsByStudent_IdAndCourse_IdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
 
+    boolean existsByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
+
     Page<Enrollment> findByStudent_IdAndApprovalStatus(Integer studentId, EnrollmentStatus approvalStatus, Pageable pageable);
+
+    Page<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus, Pageable pageable);
+
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED'")
+    Long countApprovedEnrollmentsByClassSectionId(@Param("classSectionId") Integer classSectionId);
 
     @Query("SELECT e FROM Enrollment e WHERE e.course.teacher.id = :teacherId")
     Page<Enrollment> findByTeacherId(@Param("teacherId") Integer teacherId, Pageable pageable);

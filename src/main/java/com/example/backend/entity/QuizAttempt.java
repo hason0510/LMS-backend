@@ -48,6 +48,10 @@ public class QuizAttempt extends BaseEntity {
     @JoinColumn(name = "chapter_item_id")
     private ChapterItem chapterItem;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_content_item_id")
+    private ClassContentItem classContentItem;
+
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
     List<QuizAttemptAnswer> attemptAnswers;
 

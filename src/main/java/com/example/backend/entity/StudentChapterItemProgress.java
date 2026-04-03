@@ -23,6 +23,10 @@ public class StudentChapterItemProgress {
     @ManyToOne
     private ChapterItem chapterItem;
 
+    @ManyToOne
+    @JoinColumn(name = "class_content_item_id")
+    private ClassContentItem classContentItem;
+
     @Column(name = "is_completed")
     private Boolean isCompleted;
 

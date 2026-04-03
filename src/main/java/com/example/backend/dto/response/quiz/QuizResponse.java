@@ -18,5 +18,8 @@ public class QuizResponse {
     private Integer maxAttempts;
     private LocalDateTime availableFrom;
     private LocalDateTime availableUntil;
+    private Integer classSectionId;
+    private Integer classContentItemId;
+    private List<QuizBankSourceResponse> bankSources;
     private List<QuizQuestionResponse> questions;
 }

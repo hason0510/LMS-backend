@@ -57,6 +57,14 @@ public class EnrollmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Operation(summary = "Đăng ký tham gia class section mới")
+    @PreAuthorize("hasRole('STUDENT')")
+    @PostMapping("/class-sections/{classSectionId}/enroll")
+    public ResponseEntity<EnrollmentResponse> enrollClassSection(@PathVariable Integer classSectionId) {
+        EnrollmentResponse response = enrollmentService.enrollClassSection(classSectionId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
 
     @Operation(summary = "Hiển thị danh sách đánh giá một khóa học cụ thể")
     @PreAuthorize("isAuthenticated()")
@@ -94,10 +102,25 @@ public class EnrollmentController {
         return ResponseEntity.ok().build();
     }
 
+    @Operation(summary = "Đánh dấu hoàn thành content item mới")
+    @PreAuthorize("hasRole('STUDENT')")
+    @PostMapping("/class-content-items/{classContentItemId}/complete")
+    public ResponseEntity<Void> completeClassContentItem(@PathVariable Integer classContentItemId) {
+        enrollmentService.completeClassContentItem(classContentItemId);
+        return ResponseEntity.ok().build();
+    }
+
     @PreAuthorize("hasRole('STUDENT')")
     @GetMapping("/my-progress/{courseId}")
     public ResponseEntity<EnrollmentResponse> getCurrentUserProgressByCourse(@PathVariable Integer courseId){
         EnrollmentResponse response =  enrollmentService.getCurrentUserProgressByCourse(courseId);
+        return ResponseEntity.ok().body(response);
+    }
+
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/my-progress/class-sections/{classSectionId}")
+    public ResponseEntity<EnrollmentResponse> getCurrentUserProgressByClassSection(@PathVariable Integer classSectionId) {
+        EnrollmentResponse response = enrollmentService.getCurrentUserProgressByClassSection(classSectionId);
         return ResponseEntity.ok().body(response);
     }
 

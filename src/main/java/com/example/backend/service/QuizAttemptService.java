@@ -1,6 +1,8 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
+import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
+import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.CourseQuizResultResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptDetailResponse;
@@ -17,6 +19,9 @@ public interface QuizAttemptService {
     QuizAttemptDetailResponse startQuizAttempt(Integer quizId, Integer chapterItemId);
 
     @Transactional
+    QuizAttemptDetailResponse startQuizAttemptForClassContentItem(Integer quizId, Integer classContentItemId);
+
+    @Transactional
     void answerQuestion(Integer attemptId, Integer questionId, QuizAttemptAnswerRequest request);
 
     @Transactional
@@ -24,9 +29,13 @@ public interface QuizAttemptService {
 
     QuizAttemptDetailResponse getCurrentAttempt(Integer chapterItemId);
 
+    QuizAttemptDetailResponse getCurrentAttemptForClassContentItem(Integer classContentItemId);
+
     QuizAttemptDetailResponse getAttemptDetail(Integer attemptId);
 
     List<QuizAttemptResponse> getStudentAttemptsHistory(Integer chapterItemId);
+
+    List<QuizAttemptResponse> getStudentAttemptsHistoryForClassContentItem(Integer classContentItemId);
 
     PageResponse<QuizAttemptResponse> getAttemptsForTeacherOrAdmin(
             Integer chapterItemId,
@@ -35,9 +44,20 @@ public interface QuizAttemptService {
 
     Integer getStudentBestScore(Integer chapterItemId);
 
+    Integer getStudentBestScoreForClassContentItem(Integer classContentItemId);
+
     List<StudentQuizResultResponse> getMyGradeBook(Integer courseId);
 
+    List<ClassSectionStudentQuizResultResponse> getMyGradeBookForClassSection(Integer classSectionId);
+
     List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId);
+
+    List<ClassSectionQuizGradeResponse> getClassSectionGradeBook(Integer classSectionId);
+
+    PageResponse<QuizAttemptResponse> getAttemptsForTeacherOrAdminByClassContentItem(
+            Integer classContentItemId,
+            Pageable pageable
+    );
 
 
 

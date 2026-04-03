@@ -61,10 +61,17 @@ public class User extends BaseEntity {
     private List<Enrollment> enrollment;
     @OneToMany(mappedBy = "teacher")
     private List<Course> taughtCourses;
+    @OneToMany(mappedBy = "teacher")
+    private List<ClassSection> taughtClassSections;
+    @OneToMany(mappedBy = "manager")
+    private List<ClassSection> managedClassSections;
+    @OneToMany(mappedBy = "owner")
+    private List<Subject> ownedSubjects;
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Otp> otps = new ArrayList<>();
     @OneToMany(mappedBy = "recipient")
     private List<Notification> notifications = new ArrayList<>();
+
 
 
 }

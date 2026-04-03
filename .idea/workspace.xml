@@ -4,8 +4,20 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="change properties">
+    <list default="true" id="f1a6b830-dc34-4458-bf2f-e99a66d69f19" name="Changes" comment="change port">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/config/WebSocketConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/config/WebSocketConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/ChapterItemController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/ChapterItemController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/EnrollmentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/EnrollmentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/QuizAttemptController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/controller/QuizAttemptController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/request/EnrollmentRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/request/EnrollmentRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/request/quiz/QuizRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/request/quiz/QuizRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/EnrollmentResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/EnrollmentResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizAnswerResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizAnswerResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizAttemptResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizAttemptResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizQuestionResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizQuestionResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/dto/response/quiz/QuizResponse.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Category.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Enrollment.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Meeting.java" afterDir="false" />
@@ -13,32 +25,55 @@
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizAttempt.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizAttempt.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/QuizQuestion.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/StudentChapterItemProgress.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Submission.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/Submission.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/entity/User.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/BackendApplication.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Category.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment$EnrollmentBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Enrollment.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Meeting.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Meeting.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Quiz.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/Quiz.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt$QuizAttemptBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt$QuizAttemptBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizAttempt.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizQuestion.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/QuizQuestion.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress$StudentChapterItemProgressBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress$StudentChapterItemProgressBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/StudentChapterItemProgress.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User$UserBuilder.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User$UserBuilder.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/entity/User.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/ChapterItemServiceImpl.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/example/backend/service/impl/ChapterItemServiceImpl.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/EnrollmentRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/EnrollmentRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/ProgressRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/ProgressRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/QuizAttemptRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/QuizAttemptRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/QuizQuestionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/repository/QuizQuestionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/EnrollmentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/EnrollmentService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/QuizAttemptService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/QuizAttemptService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/ChapterItemServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/ChapterItemServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/EnrollmentServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/EnrollmentServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/NotificationServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/NotificationServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/QuizAttemptServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/QuizAttemptServiceImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/QuizServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/example/backend/service/impl/QuizServiceImpl.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_C:/Users/Admin/IdeaProjects/LMS-backend" value="3BKbBNubY1A2mlImezJlzfDltJv" />
+    </persistenceIdMap>
+  </component>
+  <component name="CopilotUserSelectedChatMode">
+    <option name="chatModeId" value="Agent" />
+  </component>
+  <component name="CopilotUserSelectedModel">
+    <selectedModels>
+      <entry key="chat-panel" value="Claude Haiku 4.5" />
+      <entry key="agent-panel" value="Claude Haiku 4.5" />
+    </selectedModels>
+  </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="258" />
+    <option name="cachedIndexableFilesCount" value="316" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="GitHubPullRequestSearchHistory">{
@@ -81,6 +116,7 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;Application.Unnamed.executor&quot;: &quot;Run&quot;,
     &quot;RequestMappingsPanelOrder0&quot;: &quot;0&quot;,
     &quot;RequestMappingsPanelOrder1&quot;: &quot;1&quot;,
     &quot;RequestMappingsPanelWidth0&quot;: &quot;75&quot;,
@@ -92,8 +128,9 @@
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
     &quot;Spring Boot.BackendApplication.executor&quot;: &quot;Run&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;C:/Users/Admin/IdeaProjects/LMS-backend/src/main/resources&quot;,
@@ -105,7 +142,7 @@
     &quot;project.structure.last.edited&quot;: &quot;Project&quot;,
     &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
     &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;reference.settings.ide.settings.uml&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
@@ -121,14 +158,13 @@
     </key>
   </component>
   <component name="RunManager">
-    <configuration default="true" type="JetRunConfigurationType">
+    <configuration name="BackendApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UpdateClassesAndResources" />
+      <module name="backend" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.backend.BackendApplication" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
-    </configuration>
-    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
-      <option name="filePath" />
-      <method v="2" />
     </configuration>
   </component>
   <component name="SharedIndexes">
@@ -155,7 +191,20 @@
       <workItem from="1774365633535" duration="4226000" />
       <workItem from="1774419559405" duration="6662000" />
       <workItem from="1774450776343" duration="5567000" />
-      <workItem from="1774496179675" duration="3527000" />
+      <workItem from="1774496179675" duration="8443000" />
+      <workItem from="1774586506016" duration="10219000" />
+      <workItem from="1774704647527" duration="3053000" />
+      <workItem from="1774709726287" duration="2824000" />
+      <workItem from="1774752271246" duration="7573000" />
+      <workItem from="1774834298347" duration="12098000" />
+      <workItem from="1774862183874" duration="2871000" />
+      <workItem from="1774925185770" duration="91000" />
+      <workItem from="1774925380246" duration="6952000" />
+      <workItem from="1774967675247" duration="795000" />
+      <workItem from="1775009978574" duration="4958000" />
+      <workItem from="1775027549294" duration="4947000" />
+      <workItem from="1775185503037" duration="364000" />
+      <workItem from="1775186172101" duration="5877000" />
     </task>
     <task id="LOCAL-00001" summary="fix bug ko tạo được STUDENT">
       <option name="closed" value="true" />
@@ -181,7 +230,15 @@
       <option name="project" value="LOCAL" />
       <updated>1774498494515</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="change port">
+      <option name="closed" value="true" />
+      <created>1774504463562</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1774504463562</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -191,10 +248,19 @@
     <MESSAGE value="fix bug ko tạo được STUDENT" />
     <MESSAGE value="commit" />
     <MESSAGE value="change properties" />
-    <option name="LAST_COMMIT_MESSAGE" value="change properties" />
+    <MESSAGE value="change port" />
+    <option name="LAST_COMMIT_MESSAGE" value="change port" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
     <select />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
   </component>
 </project>

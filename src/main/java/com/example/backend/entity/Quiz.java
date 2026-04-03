@@ -33,5 +33,13 @@ public class Quiz extends BaseEntity {
 
     @OneToMany(mappedBy = "quiz")
     private List<QuizAttempt> attempts;
+
+    @ManyToOne
+    @JoinColumn(name = "class_section_id")
+    private ClassSection classSection;
+
+    @OneToMany(mappedBy = "quiz")
+    @OrderBy("orderIndex ASC")
+    private List<QuizBankSource> bankSources;
 }
 

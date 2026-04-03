@@ -23,6 +23,8 @@ public interface EnrollmentService {
 
     EnrollmentResponse enrollPrivateCourse(String classCode);
 
+    EnrollmentResponse enrollClassSection(Integer classSectionId);
+
     CourseRatingResponse ratingCourse(Integer courseId, CourseRatingRequest request);
 
     void deleteReview(Integer courseId);
@@ -31,6 +33,9 @@ public interface EnrollmentService {
 
     @Transactional
     void completeLesson(Integer lessonId);
+
+    @Transactional
+    void completeClassContentItem(Integer classContentItemId);
 
     EnrollmentResponse approveStudentToEnrollment(EnrollmentRequest request);
 
@@ -42,6 +47,8 @@ public interface EnrollmentService {
 
     EnrollmentResponse getCurrentUserProgressByCourse(Integer courseId);
 
+    EnrollmentResponse getCurrentUserProgressByClassSection(Integer classSectionId);
+
     EnrollmentResponse getEnrollmentById(Integer id);
 
     PageResponse<EnrollmentResponse> getEnrollmentPage(Pageable pageable);
@@ -51,6 +58,8 @@ public interface EnrollmentService {
     PageResponse<UserViewResponse> searchStudentsNotInCourse(Integer courseId, SearchUserRequest request, Pageable pageable);
 
     void recalculateAndSaveProgress(Integer studentId, Integer courseId);
+
+    void recalculateAndSaveProgressForClassSection(Integer studentId, Integer classSectionId);
 
     PageResponse<EnrollmentResponse> getTeacherEnrollments(Integer teacherId, Integer courseId, String approvalStatus, Pageable pageable);
 }

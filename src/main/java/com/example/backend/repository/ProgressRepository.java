@@ -25,4 +25,13 @@ public interface ProgressRepository extends JpaRepository<StudentChapterItemProg
     List<Integer> findCompletedItemIdsByUserAndChapter(Integer studentId, Integer chapterId);
 
     Optional<StudentChapterItemProgress> findByStudent_IdAndChapterItem_Id(Integer studentId, Integer chapterItemId);
+
+    @Query("SELECT COUNT(p) FROM StudentChapterItemProgress p " +
+            "WHERE p.student.id = :studentId " +
+            "AND p.classContentItem.classChapter.classSection.id = :classSectionId " +
+            "AND p.isCompleted = true")
+    Integer countCompletedClassItemsByStudentAndClassSection(@Param("studentId") Integer studentId,
+                                                             @Param("classSectionId") Integer classSectionId);
+
+    Optional<StudentChapterItemProgress> findByStudent_IdAndClassContentItem_Id(Integer studentId, Integer classContentItemId);
 }

@@ -25,6 +25,9 @@ public class Enrollment extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "course_id")
     private Course course;
+    @ManyToOne
+    @JoinColumn(name = "class_section_id")
+    private ClassSection classSection;
     private Integer progress;
     @Enumerated(EnumType.STRING)
     private EnrollmentStatus approvalStatus;

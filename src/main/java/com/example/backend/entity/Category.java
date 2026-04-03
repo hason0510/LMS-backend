@@ -27,4 +27,7 @@ public class Category extends BaseEntity {
 
     @OneToMany(mappedBy = "category")
     private List<Course> courses;
+
+    @OneToMany(mappedBy = "category")
+    private List<Subject> subjects;
 }

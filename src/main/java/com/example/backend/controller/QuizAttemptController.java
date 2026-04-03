@@ -2,6 +2,8 @@ package com.example.backend.controller;
 
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
 import com.example.backend.dto.response.PageResponse;
+import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
+import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
 import com.example.backend.dto.response.quiz.CourseQuizResultResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptDetailResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptResponse;
@@ -34,6 +36,16 @@ public class QuizAttemptController {
         return ResponseEntity.ok(quizAttemptService.startQuizAttempt(quizId, chapterItemId));
     }
 
+    @Operation(summary = "Bắt đầu làm quiz trong class content item")
+    @PreAuthorize("hasRole('STUDENT')")
+    @PostMapping("/class-content-items/{classContentItemId}/quiz/{quizId}/start")
+    public ResponseEntity<QuizAttemptDetailResponse> startQuizAttemptForClassContentItem(
+            @PathVariable Integer quizId,
+            @PathVariable Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(quizAttemptService.startQuizAttemptForClassContentItem(quizId, classContentItemId));
+    }
+
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/quiz-attempts/{attemptId}")
     public ResponseEntity<QuizAttemptDetailResponse> getAttemptDetail(
@@ -55,6 +67,17 @@ public class QuizAttemptController {
     ) {
         return ResponseEntity.ok(
                 quizAttemptService.getCurrentAttempt(chapterItemId)
+        );
+    }
+
+    @Operation(summary = "Lấy bài quiz đang làm trong class content item")
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/class-content-items/{classContentItemId}/quiz/current")
+    public ResponseEntity<QuizAttemptDetailResponse> getCurrentAttemptForClassContentItem(
+            @PathVariable Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(
+                quizAttemptService.getCurrentAttemptForClassContentItem(classContentItemId)
         );
     }
 
@@ -92,12 +115,32 @@ public class QuizAttemptController {
     }
 
     @PreAuthorize("isAuthenticated()")
+    @GetMapping("/class-content-items/{classContentItemId}/best-score")
+    public ResponseEntity<Integer> getStudentBestScoreOnClassContentItemQuizAttempt(
+            @PathVariable Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(
+                quizAttemptService.getStudentBestScoreForClassContentItem(classContentItemId)
+        );
+    }
+
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/chapterItem/{chapterItemId}/my-attempts")
     public ResponseEntity<List<QuizAttemptResponse>> getStudentAttemptsHistory(
             @PathVariable Integer chapterItemId
     ) {
         return ResponseEntity.ok(
                 quizAttemptService.getStudentAttemptsHistory(chapterItemId)
+        );
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/class-content-items/{classContentItemId}/my-attempts")
+    public ResponseEntity<List<QuizAttemptResponse>> getStudentAttemptsHistoryForClassContentItem(
+            @PathVariable Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(
+                quizAttemptService.getStudentAttemptsHistoryForClassContentItem(classContentItemId)
         );
     }
 
@@ -116,6 +159,18 @@ public class QuizAttemptController {
         );
     }
 
+    @Operation(summary = "Danh sách bài làm của học viên theo class content item")
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @GetMapping("/class-content-items/{classContentItemId}/attempts")
+    public ResponseEntity<PageResponse<QuizAttemptResponse>> getAttemptsForTeacherOrAdminByClassContentItem(
+            @PathVariable Integer classContentItemId,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                quizAttemptService.getAttemptsForTeacherOrAdminByClassContentItem(classContentItemId, pageable)
+        );
+    }
+
     // =========================================================================
     // API BẢNG ĐIỂM (GRADE BOOK)
     // =========================================================================
@@ -128,6 +183,15 @@ public class QuizAttemptController {
     ) {
         return ResponseEntity.ok(quizAttemptService.getMyGradeBook(courseId));
     }
+
+    @Operation(summary = "Xem bảng điểm cá nhân trong 1 class section")
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/class-sections/{classSectionId}/my-grades")
+    public ResponseEntity<List<ClassSectionStudentQuizResultResponse>> getMyGradeBookForClassSection(
+            @PathVariable Integer classSectionId
+    ) {
+        return ResponseEntity.ok(quizAttemptService.getMyGradeBookForClassSection(classSectionId));
+    }
     @Operation(
             summary = "Xem bảng điểm khóa học (Giáo viên/Admin)",
             description = "Xem tổng hợp kết quả làm bài Quiz của tất cả sinh viên trong một khóa học cụ thể."
@@ -138,5 +202,14 @@ public class QuizAttemptController {
             @PathVariable Integer courseId
     ) {
         return ResponseEntity.ok(quizAttemptService.getCourseGradeBook(courseId));
+    }
+
+    @Operation(summary = "Xem bảng điểm class section")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @GetMapping("/class-sections/{classSectionId}/quiz-grades")
+    public ResponseEntity<List<ClassSectionQuizGradeResponse>> getClassSectionGradeBook(
+            @PathVariable Integer classSectionId
+    ) {
+        return ResponseEntity.ok(quizAttemptService.getClassSectionGradeBook(classSectionId));
     }
 }
