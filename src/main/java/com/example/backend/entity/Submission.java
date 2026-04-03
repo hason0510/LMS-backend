@@ -1,5 +1,6 @@
 package com.example.backend.entity;
 
+import com.example.backend.constant.SubmissionStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -23,8 +24,8 @@ public class Submission extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "assignment_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
 
     @ManyToOne
@@ -34,15 +35,26 @@ public class Submission extends BaseEntity {
     @Column(columnDefinition = "MEDIUMTEXT")
     private String description;
 
-    @Column(name = "")
-    private String instruction;
+    private String fileUrl;
 
-    @Column(name = "max_score")
-    private Integer maxScore;
+    private String embedUrl;
 
-    @Column(name = "due_at")
-    private LocalDateTime dueAt;
+    private String cloudinaryId;
 
-    @Column(name = "allow_late_submission", nullable = false)
-    private boolean allowLateSubmission = false;
+    @Column(name = "submission_Time")
+    private LocalDateTime submissionTime;
+
+    // NEW FIELDS: Status tracking
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SubmissionStatus status = SubmissionStatus.NOT_SUBMITTED;
+
+    @Column(name = "grade")
+    private Integer grade;
+
+    @Column(name = "feedback", columnDefinition = "LONGTEXT")
+    private String feedback;
+
+    @Column(name = "graded_at")
+    private LocalDateTime gradedAt;
 }
