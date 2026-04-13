@@ -18,6 +18,7 @@ public class CurriculumTemplateResponse {
     private Boolean isDefault;
     private Integer subjectId;
     private String subjectTitle;
-    private Integer versionCount;
-    private List<CurriculumVersionResponse> versions;
+    private Integer categoryId;
+    private String categoryTitle;
+    private List<ChapterTemplateResponse> chapters;
 }

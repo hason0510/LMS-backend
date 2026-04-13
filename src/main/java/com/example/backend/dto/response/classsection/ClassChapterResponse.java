@@ -18,5 +18,8 @@ public class ClassChapterResponse {
     private String description;
     private Integer orderIndex;
     private Boolean hidden;
+    private Boolean locked;
+    private java.time.LocalDateTime availableFrom;
+    private java.time.LocalDateTime availableTo;
     private List<ClassContentItemResponse> contentItems;
 }

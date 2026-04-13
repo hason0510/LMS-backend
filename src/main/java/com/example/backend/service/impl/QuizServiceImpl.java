@@ -11,16 +11,16 @@ import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizBankSourceResponse;
 import com.example.backend.dto.response.quiz.QuizQuestionResponse;
 import com.example.backend.dto.response.quiz.QuizResponse;
-import com.example.backend.entity.BankQuestion;
-import com.example.backend.entity.BankQuestionOption;
+import com.example.backend.entity.quiz.BankQuestion;
+import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
-import com.example.backend.entity.QuestionBank;
-import com.example.backend.entity.QuestionTag;
-import com.example.backend.entity.Quiz;
-import com.example.backend.entity.QuizAnswer;
-import com.example.backend.entity.QuizBankSource;
-import com.example.backend.entity.QuizQuestion;
+import com.example.backend.entity.quiz.QuestionBank;
+import com.example.backend.entity.quiz.QuestionTag;
+import com.example.backend.entity.quiz.Quiz;
+import com.example.backend.entity.quiz.QuizAnswer;
+import com.example.backend.entity.quiz.QuizBankSource;
+import com.example.backend.entity.quiz.QuizQuestion;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.repository.BankQuestionRepository;
@@ -97,7 +97,7 @@ public class QuizServiceImpl implements QuizService {
         response.setAvailableUntil(quiz.getAvailableUntil());
         response.setClassSectionId(quiz.getClassSection() != null ? quiz.getClassSection().getId() : null);
         response.setClassContentItemId(
-                classContentItemRepository.findByOverrideQuiz_Id(quiz.getId())
+                classContentItemRepository.findByQuiz_Id(quiz.getId())
                         .map(ClassContentItem::getId)
                         .orElse(null)
         );
@@ -229,16 +229,16 @@ public class QuizServiceImpl implements QuizService {
             throw new BusinessException("Quiz classSection does not match the target class content item");
         }
 
-        classContentItemRepository.findByOverrideQuiz_Id(quiz.getId())
+        classContentItemRepository.findByQuiz_Id(quiz.getId())
                 .filter(existing -> !existing.getId().equals(classContentItem.getId()))
                 .ifPresent(existing -> {
-                    existing.setOverrideQuiz(null);
+                    existing.setQuiz(null);
                     classContentItemRepository.save(existing);
                 });
 
-        classContentItem.setOverrideQuiz(quiz);
-        if (!StringUtils.hasText(classContentItem.getTitleOverride())) {
-            classContentItem.setTitleOverride(quiz.getTitle());
+        classContentItem.setQuiz(quiz);
+        if (!StringUtils.hasText(classContentItem.getTitle())) {
+            classContentItem.setTitle(quiz.getTitle());
         }
         classContentItemRepository.save(classContentItem);
     }
@@ -282,20 +282,13 @@ public class QuizServiceImpl implements QuizService {
             QuestionBank questionBank = questionBankRepository.findById(sourceRequest.getQuestionBankId())
                     .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
 
-            if (questionBank.getClassSection() != null) {
-                if (quiz.getClassSection() == null) {
-                    quiz.setClassSection(questionBank.getClassSection());
-                    quizRepository.save(quiz);
-                } else if (!quiz.getClassSection().getId().equals(questionBank.getClassSection().getId())) {
-                    throw new BusinessException("Class-scoped question bank does not belong to the quiz class section");
-                }
-            }
-
             QuestionTag tag = null;
             if (sourceRequest.getTagId() != null) {
                 tag = questionTagRepository.findById(sourceRequest.getTagId())
                         .orElseThrow(() -> new ResourceNotFoundException("Question tag not found"));
             }
+
+            validateQuestionBankSource(quiz, questionBank, tag);
 
             QuizBankSource source = new QuizBankSource();
             source.setQuiz(quiz);
@@ -309,6 +302,24 @@ public class QuizServiceImpl implements QuizService {
             savedSources.add(quizBankSourceRepository.save(source));
         }
         return savedSources;
+    }
+
+    private void validateQuestionBankSource(Quiz quiz, QuestionBank questionBank, QuestionTag tag) {
+        if (questionBank.getSubject() == null) {
+            throw new BusinessException("Question bank must belong to a subject");
+        }
+
+        if (tag != null
+                && tag.getSubject() != null
+                && !Objects.equals(tag.getSubject().getId(), questionBank.getSubject().getId())) {
+            throw new BusinessException("Question tag must belong to the same subject as the question bank");
+        }
+
+        if (quiz.getClassSection() != null
+                && quiz.getClassSection().getSubject() != null
+                && !Objects.equals(quiz.getClassSection().getSubject().getId(), questionBank.getSubject().getId())) {
+            throw new BusinessException("Question bank subject does not match the quiz class section subject");
+        }
     }
 
     private void generateQuestionsFromBankSources(Quiz quiz, List<QuizBankSource> bankSources) {

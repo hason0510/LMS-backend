@@ -24,6 +24,9 @@ import com.example.backend.service.UserService;
 import com.example.backend.specification.UserSpecification;
 import com.example.backend.utils.FileUploadUtil;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -108,6 +111,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @CacheEvict(value = "user", key = "#id")
     public void deleteUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
@@ -132,6 +136,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @CachePut(value = "user", key = "#id")
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
 
@@ -208,6 +213,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Cacheable(value = "user", key = "#id")
     public Object getUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
@@ -234,6 +240,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Cacheable(value = "user_page", key = "#pageable.pageNumber + '-' + #pageable.pageSize")
     public PageResponse<UserInfoResponse> getUserPage(Pageable pageable) {
         Page<User> userPage = userRepository.findAll(pageable);
         Page<UserInfoResponse> userResponse = userPage.map(this::convertUserInfoToDTO);

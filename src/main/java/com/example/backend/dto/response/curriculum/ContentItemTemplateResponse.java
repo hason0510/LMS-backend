@@ -14,10 +14,10 @@ public class ContentItemTemplateResponse {
     private Integer id;
     private ContentItemType itemType;
     private Integer orderIndex;
-    private Integer lessonId;
-    private String lessonTitle;
-    private Integer quizId;
-    private String quizTitle;
-    private Integer assignmentId;
-    private String assignmentTitle;
+    private Integer lessonTemplateId;
+    private String lessonTemplateTitle;
+    private Integer quizTemplateId;
+    private String quizTemplateTitle;
+    private Integer assignmentTemplateId;
+    private String assignmentTemplateTitle;
 }

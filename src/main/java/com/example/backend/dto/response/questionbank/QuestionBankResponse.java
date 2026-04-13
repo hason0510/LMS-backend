@@ -1,6 +1,6 @@
 package com.example.backend.dto.response.questionbank;
 
-import com.example.backend.constant.QuestionBankScope;
+import com.example.backend.constant.QuestionBankMemberRole;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,9 +16,10 @@ public class QuestionBankResponse {
     private Integer id;
     private String name;
     private String description;
-    private QuestionBankScope scopeType;
     private Integer subjectId;
-    private Integer curriculumVersionId;
-    private Integer classSectionId;
+    private Integer ownerId;
+    private String ownerName;
+    private QuestionBankMemberRole myRole;
+    private List<QuestionBankMemberResponse> members;
     private List<BankQuestionResponse> questions;
 }

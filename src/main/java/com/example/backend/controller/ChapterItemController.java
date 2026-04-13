@@ -4,7 +4,7 @@ import com.example.backend.dto.request.LessonRequest;
 import com.example.backend.dto.request.chapter.ChapterItemOrderRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.chapter.ChapterItemResponse;
-import com.example.backend.service.ChapterItemService;
+import com.example.backend.service.old.ChapterItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

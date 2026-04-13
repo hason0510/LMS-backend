@@ -1,6 +1,7 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.entity.old.Course;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;

@@ -14,9 +14,8 @@ import lombok.Setter;
 public class ContentItemTemplateRequest {
     @NotNull(message = "Item type is required")
     private ContentItemType itemType;
-
     private Integer orderIndex;
-    private Integer lessonId;
-    private Integer quizId;
-    private Integer assignmentId;
+    private Integer lessonTemplateId;
+    private Integer quizTemplateId;
+    private Integer assignmentTemplateId;
 }

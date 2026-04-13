@@ -46,7 +46,7 @@ public class SecurityConfig {
                 //.csrf(csrf -> csrf.disable())// dùng lambda thay vì csrf().disable()
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/", "/api/v1/lms/auth/**",
-                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/oauth2/**").permitAll()
+                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/oauth2/**", "/ws/**").permitAll()
                         .anyRequest().authenticated() // tất cả request được phép
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

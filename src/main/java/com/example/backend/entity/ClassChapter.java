@@ -1,5 +1,6 @@
 package com.example.backend.entity;
 
+import com.example.backend.entity.template.ChapterTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.Setter;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -27,21 +29,30 @@ public class ClassChapter extends BaseEntity {
     @JoinColumn(name = "class_section_id", nullable = false)
     private ClassSection classSection;
 
-    @ManyToOne
+/*    @ManyToOne
     @JoinColumn(name = "chapter_template_id")
-    private ChapterTemplate chapterTemplate;
+    private ChapterTemplate chapterTemplate;*/
 
-    @Column(name = "title_override")
-    private String titleOverride;
+    @Column(nullable = false)
+    private String title;
 
-    @Column(name = "description_override", columnDefinition = "MEDIUMTEXT")
-    private String descriptionOverride;
+    @Column(columnDefinition = "MEDIUMTEXT")
+    private String description;
 
     @Column(name = "order_index")
     private Integer orderIndex;
 
     @Column(name = "is_hidden", nullable = false)
     private Boolean isHidden = false;
+
+    @Column(name = "is_locked", nullable = false)
+    private Boolean isLocked = false;
+
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
+
+    @Column(name = "available_to")
+    private LocalDateTime availableTo;
 
     @OneToMany(mappedBy = "classChapter", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")

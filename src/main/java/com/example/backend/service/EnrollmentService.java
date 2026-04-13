@@ -1,13 +1,10 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.request.EnrollmentRequest;
-import com.example.backend.dto.request.course.CourseRatingRequest;
 import com.example.backend.dto.request.course.StudentCourseRequest;
 import com.example.backend.dto.request.search.SearchUserRequest;
 import com.example.backend.dto.response.EnrollmentResponse;
 import com.example.backend.dto.response.PageResponse;
-import com.example.backend.dto.response.course.CourseRatingResponse;
-import com.example.backend.dto.response.course.CourseResponse;
 import com.example.backend.dto.response.user.UserViewResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,19 +14,19 @@ public interface EnrollmentService {
     void addStudentsToCourse(Integer courseId, StudentCourseRequest request);
 
     @Transactional
+    void addStudentsToClassSection(Integer classSectionId, StudentCourseRequest request);
+
+    @Transactional
     void removeStudentsInCourse(Integer courseId, StudentCourseRequest request);
+
+    @Transactional
+    void removeStudentsFromClassSection(Integer classSectionId, StudentCourseRequest request);
 
     EnrollmentResponse enrollPublicCourse(Integer courseId);
 
     EnrollmentResponse enrollPrivateCourse(String classCode);
 
     EnrollmentResponse enrollClassSection(Integer classSectionId);
-
-    CourseRatingResponse ratingCourse(Integer courseId, CourseRatingRequest request);
-
-    void deleteReview(Integer courseId);
-
-    PageResponse<CourseRatingResponse> getAllCourseRatings(Integer courseId, Integer ratingValue, Pageable pageable);
 
     @Transactional
     void completeLesson(Integer lessonId);
@@ -43,7 +40,11 @@ public interface EnrollmentService {
 
     PageResponse<EnrollmentResponse> getStudentsApprovedInEnrollment(Integer courseId, Pageable pageable);
 
+    PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, Pageable pageable);
+
     PageResponse<EnrollmentResponse> getStudentsPendingEnrollment(Integer courseId, Pageable pageable);
+
+    PageResponse<EnrollmentResponse> getStudentsPendingInClassSection(Integer classSectionId, Pageable pageable);
 
     EnrollmentResponse getCurrentUserProgressByCourse(Integer courseId);
 
@@ -57,9 +58,11 @@ public interface EnrollmentService {
 
     PageResponse<UserViewResponse> searchStudentsNotInCourse(Integer courseId, SearchUserRequest request, Pageable pageable);
 
+    PageResponse<UserViewResponse> searchStudentsNotInClassSection(Integer classSectionId, SearchUserRequest request, Pageable pageable);
+
     void recalculateAndSaveProgress(Integer studentId, Integer courseId);
 
     void recalculateAndSaveProgressForClassSection(Integer studentId, Integer classSectionId);
 
-    PageResponse<EnrollmentResponse> getTeacherEnrollments(Integer teacherId, Integer courseId, String approvalStatus, Pageable pageable);
+    PageResponse<EnrollmentResponse> getTeacherEnrollments(Integer classSectionId, String approvalStatus, Pageable pageable);
 }

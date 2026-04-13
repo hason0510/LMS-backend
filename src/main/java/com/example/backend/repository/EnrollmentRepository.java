@@ -9,12 +9,18 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> {
     List<Enrollment> findByCourse_IdAndStudent_IdIn(
             Integer courseId,
+            List<Integer> studentIds
+    );
+
+    List<Enrollment> findByClassSection_IdAndStudent_IdIn(
+            Integer classSectionId,
             List<Integer> studentIds
     );
 
@@ -38,20 +44,20 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     Page<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus, Pageable pageable);
 
+    List<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus);
+
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED'")
     Long countApprovedEnrollmentsByClassSectionId(@Param("classSectionId") Integer classSectionId);
 
-    @Query("SELECT e FROM Enrollment e WHERE e.course.teacher.id = :teacherId")
-    Page<Enrollment> findByTeacherId(@Param("teacherId") Integer teacherId, Pageable pageable);
+    // ── Simple queries for teacher enrollments (classSectionIds resolved in service layer) ──
 
-    @Query("SELECT e FROM Enrollment e WHERE e.course.teacher.id = :teacherId AND e.course.id = :courseId")
-    Page<Enrollment> findByTeacherIdAndCourseId(@Param("teacherId") Integer teacherId, @Param("courseId") Integer courseId, Pageable pageable);
+    Page<Enrollment> findByClassSection_IdIn(Collection<Integer> classSectionIds, Pageable pageable);
 
-    @Query("SELECT e FROM Enrollment e WHERE e.course.teacher.id = :teacherId AND e.approvalStatus = :approvalStatus")
-    Page<Enrollment> findByTeacherIdAndApprovalStatus(@Param("teacherId") Integer teacherId, @Param("approvalStatus") EnrollmentStatus approvalStatus, Pageable pageable);
+    Page<Enrollment> findByClassSection_IdInAndApprovalStatus(Collection<Integer> classSectionIds, EnrollmentStatus approvalStatus, Pageable pageable);
 
-    @Query("SELECT e FROM Enrollment e WHERE e.course.teacher.id = :teacherId AND e.course.id = :courseId AND e.approvalStatus = :approvalStatus")
-    Page<Enrollment> findByTeacherIdAndCourseIdAndApprovalStatus(@Param("teacherId") Integer teacherId, @Param("courseId") Integer courseId, @Param("approvalStatus") EnrollmentStatus approvalStatus, Pageable pageable);
+    Page<Enrollment> findByClassSection_Id(Integer classSectionId, Pageable pageable);
+
+    // ── Legacy course-based queries ──
 
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.course.id = :courseId AND e.approvalStatus = 'APPROVED'")
     Long countApprovedEnrollmentsByCourseId(@Param("courseId") Integer courseId);

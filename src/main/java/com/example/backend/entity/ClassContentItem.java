@@ -1,13 +1,14 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.ContentItemType;
+import com.example.backend.entity.assignment.Assignment;
+import com.example.backend.entity.quiz.Quiz;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "class_content_items")
@@ -26,16 +27,12 @@ public class ClassContentItem extends BaseEntity {
     @JoinColumn(name = "class_chapter_id", nullable = false)
     private ClassChapter classChapter;
 
-    @ManyToOne
-    @JoinColumn(name = "content_item_template_id")
-    private ContentItemTemplate contentItemTemplate;
+    @Column(nullable = false)
+    private String title;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "item_type", nullable = false, length = 20)
     private ContentItemType itemType;
-
-    @Column(name = "title_override")
-    private String titleOverride;
 
     @Column(name = "order_index")
     private Integer orderIndex;
@@ -43,15 +40,25 @@ public class ClassContentItem extends BaseEntity {
     @Column(name = "is_hidden", nullable = false)
     private Boolean isHidden = false;
 
-    @ManyToOne
-    @JoinColumn(name = "override_lesson_id")
-    private Lesson overrideLesson;
+    @Column(name = "is_locked", nullable = false)
+    private Boolean isLocked = false;
+
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
+
+    @Column(name = "available_to")
+    private LocalDateTime availableTo;
 
     @ManyToOne
-    @JoinColumn(name = "override_quiz_id")
-    private Quiz overrideQuiz;
+    @JoinColumn(name = "lesson_id")
+    private Lesson lesson;
 
     @ManyToOne
-    @JoinColumn(name = "override_assignment_id")
-    private Assignment overrideAssignment;
+    @JoinColumn(name = "quiz_id")
+    private Quiz quiz;
+
+    @ManyToOne
+    @JoinColumn(name = "assignment_id")
+    private Assignment assignment;
+
 }

@@ -7,6 +7,7 @@ import com.example.backend.dto.response.user.UserInfoResponse;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.AuthService;
 import com.example.backend.service.OtpService;
@@ -64,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
         return response;
     }
 
-    @Override
+   /* @Override
     public LoginResponse refreshToken(String oldRefreshToken){
         Jwt decodeToken = securityUtil.checkValidRefreshToken(oldRefreshToken);
         String userName = decodeToken.getSubject();
@@ -82,6 +83,46 @@ public class AuthServiceImpl implements AuthService {
         LoginResponse.setRefreshToken(newRefreshToken); // This field is @JsonIgnore
         userService.updateUserToken(newRefreshToken, userName);
         return LoginResponse;
+    }*/
+
+    @Override
+    public LoginResponse refreshToken(String oldRefreshToken) {
+        // 1. Decode token
+        Jwt decodeToken = securityUtil.checkValidRefreshToken(oldRefreshToken);
+
+        // 2. Lấy userId từ subject
+        Integer userId = Integer.valueOf(decodeToken.getSubject());
+
+        // 3. Tìm user theo ID
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        // 4. So sánh refresh token trong DB
+        if (user.getRefreshToken() == null || !user.getRefreshToken().equals(oldRefreshToken)) {
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        // 5. Build response
+        LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin(
+                user.getId(),
+                user.getUserName(),
+                user.getRole().getRoleName().name()
+        );
+
+        LoginResponse response = new LoginResponse();
+        response.setUser(userLogin);
+
+        // 6. Generate new tokens
+        String newAccessToken = securityUtil.createAccessToken(user.getUserName(), response);
+        String newRefreshToken = securityUtil.createRefreshToken(user.getUserName(), response);
+
+        response.setAccessToken(newAccessToken);
+        response.setRefreshToken(newRefreshToken);
+
+        // 7. Update refresh token (rotate)
+        userService.updateUserToken(newRefreshToken, user.getUserName());
+
+        return response;
     }
 
     @Override

@@ -42,7 +42,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             admin.setPhoneNumber("0123456789");
             admin.setStudentNumber("20052015");
             admin.setAddress("Hà Nội");
-            admin.setPassword(new BCryptPasswordEncoder().encode("123456"));
+            admin.setPassword(new BCryptPasswordEncoder().encode("123"));
             admin.setRole(adminRole);
             admin.setVerified(true);
             User teacher1 = new User();
@@ -52,7 +52,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             teacher1.setPhoneNumber("0310964076");
             teacher1.setStudentNumber("20050123");
             teacher1.setAddress("Hà Nội");
-            teacher1.setPassword(new BCryptPasswordEncoder().encode("123456"));
+            teacher1.setPassword(new BCryptPasswordEncoder().encode("123"));
             teacher1.setRole(teacherRole);
             teacher1.setVerified(true);
             User teacher2 = new User();
@@ -62,7 +62,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             teacher2.setPhoneNumber("0778410920");
             teacher2.setStudentNumber("20225174");
             teacher2.setAddress("Hà Nội");
-            teacher2.setPassword(new BCryptPasswordEncoder().encode("123456"));
+            teacher2.setPassword(new BCryptPasswordEncoder().encode("123"));
             teacher2.setRole(teacherRole);
             teacher2.setVerified(true);
             User student0 = new User();

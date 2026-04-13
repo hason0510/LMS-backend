@@ -1,5 +1,8 @@
 package com.example.backend.entity;
 
+import com.example.backend.entity.quiz.QuestionBank;
+import com.example.backend.entity.quiz.QuestionTag;
+import com.example.backend.entity.template.CurriculumTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

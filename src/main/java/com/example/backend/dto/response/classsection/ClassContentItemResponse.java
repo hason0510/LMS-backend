@@ -15,10 +15,12 @@ public class ClassContentItemResponse {
     private Integer classChapterId;
     private Integer contentItemTemplateId;
     private ContentItemType itemType;
+    private String title;
     private Integer orderIndex;
     private Boolean hidden;
-    private Boolean overridden;
-    private String title;
+    private Boolean locked;
+    private java.time.LocalDateTime availableFrom;
+    private java.time.LocalDateTime availableTo;
     private Integer lessonId;
     private Integer quizId;
     private Integer assignmentId;

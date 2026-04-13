@@ -1,5 +1,6 @@
 package com.example.backend.dto.response.classsection;
 
+import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.CourseStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -18,18 +19,15 @@ public class ClassSectionResponse {
     private String classCode;
     private String title;
     private String description;
-    private CourseStatus status;
+    private ClassSectionStatus status;
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer subjectId;
     private String subjectTitle;
     private Integer teacherId;
     private String teacherName;
-    private Integer managerId;
-    private String managerName;
-    private Integer curriculumVersionId;
-    private Integer legacyCourseId;
+    private List<ClassMemberResponse> teachingMembers;
+    private Integer curriculumTemplateId;
     private Boolean templateBased;
-    private Boolean migratedFromLegacyCourse;
     private List<ClassChapterResponse> chapters;
 }

@@ -1,13 +1,11 @@
 package com.example.backend.dto.request.classsection;
 
-import com.example.backend.constant.CourseStatus;
+import com.example.backend.constant.ClassSectionStatus;
 import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -16,12 +14,11 @@ import java.time.LocalDate;
 public class ClassSectionRequest {
     @NotBlank(message = "Class section title is required")
     private String title;
-
     private String description;
     private String classCode;
-    private CourseStatus status;
+    private ClassSectionStatus status;
     private LocalDate startDate;
     private LocalDate endDate;
     private Integer teacherId;
-    private Integer managerId;
+    private List<Integer> taIds;
 }

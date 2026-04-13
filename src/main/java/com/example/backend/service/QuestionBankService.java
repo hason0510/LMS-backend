@@ -1,11 +1,16 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.request.questionbank.BankQuestionRequest;
+import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
+import com.example.backend.dto.request.questionbank.QuestionBankMemberRoleRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankRequest;
 import com.example.backend.dto.request.questionbank.QuestionTagRequest;
 import com.example.backend.dto.response.questionbank.BankQuestionResponse;
+import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
+import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -16,12 +21,7 @@ public interface QuestionBankService {
 
     QuestionBankResponse getQuestionBankById(Integer id);
 
-    List<QuestionBankResponse> getQuestionBanks(
-            Integer subjectId,
-            Integer curriculumVersionId,
-            Integer classSectionId,
-            boolean includeQuestions
-    );
+    List<QuestionBankResponse> getQuestionBanks(Integer subjectId, boolean includeQuestions);
 
     BankQuestionResponse createQuestion(Integer questionBankId, BankQuestionRequest request);
 
@@ -29,7 +29,17 @@ public interface QuestionBankService {
 
     void deleteQuestion(Integer questionId);
 
+    GiftImportResultResponse importGiftQuestions(Integer questionBankId, MultipartFile file);
+
     QuestionTagResponse createTag(QuestionTagRequest request);
 
     List<QuestionTagResponse> getTags(Integer subjectId);
+
+    QuestionBankMemberResponse addMember(Integer questionBankId, QuestionBankMemberRequest request);
+
+    QuestionBankMemberResponse updateMemberRole(Integer questionBankId, Integer userId, QuestionBankMemberRoleRequest request);
+
+    void removeMember(Integer questionBankId, Integer userId);
+
+    List<QuestionBankMemberResponse> getMembers(Integer questionBankId);
 }

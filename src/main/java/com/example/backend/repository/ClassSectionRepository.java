@@ -10,10 +10,9 @@ import java.util.Optional;
 @Repository
 public interface ClassSectionRepository extends JpaRepository<ClassSection, Integer> {
     boolean existsByClassCode(String classCode);
+    Optional<ClassSection> findByClassCode(String classCode);
 
-    Optional<ClassSection> findByLegacyCourse_Id(Integer legacyCourseId);
-
-    List<ClassSection> findByCurriculumVersion_Id(Integer curriculumVersionId);
+    List<ClassSection> findByCurriculumTemplate_Id(Integer curriculumTemplateId);
 
     List<ClassSection> findByTeacher_Id(Integer teacherId);
 

@@ -5,10 +5,16 @@ import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.*;
 import com.example.backend.entity.*;
+import com.example.backend.entity.old.ChapterItem;
+import com.example.backend.entity.old.Course;
+import com.example.backend.entity.quiz.*;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.*;
+import com.example.backend.repository.old.ChapterItemRepository;
+import com.example.backend.repository.old.CourseRepository;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.QuizAttemptService;
 import com.example.backend.service.UserService;
@@ -42,6 +48,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final ProgressRepository progressRepository;
     private final EnrollmentService enrollmentService;
     private final CourseRepository courseRepository;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
 
 
     // =========================================================================
@@ -287,9 +294,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (false) {
             User student = attempt.getStudent();
             ChapterItem chapterItem = attempt.getChapterItem();
-            StudentChapterItemProgress progress = progressRepository
+            Progress progress = progressRepository
                     .findByStudent_IdAndChapterItem_Id(student.getId(), chapterItem.getId())
-                    .orElse(StudentChapterItemProgress.builder()
+                    .orElse(Progress.builder()
                             .student(student)
                             .chapterItem(chapterItem)
                             .isCompleted(false) // Mặc định false nếu chưa có bản ghi
@@ -775,10 +782,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             throw new BusinessException("Noi dung nay khong phai quiz");
         }
 
-        Quiz quiz = classContentItem.getOverrideQuiz();
-        if (quiz == null && classContentItem.getContentItemTemplate() != null) {
-            quiz = classContentItem.getContentItemTemplate().getQuiz();
-        }
+        Quiz quiz = classContentItem.getQuiz();
         if (quiz == null) {
             throw new ResourceNotFoundException("Quiz chua duoc gan vao class content item");
         }
@@ -793,9 +797,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         User student = attempt.getStudent();
         if (attempt.getClassContentItem() != null) {
             ClassContentItem classContentItem = attempt.getClassContentItem();
-            StudentChapterItemProgress progress = progressRepository
+            Progress progress = progressRepository
                     .findByStudent_IdAndClassContentItem_Id(student.getId(), classContentItem.getId())
-                    .orElse(StudentChapterItemProgress.builder()
+                    .orElse(Progress.builder()
                             .student(student)
                             .classContentItem(classContentItem)
                             .isCompleted(false)
@@ -815,9 +819,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         if (attempt.getChapterItem() != null) {
             ChapterItem chapterItem = attempt.getChapterItem();
-            StudentChapterItemProgress progress = progressRepository
+            Progress progress = progressRepository
                     .findByStudent_IdAndChapterItem_Id(student.getId(), chapterItem.getId())
-                    .orElse(StudentChapterItemProgress.builder()
+                    .orElse(Progress.builder()
                             .student(student)
                             .chapterItem(chapterItem)
                             .isCompleted(false)
@@ -868,11 +872,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     }
 
     private boolean canManageClassSection(ClassSection classSection, User currentUser) {
-        boolean isTeacher = classSection.getTeacher() != null
-                && classSection.getTeacher().getId().equals(currentUser.getId());
-        boolean isManager = classSection.getManager() != null
-                && classSection.getManager().getId().equals(currentUser.getId());
-        return isTeacher || isManager;
+        return classMemberAuthorizationService.isTeacher(classSection, currentUser);
     }
 
     private QuizAttemptDetailResponse convertToDetailResponse(QuizAttempt attempt) {

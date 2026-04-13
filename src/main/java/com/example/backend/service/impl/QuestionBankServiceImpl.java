@@ -1,22 +1,26 @@
 package com.example.backend.service.impl;
 
-import com.example.backend.constant.QuestionBankScope;
+import com.example.backend.constant.QuestionBankMemberRole;
+import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.questionbank.BankQuestionOptionRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionRequest;
+import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
+import com.example.backend.dto.request.questionbank.QuestionBankMemberRoleRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankRequest;
 import com.example.backend.dto.request.questionbank.QuestionTagRequest;
 import com.example.backend.dto.response.questionbank.BankQuestionOptionResponse;
 import com.example.backend.dto.response.questionbank.BankQuestionResponse;
+import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
+import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
-import com.example.backend.entity.BankQuestion;
-import com.example.backend.entity.BankQuestionOption;
-import com.example.backend.entity.BankQuestionTag;
-import com.example.backend.entity.ClassSection;
-import com.example.backend.entity.CurriculumVersion;
-import com.example.backend.entity.QuestionBank;
-import com.example.backend.entity.QuestionTag;
+import com.example.backend.entity.quiz.BankQuestion;
+import com.example.backend.entity.quiz.BankQuestionOption;
+import com.example.backend.entity.quiz.BankQuestionTag;
+import com.example.backend.entity.quiz.QuestionBank;
+import com.example.backend.entity.quiz.QuestionBankMember;
+import com.example.backend.entity.quiz.QuestionTag;
 import com.example.backend.entity.Subject;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
@@ -24,20 +28,25 @@ import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.BankQuestionTagRepository;
-import com.example.backend.repository.ClassSectionRepository;
-import com.example.backend.repository.CurriculumVersionRepository;
+import com.example.backend.repository.QuestionBankMemberRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.QuestionTagRepository;
 import com.example.backend.repository.SubjectRepository;
+import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -48,16 +57,19 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final BankQuestionTagRepository bankQuestionTagRepository;
     private final QuestionTagRepository questionTagRepository;
     private final SubjectRepository subjectRepository;
-    private final CurriculumVersionRepository curriculumVersionRepository;
-    private final ClassSectionRepository classSectionRepository;
+    private final QuestionBankMemberRepository questionBankMemberRepository;
+    private final UserRepository userRepository;
     private final UserService userService;
 
     @Override
     @Transactional
     public QuestionBankResponse createQuestionBank(QuestionBankRequest request) {
+        User currentUser = requireCurrentUser();
         QuestionBank questionBank = new QuestionBank();
         applyQuestionBankRequest(questionBank, request);
-        return convertQuestionBank(questionBankRepository.save(questionBank), false);
+        QuestionBank saved = questionBankRepository.save(questionBank);
+        createOrUpdateMembership(saved, currentUser, QuestionBankMemberRole.OWNER);
+        return convertQuestionBank(saved, false, false);
     }
 
     @Override
@@ -65,37 +77,31 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public QuestionBankResponse updateQuestionBank(Integer id, QuestionBankRequest request) {
         QuestionBank questionBank = questionBankRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
         applyQuestionBankRequest(questionBank, request);
-        return convertQuestionBank(questionBankRepository.save(questionBank), false);
+        return convertQuestionBank(questionBankRepository.save(questionBank), false, false);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public QuestionBankResponse getQuestionBankById(Integer id) {
         QuestionBank questionBank = questionBankRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        return convertQuestionBank(questionBank, true);
+        requireViewPermission(questionBank);
+        return convertQuestionBank(questionBank, true, true);
     }
 
     @Override
-    public List<QuestionBankResponse> getQuestionBanks(
-            Integer subjectId,
-            Integer curriculumVersionId,
-            Integer classSectionId,
-            boolean includeQuestions
-    ) {
-        List<QuestionBank> questionBanks;
-        if (classSectionId != null) {
-            questionBanks = questionBankRepository.findByClassSection_Id(classSectionId);
-        } else if (curriculumVersionId != null) {
-            questionBanks = questionBankRepository.findByCurriculumVersion_Id(curriculumVersionId);
-        } else if (subjectId != null) {
-            questionBanks = questionBankRepository.findBySubject_Id(subjectId);
-        } else {
-            questionBanks = questionBankRepository.findAll();
-        }
+    @Transactional(readOnly = true)
+    public List<QuestionBankResponse> getQuestionBanks(Integer subjectId, boolean includeQuestions) {
+        User currentUser = requireCurrentUser();
+        List<QuestionBank> questionBanks = subjectId != null
+                ? questionBankRepository.findBySubject_Id(subjectId)
+                : questionBankRepository.findAll();
 
         return questionBanks.stream()
-                .map(questionBank -> convertQuestionBank(questionBank, includeQuestions))
+                .filter(questionBank -> canView(questionBank, currentUser))
+                .map(questionBank -> convertQuestionBank(questionBank, includeQuestions, false))
                 .toList();
     }
 
@@ -104,7 +110,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public BankQuestionResponse createQuestion(Integer questionBankId, BankQuestionRequest request) {
         QuestionBank questionBank = questionBankRepository.findById(questionBankId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        validateManagePermission(questionBank);
+        requireEditPermission(questionBank);
 
         BankQuestion question = new BankQuestion();
         question.setQuestionBank(questionBank);
@@ -119,7 +125,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public BankQuestionResponse updateQuestion(Integer questionId, BankQuestionRequest request) {
         BankQuestion question = bankQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank question not found"));
-        validateManagePermission(question.getQuestionBank());
+        requireEditPermission(question.getQuestionBank());
 
         applyQuestionRequest(question, request);
         question = bankQuestionRepository.save(question);
@@ -133,8 +139,80 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public void deleteQuestion(Integer questionId) {
         BankQuestion question = bankQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank question not found"));
-        validateManagePermission(question.getQuestionBank());
+        requireEditPermission(question.getQuestionBank());
         bankQuestionRepository.delete(question);
+    }
+
+    @Override
+    @Transactional
+    public GiftImportResultResponse importGiftQuestions(Integer questionBankId, MultipartFile file) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("File import is empty");
+        }
+        String originalFileName = file.getOriginalFilename();
+        if (StringUtils.hasText(originalFileName)
+                && !originalFileName.toLowerCase(Locale.ROOT).endsWith(".txt")) {
+            throw new BusinessException("Only .txt GIFT files are supported");
+        }
+
+        String rawContent;
+        try {
+            rawContent = new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new BusinessException("Cannot read uploaded file");
+        }
+
+        List<String> blocks = splitGiftQuestionBlocks(rawContent);
+        int importedCount = 0;
+        int skippedCount = 0;
+        List<String> warnings = new ArrayList<>();
+
+        for (int index = 0; index < blocks.size(); index++) {
+            String block = blocks.get(index);
+            int questionNumber = index + 1;
+            try {
+                ParsedGiftQuestion parsed = parseGiftBlock(block);
+                if (parsed == null) {
+                    skippedCount++;
+                    warnings.add("Question #" + questionNumber + ": empty or unsupported format");
+                    continue;
+                }
+
+                BankQuestion question = new BankQuestion();
+                question.setQuestionBank(questionBank);
+                question.setContent(parsed.content());
+                question.setType(parsed.type());
+                question.setDefaultPoints(1);
+                question.setOptions(parsed.options());
+
+                if (question.getOptions() != null) {
+                    for (BankQuestionOption option : question.getOptions()) {
+                        option.setBankQuestion(question);
+                    }
+                    question.getOptions().sort(Comparator.comparing(BankQuestionOption::getOrderIndex));
+                }
+
+                bankQuestionRepository.save(question);
+                importedCount++;
+            } catch (BusinessException ex) {
+                skippedCount++;
+                warnings.add("Question #" + questionNumber + ": " + ex.getMessage());
+            } catch (Exception ex) {
+                skippedCount++;
+                warnings.add("Question #" + questionNumber + ": parse failed");
+            }
+        }
+
+        return new GiftImportResultResponse(
+                importedCount + skippedCount,
+                importedCount,
+                skippedCount,
+                warnings
+        );
     }
 
     @Override
@@ -156,6 +234,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<QuestionTagResponse> getTags(Integer subjectId) {
         List<QuestionTag> tags = subjectId != null
                 ? questionTagRepository.findBySubject_Id(subjectId)
@@ -163,55 +242,412 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         return tags.stream().map(this::convertTag).toList();
     }
 
+    @Override
+    @Transactional
+    public QuestionBankMemberResponse addMember(Integer questionBankId, QuestionBankMemberRequest request) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (request.getRole() == QuestionBankMemberRole.OWNER) {
+            transferOwnership(questionBank, user);
+            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                    questionBankId,
+                    user.getId()
+            ).orElseThrow());
+        }
+
+        QuestionBankMember member = createOrUpdateMembership(questionBank, user, request.getRole());
+        return convertMember(member);
+    }
+
+    @Override
+    @Transactional
+    public QuestionBankMemberResponse updateMemberRole(
+            Integer questionBankId,
+            Integer userId,
+            QuestionBankMemberRoleRequest request
+    ) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
+
+        if (request.getRole() == QuestionBankMemberRole.OWNER) {
+            transferOwnership(questionBank, member.getUser());
+            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                    questionBankId,
+                    userId
+            ).orElseThrow());
+        }
+
+        if (member.getRole() == QuestionBankMemberRole.OWNER) {
+            throw new BusinessException("Owner role cannot be downgraded directly. Transfer ownership first.");
+        }
+        member.setRole(request.getRole());
+        return convertMember(questionBankMemberRepository.save(member));
+    }
+
+    @Override
+    @Transactional
+    public void removeMember(Integer questionBankId, Integer userId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
+
+        if (member.getRole() == QuestionBankMemberRole.OWNER) {
+            throw new BusinessException("Cannot remove the owner from question bank");
+        }
+
+        questionBankMemberRepository.delete(member);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionBankMemberResponse> getMembers(Integer questionBankId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireViewPermission(questionBank);
+
+        return questionBankMemberRepository.findByQuestionBank_Id(questionBankId).stream()
+                .map(this::convertMember)
+                .sorted((left, right) -> Integer.compare(roleRank(left.getRole()), roleRank(right.getRole())))
+                .toList();
+    }
+
+    private List<String> splitGiftQuestionBlocks(String rawContent) {
+        String normalized = rawContent.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = normalized.split("\n", -1);
+        List<String> blocks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (String line : lines) {
+            if (!StringUtils.hasText(line)) {
+                if (StringUtils.hasText(current.toString())) {
+                    blocks.add(current.toString().trim());
+                    current.setLength(0);
+                }
+                continue;
+            }
+
+            if (current.length() > 0) {
+                current.append('\n');
+            }
+            current.append(line);
+        }
+
+        if (StringUtils.hasText(current.toString())) {
+            blocks.add(current.toString().trim());
+        }
+        return blocks;
+    }
+
+    private ParsedGiftQuestion parseGiftBlock(String block) {
+        if (!StringUtils.hasText(block)) {
+            return null;
+        }
+
+        String cleanedBlock = stripGiftCommentLines(block).trim();
+        if (!StringUtils.hasText(cleanedBlock)) {
+            return null;
+        }
+        if (cleanedBlock.toUpperCase(Locale.ROOT).startsWith("$CATEGORY:")) {
+            return null;
+        }
+
+        int openBrace = findFirstUnescaped(cleanedBlock, '{');
+        if (openBrace < 0) {
+            throw new BusinessException("GIFT question must contain answer block wrapped by { ... }");
+        }
+        int closeBrace = findClosingBrace(cleanedBlock, openBrace);
+        if (closeBrace < 0) {
+            throw new BusinessException("GIFT question has unclosed answer block");
+        }
+
+        String questionPart = cleanedBlock.substring(0, openBrace).trim();
+        String trailingPart = cleanedBlock.substring(closeBrace + 1).trim();
+        if (StringUtils.hasText(trailingPart)) {
+            // Missing-word style keeps text after answer block. This requires a dedicated format
+            // not represented in current QuestionType, so we skip it for now.
+            throw new BusinessException("Unsupported GIFT type: missing-word sentence format");
+        }
+
+        String content = extractQuestionContent(questionPart);
+        if (!StringUtils.hasText(content)) {
+            throw new BusinessException("Question content is empty");
+        }
+
+        String answerBlock = cleanedBlock.substring(openBrace + 1, closeBrace).trim();
+
+        String normalizedAnswer = answerBlock.toUpperCase(Locale.ROOT);
+        if ("T".equals(normalizedAnswer) || "TRUE".equals(normalizedAnswer)
+                || "F".equals(normalizedAnswer) || "FALSE".equals(normalizedAnswer)) {
+            // True/False is not a dedicated enum in current schema.
+            // We map it to SINGLE_CHOICE with 2 options to keep compatibility.
+            boolean isTrueCorrect = "T".equals(normalizedAnswer) || "TRUE".equals(normalizedAnswer);
+            List<BankQuestionOption> options = new ArrayList<>();
+            options.add(buildOption("True", isTrueCorrect, 1));
+            options.add(buildOption("False", !isTrueCorrect, 2));
+            return new ParsedGiftQuestion(content, QuestionType.SINGLE_CHOICE, options);
+        }
+
+        if (!StringUtils.hasText(answerBlock)) {
+            throw new BusinessException("Unsupported GIFT essay '{}' without short-answer key");
+        }
+        if (answerBlock.startsWith("#")) {
+            // Numerical questions require dedicated model + scoring logic.
+            throw new BusinessException("Unsupported GIFT type: numerical");
+        }
+
+        List<GiftAnswerToken> tokens = parseGiftAnswerTokens(answerBlock);
+        if (tokens.isEmpty()) {
+            // GIFT short answer can omit '=' for a single answer.
+            tokens.add(toGiftAnswerToken('=', answerBlock));
+        }
+
+        boolean hasMatchingSyntax = tokens.stream()
+                .anyMatch(token -> StringUtils.hasText(token.content()) && token.content().contains("->"));
+        if (hasMatchingSyntax) {
+            // Matching questions need pairwise answer model; current QuestionType does not support it.
+            throw new BusinessException("Unsupported GIFT type: matching");
+        }
+
+        int correctCount = (int) tokens.stream().filter(GiftAnswerToken::correct).count();
+        if (correctCount == 0) {
+            throw new BusinessException("Question must have at least one correct answer");
+        }
+
+        boolean hasIncorrect = tokens.stream().anyMatch(token -> !token.correct());
+        QuestionType questionType = hasIncorrect
+                ? (correctCount == 1 ? QuestionType.SINGLE_CHOICE : QuestionType.MULTIPLE_CHOICE)
+                : QuestionType.ESSAY;
+
+        List<BankQuestionOption> options = new ArrayList<>();
+        int orderIndex = 1;
+        for (GiftAnswerToken token : tokens) {
+            if (questionType == QuestionType.ESSAY && !token.correct()) {
+                continue;
+            }
+            options.add(buildOption(token.content(), token.correct(), orderIndex++));
+        }
+
+        if (options.isEmpty()) {
+            throw new BusinessException("No valid options parsed from GIFT block");
+        }
+        return new ParsedGiftQuestion(content, questionType, options);
+    }
+
+    private List<GiftAnswerToken> parseGiftAnswerTokens(String answerBlock) {
+        List<GiftAnswerToken> tokens = new ArrayList<>();
+        int length = answerBlock.length();
+        int index = 0;
+
+        while (index < length) {
+            while (index < length && Character.isWhitespace(answerBlock.charAt(index))) {
+                index++;
+            }
+            if (index >= length) {
+                break;
+            }
+
+            char marker = answerBlock.charAt(index);
+            if (marker != '=' && marker != '~') {
+                break;
+            }
+            index++;
+
+            StringBuilder payload = new StringBuilder();
+            while (index < length) {
+                char current = answerBlock.charAt(index);
+                char previous = index > 0 ? answerBlock.charAt(index - 1) : '\0';
+                boolean escaped = previous == '\\';
+                boolean nextMarker = (current == '=' || current == '~')
+                        && !escaped;
+
+                if (nextMarker) {
+                    break;
+                }
+                payload.append(current);
+                index++;
+            }
+
+            tokens.add(toGiftAnswerToken(marker, payload.toString()));
+        }
+        return tokens;
+    }
+
+    private GiftAnswerToken toGiftAnswerToken(char marker, String rawPayload) {
+        String payload = rawPayload == null ? "" : rawPayload.trim();
+        Integer weight = null;
+
+        if (payload.startsWith("%")) {
+            int endWeight = payload.indexOf('%', 1);
+            if (endWeight > 1) {
+                try {
+                    weight = Integer.parseInt(payload.substring(1, endWeight).trim());
+                    payload = payload.substring(endWeight + 1).trim();
+                } catch (NumberFormatException ignored) {
+                    // Ignore malformed percentage and keep parsing payload as plain text.
+                }
+            }
+        }
+
+        int feedbackIndex = findFirstUnescaped(payload, '#');
+        if (feedbackIndex >= 0) {
+            payload = payload.substring(0, feedbackIndex).trim();
+        }
+
+        String content = unescapeGiftText(payload);
+        if (!StringUtils.hasText(content)) {
+            throw new BusinessException("Option content is empty");
+        }
+
+        boolean isCorrect;
+        if (marker == '=') {
+            isCorrect = weight == null || weight > 0;
+        } else {
+            isCorrect = weight != null && weight > 0;
+        }
+        return new GiftAnswerToken(content, isCorrect);
+    }
+
+    private BankQuestionOption buildOption(String content, boolean isCorrect, int orderIndex) {
+        BankQuestionOption option = new BankQuestionOption();
+        option.setContent(content.trim());
+        option.setIsCorrect(isCorrect);
+        option.setOrderIndex(orderIndex);
+        return option;
+    }
+
+    private String extractQuestionContent(String questionPart) {
+        String content = questionPart == null ? "" : questionPart.trim();
+        if (content.startsWith("::")) {
+            int secondMarker = content.indexOf("::", 2);
+            if (secondMarker > 1) {
+                content = content.substring(secondMarker + 2).trim();
+            }
+        }
+        return unescapeGiftText(content);
+    }
+
+    private String stripGiftCommentLines(String block) {
+        String[] lines = block.replace("\r\n", "\n").replace("\r", "\n").split("\n");
+        StringBuilder result = new StringBuilder();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("//")) {
+                continue;
+            }
+            if (result.length() > 0) {
+                result.append('\n');
+            }
+            result.append(line);
+        }
+        return result.toString();
+    }
+
+    private int findFirstUnescaped(String text, char target) {
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == target && !isEscaped(text, i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private int findClosingBrace(String text, int openBraceIndex) {
+        int depth = 0;
+        for (int i = openBraceIndex; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (isEscaped(text, i)) {
+                continue;
+            }
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private boolean isEscaped(String text, int index) {
+        int slashCount = 0;
+        int cursor = index - 1;
+        while (cursor >= 0 && text.charAt(cursor) == '\\') {
+            slashCount++;
+            cursor--;
+        }
+        return slashCount % 2 == 1;
+    }
+
+    private String unescapeGiftText(String value) {
+        if (value == null) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder();
+        boolean escaped = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (escaped) {
+                out.append(c == 'n' ? '\n' : c);
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            out.append(c);
+        }
+        if (escaped) {
+            out.append('\\');
+        }
+        return out.toString().trim();
+    }
+
+    private record ParsedGiftQuestion(String content, QuestionType type, List<BankQuestionOption> options) {
+    }
+
+    private record GiftAnswerToken(String content, boolean correct) {
+    }
+
+    private int roleRank(QuestionBankMemberRole role) {
+        if (role == QuestionBankMemberRole.OWNER) {
+            return 1;
+        }
+        if (role == QuestionBankMemberRole.EDITOR) {
+            return 2;
+        }
+        return 3;
+    }
+
     private void applyQuestionBankRequest(QuestionBank questionBank, QuestionBankRequest request) {
-        User currentUser = userService.getCurrentUser();
+        Subject subject = subjectRepository.findById(request.getSubjectId())
+                .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
+        validateManagePermission(subject);
+
+        if (questionBank.getId() != null
+                && questionBank.getSubject() != null
+                && !questionBank.getSubject().getId().equals(subject.getId())
+                && !bankQuestionRepository.findByQuestionBank_Id(questionBank.getId()).isEmpty()) {
+            throw new BusinessException("Cannot move a non-empty question bank to a different subject");
+        }
 
         questionBank.setName(request.getName().trim());
-        questionBank.setDescription(request.getDescription());
-        questionBank.setScopeType(request.getScopeType());
-        questionBank.setSubject(null);
-        questionBank.setCurriculumVersion(null);
-        questionBank.setClassSection(null);
-
-        if (request.getScopeType() == QuestionBankScope.SUBJECT) {
-            if (request.getSubjectId() == null) {
-                throw new BusinessException("subjectId is required for SUBJECT scope");
-            }
-            Subject subject = subjectRepository.findById(request.getSubjectId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
-            validateManagePermission(subject);
-            questionBank.setSubject(subject);
-            return;
-        }
-
-        if (request.getScopeType() == QuestionBankScope.CURRICULUM) {
-            if (request.getCurriculumVersionId() == null) {
-                throw new BusinessException("curriculumVersionId is required for CURRICULUM scope");
-            }
-            CurriculumVersion curriculumVersion = curriculumVersionRepository.findById(request.getCurriculumVersionId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Curriculum version not found"));
-            validateManagePermission(curriculumVersion.getTemplate().getSubject());
-            questionBank.setCurriculumVersion(curriculumVersion);
-            questionBank.setSubject(curriculumVersion.getTemplate().getSubject());
-            return;
-        }
-
-        if (request.getScopeType() == QuestionBankScope.CLASS) {
-            if (request.getClassSectionId() == null) {
-                throw new BusinessException("classSectionId is required for CLASS scope");
-            }
-            ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-            validateManagePermission(classSection);
-            questionBank.setClassSection(classSection);
-            questionBank.setCurriculumVersion(classSection.getCurriculumVersion());
-            questionBank.setSubject(classSection.getSubject());
-            return;
-        }
-
-        if (currentUser == null) {
-            throw new UnauthorizedException("Unauthorized");
-        }
+        questionBank.setDescription(StringUtils.hasText(request.getDescription()) ? request.getDescription().trim() : null);
+        questionBank.setSubject(subject);
     }
 
     private void applyQuestionRequest(BankQuestion question, BankQuestionRequest request) {
@@ -271,21 +707,91 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
     }
 
-    private void validateManagePermission(QuestionBank questionBank) {
-        if (questionBank.getClassSection() != null) {
-            validateManagePermission(questionBank.getClassSection());
+    private void requireOwnerPermission(QuestionBank questionBank) {
+        User currentUser = requireCurrentUser();
+        if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
             return;
         }
-        if (questionBank.getSubject() != null) {
-            validateManagePermission(questionBank.getSubject());
+        QuestionBankMember membership = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                        questionBank.getId(),
+                        currentUser.getId()
+                )
+                .orElseThrow(() -> new UnauthorizedException("You do not have permission to manage this question bank"));
+        if (membership.getRole() != QuestionBankMemberRole.OWNER) {
+            throw new UnauthorizedException("Only owner can modify question bank settings");
         }
     }
 
-    private void validateManagePermission(Subject subject) {
-        User currentUser = userService.getCurrentUser();
-        if (currentUser == null) {
-            throw new UnauthorizedException("Unauthorized");
+    private void requireEditPermission(QuestionBank questionBank) {
+        User currentUser = requireCurrentUser();
+        if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
+            return;
         }
+        QuestionBankMember membership = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                        questionBank.getId(),
+                        currentUser.getId()
+                )
+                .orElse(null);
+        if (membership != null && (membership.getRole() == QuestionBankMemberRole.OWNER
+                || membership.getRole() == QuestionBankMemberRole.EDITOR)) {
+            return;
+        }
+        throw new UnauthorizedException("You do not have edit permission for this question bank");
+    }
+
+    private void requireViewPermission(QuestionBank questionBank) {
+        User currentUser = requireCurrentUser();
+        if (!canView(questionBank, currentUser)) {
+            throw new UnauthorizedException("You do not have permission to view this question bank");
+        }
+    }
+
+    private boolean canView(QuestionBank questionBank, User currentUser) {
+        if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
+            return true;
+        }
+        return questionBankMemberRepository.existsByQuestionBank_IdAndUser_Id(
+                questionBank.getId(),
+                currentUser.getId()
+        );
+    }
+
+    private QuestionBankMember createOrUpdateMembership(
+            QuestionBank questionBank,
+            User user,
+            QuestionBankMemberRole role
+    ) {
+        QuestionBankMember member = questionBankMemberRepository
+                .findByQuestionBank_IdAndUser_Id(questionBank.getId(), user.getId())
+                .orElseGet(() -> {
+                    QuestionBankMember created = new QuestionBankMember();
+                    created.setQuestionBank(questionBank);
+                    created.setUser(user);
+                    return created;
+                });
+        member.setRole(role);
+        return questionBankMemberRepository.save(member);
+    }
+
+    private void transferOwnership(QuestionBank questionBank, User newOwner) {
+        QuestionBankMember currentOwner = questionBankMemberRepository
+                .findByQuestionBank_IdAndRole(questionBank.getId(), QuestionBankMemberRole.OWNER)
+                .orElse(null);
+
+        if (currentOwner != null && currentOwner.getUser().getId().equals(newOwner.getId())) {
+            return;
+        }
+
+        if (currentOwner != null) {
+            currentOwner.setRole(QuestionBankMemberRole.EDITOR);
+            questionBankMemberRepository.save(currentOwner);
+        }
+
+        createOrUpdateMembership(questionBank, newOwner, QuestionBankMemberRole.OWNER);
+    }
+
+    private void validateManagePermission(Subject subject) {
+        User currentUser = requireCurrentUser();
         if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
             return;
         }
@@ -297,32 +803,39 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
     }
 
-    private void validateManagePermission(ClassSection classSection) {
-        User currentUser = userService.getCurrentUser();
-        if (currentUser == null) {
-            throw new UnauthorizedException("Unauthorized");
-        }
-        if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
-            return;
-        }
-        boolean isTeacher = classSection.getTeacher() != null
-                && classSection.getTeacher().getId().equals(currentUser.getId());
-        boolean isManager = classSection.getManager() != null
-                && classSection.getManager().getId().equals(currentUser.getId());
-        if (!isTeacher && !isManager) {
-            throw new UnauthorizedException("You do not manage this class section");
-        }
-    }
-
-    private QuestionBankResponse convertQuestionBank(QuestionBank questionBank, boolean includeQuestions) {
+    private QuestionBankResponse convertQuestionBank(QuestionBank questionBank, boolean includeQuestions, boolean includeMembers) {
         QuestionBankResponse response = new QuestionBankResponse();
         response.setId(questionBank.getId());
         response.setName(questionBank.getName());
         response.setDescription(questionBank.getDescription());
-        response.setScopeType(questionBank.getScopeType());
         response.setSubjectId(questionBank.getSubject() != null ? questionBank.getSubject().getId() : null);
-        response.setCurriculumVersionId(questionBank.getCurriculumVersion() != null ? questionBank.getCurriculumVersion().getId() : null);
-        response.setClassSectionId(questionBank.getClassSection() != null ? questionBank.getClassSection().getId() : null);
+
+        QuestionBankMember owner = questionBankMemberRepository
+                .findByQuestionBank_IdAndRole(questionBank.getId(), QuestionBankMemberRole.OWNER)
+                .orElse(null);
+        response.setOwnerId(owner != null && owner.getUser() != null ? owner.getUser().getId() : null);
+        response.setOwnerName(owner != null && owner.getUser() != null ? owner.getUser().getFullName() : null);
+
+        User currentUser = null;
+        try {
+            currentUser = userService.getCurrentUser();
+        } catch (Exception ignored) {}
+
+        if (currentUser != null) {
+            response.setMyRole(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                            questionBank.getId(),
+                            currentUser.getId()
+                    )
+                    .map(QuestionBankMember::getRole)
+                    .orElse(null));
+        }
+
+        response.setMembers(includeMembers
+                ? questionBankMemberRepository.findByQuestionBank_Id(questionBank.getId()).stream()
+                .map(this::convertMember)
+                .toList()
+                : null);
+
         response.setQuestions(includeQuestions
                 ? bankQuestionRepository.findByQuestionBank_Id(questionBank.getId()).stream()
                 .map(question -> convertQuestion(question, true))
@@ -376,5 +889,23 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 StringUtils.hasText(tag.getName()) ? tag.getName().trim() : tag.getName(),
                 tag.getSubject() != null ? tag.getSubject().getId() : null
         );
+    }
+
+    private QuestionBankMemberResponse convertMember(QuestionBankMember member) {
+        return new QuestionBankMemberResponse(
+                member.getId(),
+                member.getUser() != null ? member.getUser().getId() : null,
+                member.getUser() != null ? member.getUser().getUserName() : null,
+                member.getUser() != null ? member.getUser().getFullName() : null,
+                member.getRole()
+        );
+    }
+
+    private User requireCurrentUser() {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        return currentUser;
     }
 }

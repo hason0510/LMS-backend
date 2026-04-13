@@ -1,6 +1,8 @@
 package com.example.backend.entity;
 
-import com.example.backend.constant.CourseStatus;
+import com.example.backend.constant.ClassSectionStatus;
+import com.example.backend.entity.quiz.Quiz;
+import com.example.backend.entity.template.CurriculumTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -25,7 +27,7 @@ public class ClassSection extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "class_code", nullable = false, unique = true, length = 20)
+    @Column(name = "class_code", nullable = true, unique = true, length = 20)
     private String classCode;
 
     @Column(nullable = false)
@@ -35,7 +37,7 @@ public class ClassSection extends BaseEntity {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    private CourseStatus status;
+    private ClassSectionStatus status;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -48,20 +50,15 @@ public class ClassSection extends BaseEntity {
     private Subject subject;
 
     @ManyToOne
-    @JoinColumn(name = "curriculum_version_id")
-    private CurriculumVersion curriculumVersion;
-
-    @ManyToOne
-    @JoinColumn(name = "manager_id")
-    private User manager;
+    @JoinColumn(name = "curriculum_template_id")
+    private CurriculumTemplate curriculumTemplate;
 
     @ManyToOne
     @JoinColumn(name = "teacher_id")
     private User teacher;
 
-    @ManyToOne
-    @JoinColumn(name = "legacy_course_id")
-    private Course legacyCourse;
+    @OneToMany(mappedBy = "classSection")
+    private List<ClassMember> classMembers;
 
     @OneToMany(mappedBy = "classSection", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
@@ -69,9 +66,6 @@ public class ClassSection extends BaseEntity {
 
     @OneToMany(mappedBy = "classSection")
     private List<Enrollment> enrollments;
-
-    @OneToMany(mappedBy = "classSection")
-    private List<QuestionBank> questionBanks;
 
     @OneToMany(mappedBy = "classSection")
     private List<Meeting> meetings;
