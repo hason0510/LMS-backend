@@ -10,6 +10,7 @@ import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserService userService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
     public void createNotification(User recipient, String title, String message) {
@@ -40,6 +42,13 @@ public class NotificationServiceImpl implements NotificationService {
                 .createdAt(LocalDateTime.now())
                 .build();
         notificationRepository.save(notification);
+
+        NotificationResponse response = convertEntityToDTO(notification);
+
+        messagingTemplate.convertAndSend(
+                "/topic/notifications/" + recipient.getId(),
+                response
+        );
     }
 
     @Override

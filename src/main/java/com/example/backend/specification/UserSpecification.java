@@ -74,6 +74,25 @@ public class UserSpecification {
         };
     }
 
+    public static Specification<User> notInClassSection(Integer classSectionId) {
+        return (root, query, cb) -> {
+            var subQuery = query.subquery(Integer.class);
+            var enrollment = subQuery.from(Enrollment.class);
+
+            subQuery.select(enrollment.get("id"))
+                    .where(
+                            cb.equal(enrollment.get("student"), root),
+                            cb.equal(enrollment.get("classSection").get("id"), classSectionId),
+                            cb.equal(
+                                    enrollment.get("approvalStatus"),
+                                    EnrollmentStatus.APPROVED
+                            )
+                    );
+
+            return cb.not(cb.exists(subQuery));
+        };
+    }
+
 
 }
 

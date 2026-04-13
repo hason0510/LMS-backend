@@ -1,6 +1,7 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.entity.old.Course;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -25,6 +26,9 @@ public class Enrollment extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "course_id")
     private Course course;
+    @ManyToOne
+    @JoinColumn(name = "class_section_id")
+    private ClassSection classSection;
     private Integer progress;
     @Enumerated(EnumType.STRING)
     private EnrollmentStatus approvalStatus;

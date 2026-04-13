@@ -4,7 +4,7 @@ import com.example.backend.dto.request.LessonRequest;
 import com.example.backend.dto.request.chapter.ChapterItemOrderRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.chapter.ChapterItemResponse;
-import com.example.backend.service.ChapterItemService;
+import com.example.backend.service.old.ChapterItemService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -92,7 +92,7 @@ public class ChapterItemController {
     // ========== OLD API =============== //
     @Operation(summary = "Thêm bài học sẵn có vào chương")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    @PostMapping("/chapters/{chapterId}/quizzes/{lessonId}")
+    @PostMapping("/chapters/{chapterId}/lessons/{lessonId}")
     public ResponseEntity<ChapterItemResponse> addLessonToChapter(
             @PathVariable Integer chapterId,
             @PathVariable Integer lessonId

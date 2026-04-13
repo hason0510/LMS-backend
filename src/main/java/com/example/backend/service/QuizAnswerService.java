@@ -3,7 +3,7 @@ package com.example.backend.service;
 import com.example.backend.dto.request.quiz.QuizAnswerRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.QuizAnswerResponse;
-import com.example.backend.entity.QuizAnswer;
+import com.example.backend.entity.quiz.QuizAnswer;
 import org.springframework.data.domain.Pageable;
 
 public interface QuizAnswerService {

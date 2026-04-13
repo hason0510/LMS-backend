@@ -1,5 +1,6 @@
 package com.example.backend.entity;
 
+import com.example.backend.entity.old.Course;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Table(name= "meeting")
 @SQLDelete(sql = "UPDATE meeting SET is_deleted = true WHERE id = ?")
 @SQLRestriction(value = "is_deleted = false")
-public class Meeting {
+public class Meeting extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -25,4 +26,7 @@ public class Meeting {
     @ManyToOne
     @JoinColumn(name = "course_id")
     private Course course;
+    @ManyToOne
+    @JoinColumn(name = "class_section_id")
+    private ClassSection classSection;
 }

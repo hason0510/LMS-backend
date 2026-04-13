@@ -6,6 +6,7 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class EnrollmentResponse {
     private Integer id;
     private Integer studentId;
@@ -16,6 +17,9 @@ public class EnrollmentResponse {
     private String courseTitle;
     private String courseCode;
     private Integer courseId;
+    private String classSectionTitle;
+    private String classSectionCode;
+    private Integer classSectionId;
     private Integer progress;
     private String approvalStatus;
 }

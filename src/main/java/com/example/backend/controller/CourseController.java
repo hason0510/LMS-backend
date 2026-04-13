@@ -5,7 +5,7 @@ import com.example.backend.dto.response.CloudinaryResponse;
 import com.example.backend.dto.response.course.CourseResponse;
 import com.example.backend.dto.response.EnrollmentStatusResponse;
 import com.example.backend.dto.response.PageResponse;
-import com.example.backend.service.CourseService;
+import com.example.backend.service.old.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;

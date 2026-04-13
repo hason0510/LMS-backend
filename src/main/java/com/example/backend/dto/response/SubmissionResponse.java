@@ -1,0 +1,35 @@
+package com.example.backend.dto.response;
+
+import com.example.backend.constant.SubmissionStatus;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class SubmissionResponse {
+    private Integer id;
+    private Integer assignmentId;
+    private String assignmentTitle;
+    private Integer classSectionId;
+    private Integer studentId;
+    private String studentName;
+    private String description;
+    private String fileUrl;
+    private String embedUrl;
+    private String cloudinaryId;
+    private LocalDateTime submissionTime;
+    private SubmissionStatus status;
+    private Integer submissionCount;
+    private Integer grade;
+    private String feedback;
+    private LocalDateTime gradedAt;
+    private LocalDateTime dueAt;
+    private boolean late;
+    private boolean canResubmit;
+}

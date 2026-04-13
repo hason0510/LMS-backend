@@ -10,6 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 public class QuizQuestionResponse {
     private Integer id;
+    private Integer sourceBankQuestionId;
     private String content;
     private QuestionType type;
     private String fileUrl;

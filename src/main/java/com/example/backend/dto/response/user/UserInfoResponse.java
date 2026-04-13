@@ -2,11 +2,13 @@ package com.example.backend.dto.response.user;
 
 import lombok.*;
 
+import java.io.Serializable;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserInfoResponse {
+public class UserInfoResponse implements Serializable {
     private Integer id;
     private String userName;
     private String fullName;

@@ -1,5 +1,7 @@
 package com.example.backend.entity;
 
+import com.example.backend.entity.old.Course;
+import com.example.backend.entity.quiz.QuestionBankMember;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -40,7 +42,7 @@ public class User extends BaseEntity {
     private String refreshToken;
     @Column(name = "gmail", unique = true)
     private String gmail;
-    @Column(name = "is_verified", nullable = false)
+    @Column(name = "is_verified", nullable = false, columnDefinition = "TINYINT(1)")
     private boolean isVerified = false;
     @Column(name = "image_url", columnDefinition = "MEDIUMTEXT")
     private String imageUrl;
@@ -61,10 +63,21 @@ public class User extends BaseEntity {
     private List<Enrollment> enrollment;
     @OneToMany(mappedBy = "teacher")
     private List<Course> taughtCourses;
+    @OneToMany(mappedBy = "teacher")
+    private List<ClassSection> taughtClassSections;
+    @OneToMany(mappedBy = "user")
+    private List<ClassMember> classSectionMemberships;
+    @OneToMany(mappedBy = "owner")
+    private List<Subject> ownedSubjects;
+
+    @OneToMany(mappedBy = "user")
+    private List<QuestionBankMember> questionBankMemberships;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     private List<Otp> otps = new ArrayList<>();
     @OneToMany(mappedBy = "recipient")
     private List<Notification> notifications = new ArrayList<>();
+
 
 
 }

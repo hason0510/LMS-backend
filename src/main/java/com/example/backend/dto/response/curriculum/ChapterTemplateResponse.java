@@ -1,0 +1,20 @@
+package com.example.backend.dto.response.curriculum;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class ChapterTemplateResponse {
+    private Integer id;
+    private String title;
+    private String description;
+    private Integer orderIndex;
+    private List<ContentItemTemplateResponse> contentItems;
+}

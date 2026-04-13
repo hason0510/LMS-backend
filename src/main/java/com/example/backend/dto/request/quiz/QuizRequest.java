@@ -16,5 +16,8 @@ public class QuizRequest {
     private Integer maxAttempts;
     private LocalDateTime availableFrom;
     private LocalDateTime availableUntil;
+    private Integer classSectionId;
+    private Integer classContentItemId;
+    private List<QuizBankSourceRequest> bankSources;
     private List<QuizQuestionRequest> questions;
 }

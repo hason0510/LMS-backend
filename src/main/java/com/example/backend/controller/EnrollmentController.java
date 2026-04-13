@@ -1,16 +1,12 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.request.EnrollmentRequest;
-import com.example.backend.dto.request.course.CourseRatingRequest;
 import com.example.backend.dto.request.course.StudentCourseRequest;
 import com.example.backend.dto.request.search.SearchUserRequest;
 import com.example.backend.dto.response.EnrollmentResponse;
 import com.example.backend.dto.response.PageResponse;
-import com.example.backend.dto.response.course.CourseRatingResponse;
-import com.example.backend.dto.response.course.CourseResponse;
 import com.example.backend.dto.response.user.UserViewResponse;
 import com.example.backend.entity.User;
-import com.example.backend.service.CourseService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,23 +19,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/lms")
-@Tag(name = "Enrollment Management", description = "APIs for managing course enrollments and student registrations")
+@Tag(name = "Enrollment Management", description = "APIs for managing enrollments and student registrations")
 public class EnrollmentController {
     private final EnrollmentService enrollmentService;
     private final UserService userService;
 
-    public EnrollmentController(EnrollmentService enrollmentService, CourseService courseService, UserService userService) {
+    public EnrollmentController(EnrollmentService enrollmentService, UserService userService) {
         this.enrollmentService = enrollmentService;
         this.userService = userService;
     }
 
-    // ================= STUDENT SELF-ENROLLMENT =================
-
-    @Operation(summary = "Đăng ký tham gia khóa học Public")
+    @Operation(summary = "Student enroll in public course")
     @PreAuthorize("hasRole('STUDENT')")
     @PostMapping("/courses/{courseId}/enroll")
     public ResponseEntity<EnrollmentResponse> enrollPublicCourse(@PathVariable Integer courseId) {
@@ -47,46 +42,24 @@ public class EnrollmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "Đăng ký tham gia khóa học Private")
+    @Operation(summary = "Student enroll in private course by class code")
     @PreAuthorize("hasRole('STUDENT')")
     @PostMapping("/courses/enroll/private")
     public ResponseEntity<EnrollmentResponse> enrollPrivateCourse(@RequestBody Map<String, String> requestBody) {
-        // Giả sử body gửi lên là { "classCode": "CODE123" }
         String classCode = requestBody.get("classCode");
         EnrollmentResponse response = enrollmentService.enrollPrivateCourse(classCode);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-
-    @Operation(summary = "Hiển thị danh sách đánh giá một khóa học cụ thể")
-    @PreAuthorize("isAuthenticated()")
-    @GetMapping("/courses/{courseId}/rating")
-    public ResponseEntity<PageResponse<CourseRatingResponse>> getAllCourseRatings(
-            @PathVariable Integer courseId,
-            @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize,
-            @RequestParam(value = "ratingValue", required = false) Integer ratingValue) {
-        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
-        PageResponse<CourseRatingResponse> response = enrollmentService.getAllCourseRatings(courseId, ratingValue, pageable);
-        return ResponseEntity.ok(response);
-    }
-
-    @Operation(summary = "Sinh viên trong khóa đánh giá khóa hoọc")
+    @Operation(summary = "Student enroll in class section")
     @PreAuthorize("hasRole('STUDENT')")
-    @PostMapping("/courses/{courseId}/rating")
-    public ResponseEntity<CourseRatingResponse> ratingCourse(@PathVariable Integer courseId, @RequestBody CourseRatingRequest request) {
-        CourseRatingResponse response = enrollmentService.ratingCourse(courseId, request);
-        return ResponseEntity.ok().body(response);
+    @PostMapping("/class-sections/{classSectionId}/enroll")
+    public ResponseEntity<EnrollmentResponse> enrollClassSection(@PathVariable Integer classSectionId) {
+        EnrollmentResponse response = enrollmentService.enrollClassSection(classSectionId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PreAuthorize("hasRole('STUDENT')")
-    @DeleteMapping("/courses/{courseId}/rating")
-    public ResponseEntity<Void> deleteReview(@PathVariable Integer courseId) {
-        enrollmentService.deleteReview(courseId);
-        return ResponseEntity.ok().build();
-    }
-
-    @Operation(summary = "Đánh dấu hoàn thành LESSON")
+    @Operation(summary = "Mark legacy lesson complete")
     @PreAuthorize("hasRole('STUDENT')")
     @PostMapping("/chapter-items/{chapterItemId}/complete")
     public ResponseEntity<Void> completeLesson(@PathVariable Integer chapterItemId) {
@@ -94,17 +67,29 @@ public class EnrollmentController {
         return ResponseEntity.ok().build();
     }
 
+    @Operation(summary = "Mark class content item complete")
     @PreAuthorize("hasRole('STUDENT')")
-    @GetMapping("/my-progress/{courseId}")
-    public ResponseEntity<EnrollmentResponse> getCurrentUserProgressByCourse(@PathVariable Integer courseId){
-        EnrollmentResponse response =  enrollmentService.getCurrentUserProgressByCourse(courseId);
-        return ResponseEntity.ok().body(response);
+    @PostMapping("/class-content-items/{classContentItemId}/complete")
+    public ResponseEntity<Void> completeClassContentItem(@PathVariable Integer classContentItemId) {
+        enrollmentService.completeClassContentItem(classContentItemId);
+        return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/my-progress/{courseId}")
+    public ResponseEntity<EnrollmentResponse> getCurrentUserProgressByCourse(@PathVariable Integer courseId) {
+        EnrollmentResponse response = enrollmentService.getCurrentUserProgressByCourse(courseId);
+        return ResponseEntity.ok(response);
+    }
 
-    // ================= TEACHER/ADMIN APPROVAL & MANAGEMENT =================
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/my-progress/class-sections/{classSectionId}")
+    public ResponseEntity<EnrollmentResponse> getCurrentUserProgressByClassSection(@PathVariable Integer classSectionId) {
+        EnrollmentResponse response = enrollmentService.getCurrentUserProgressByClassSection(classSectionId);
+        return ResponseEntity.ok(response);
+    }
 
-    @Operation(summary = "Phê duyệt yêu cầu tham gia khóa học")
+    @Operation(summary = "Approve enrollment request")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PostMapping("/enrollments/approve")
     public ResponseEntity<EnrollmentResponse> approveStudentToEnrollment(@RequestBody EnrollmentRequest request) {
@@ -112,7 +97,7 @@ public class EnrollmentController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Từ chối/Xóa học viên khỏi khóa học")
+    @Operation(summary = "Reject enrollment request")
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     @DeleteMapping("/enrollments/reject")
     public ResponseEntity<Void> rejectStudent(@RequestBody EnrollmentRequest request) {
@@ -120,101 +105,172 @@ public class EnrollmentController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Lấy danh sách học viên đã được duyệt vào khóa học")
+    @Operation(summary = "Get approved enrollments by course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("/courses/{courseId}/enrollments/approved")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getStudentsApprovedInEnrollment(
             @PathVariable Integer courseId,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("id").descending());
         PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsApprovedInEnrollment(courseId, pageable);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Lấy danh sách yêu cầu đang CHỜ duyệt")
+    @Operation(summary = "Get approved enrollments by class section")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("/class-sections/{classSectionId}/enrollments/approved")
+    public ResponseEntity<PageResponse<EnrollmentResponse>> getStudentsApprovedInClassSection(
+            @PathVariable Integer classSectionId,
+            @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("id").descending());
+        PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsApprovedInClassSection(classSectionId, pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Get pending enrollments by course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("/courses/{courseId}/enrollments/pending")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getStudentsPendingEnrollment(
             @PathVariable Integer courseId,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("id").descending());
         PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsPendingEnrollment(courseId, pageable);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Lấy tất cả danh sách ghi danh", description = "Get all enrollments in the system")
+    @Operation(summary = "Get pending enrollments by class section")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("/class-sections/{classSectionId}/enrollments/pending")
+    public ResponseEntity<PageResponse<EnrollmentResponse>> getStudentsPendingInClassSection(
+            @PathVariable Integer classSectionId,
+            @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("id").descending());
+        PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsPendingInClassSection(classSectionId, pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Get all enrollments (admin)")
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/enrollments")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getEnrollmentPage(
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
         PageResponse<EnrollmentResponse> response = enrollmentService.getEnrollmentPage(pageable);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Lấy danh sách enrollments của giáo viên", description = "Get all enrollments for teacher's courses")
+    //      todo: fix this API trash as hell
+    @Operation(summary = "Get teacher enrollments")
     @PreAuthorize("hasRole('TEACHER')")
     @GetMapping("/teacher/enrollments")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getTeacherEnrollments(
-            @RequestParam(value = "courseId", required = false) Integer courseId,
+            @RequestParam(value = "classSectionId", required = false) Integer classSectionId,
             @RequestParam(value = "approvalStatus", required = false) String approvalStatus,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize) {
-        User currentUser = userService.getCurrentUser();
-        Integer teacherId = currentUser.getId();
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
-        PageResponse<EnrollmentResponse> response = enrollmentService.getTeacherEnrollments(teacherId, courseId, approvalStatus, pageable);
+        PageResponse<EnrollmentResponse> response = enrollmentService.getTeacherEnrollments(
+                classSectionId,
+                approvalStatus,
+                pageable
+        );
         return ResponseEntity.ok(response);
     }
 
-    // ================= MANUAL ADD/REMOVE STUDENTS (EXISTING) =================
-
-    @Operation(summary = "Lấy danh sách sinh viên có thể thêm vào khóa học (Search)")
+    @Operation(summary = "Search students in course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("/courses/{courseId}/students/available")
     public ResponseEntity<PageResponse<UserViewResponse>> getStudentsInCourse(
-            @PathVariable Integer courseId, SearchUserRequest request,
+            @PathVariable Integer courseId,
+            SearchUserRequest request,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
         PageResponse<UserViewResponse> response = enrollmentService.searchStudentsInCourse(courseId, request, pageable);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Lấy danh sách sinh viên chưa trong khóa học (Search)")
+    @Operation(summary = "Search students not in course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("/courses/{courseId}/students/not-available")
     public ResponseEntity<PageResponse<UserViewResponse>> getStudentsNotInCourse(
-            @PathVariable Integer courseId, SearchUserRequest request,
+            @PathVariable Integer courseId,
+            SearchUserRequest request,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize) {
+            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize
+    ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
         PageResponse<UserViewResponse> response = enrollmentService.searchStudentsNotInCourse(courseId, request, pageable);
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Thêm trực tiếp sinh viên vào khóa học")
+    @Operation(summary = "Search students not in class section")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("/class-sections/{classSectionId}/students/not-available")
+    public ResponseEntity<PageResponse<UserViewResponse>> getStudentsNotInClassSection(
+            @PathVariable Integer classSectionId,
+            SearchUserRequest request,
+            @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
+            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize
+    ) {
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
+        PageResponse<UserViewResponse> response = enrollmentService.searchStudentsNotInClassSection(classSectionId, request, pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Add students to course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PostMapping("/courses/{courseId}/students")
     public ResponseEntity<?> addStudentsToCourse(@PathVariable Integer courseId, @RequestBody StudentCourseRequest request) {
         enrollmentService.addStudentsToCourse(courseId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new java.util.HashMap<String, String>() {{
-            put("code", "201");
-            put("message", "Students has been added successfully");
-        }});
+        Map<String, String> payload = new HashMap<>();
+        payload.put("code", "201");
+        payload.put("message", "Students has been added successfully");
+        return ResponseEntity.status(HttpStatus.CREATED).body(payload);
     }
 
-    @Operation(summary = "Xóa sinh viên khỏi khóa học")
+    @Operation(summary = "Add students to class section")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/class-sections/{classSectionId}/students")
+    public ResponseEntity<?> addStudentsToClassSection(@PathVariable Integer classSectionId, @RequestBody StudentCourseRequest request) {
+        enrollmentService.addStudentsToClassSection(classSectionId, request);
+        Map<String, String> payload = new HashMap<>();
+        payload.put("code", "201");
+        payload.put("message", "Students has been added successfully");
+        return ResponseEntity.status(HttpStatus.CREATED).body(payload);
+    }
+
+    @Operation(summary = "Remove students from course")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @DeleteMapping("/courses/{courseId}/students")
     public ResponseEntity<?> removeStudentsInCourse(@PathVariable Integer courseId, @RequestBody StudentCourseRequest request) {
         enrollmentService.removeStudentsInCourse(courseId, request);
-        return ResponseEntity.ok(new java.util.HashMap<String, String>() {{
-            put("code", "200");
-            put("message", "Students has been deleted successfully");
-        }});
+        Map<String, String> payload = new HashMap<>();
+        payload.put("code", "200");
+        payload.put("message", "Students has been deleted successfully");
+        return ResponseEntity.ok(payload);
+    }
+
+    @Operation(summary = "Remove students from class section")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @DeleteMapping("/class-sections/{classSectionId}/students")
+    public ResponseEntity<?> removeStudentsFromClassSection(@PathVariable Integer classSectionId, @RequestBody StudentCourseRequest request) {
+        enrollmentService.removeStudentsFromClassSection(classSectionId, request);
+        Map<String, String> payload = new HashMap<>();
+        payload.put("code", "200");
+        payload.put("message", "Students has been deleted successfully");
+        return ResponseEntity.ok(payload);
     }
 }
