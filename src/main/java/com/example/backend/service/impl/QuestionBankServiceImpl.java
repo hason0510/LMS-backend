@@ -143,6 +143,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         bankQuestionRepository.delete(question);
     }
 
+    // TODO: Understand this code
     @Override
     @Transactional
     public GiftImportResultResponse importGiftQuestions(Integer questionBankId, MultipartFile file) {
@@ -215,114 +216,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         );
     }
 
-    @Override
-    @Transactional
-    public QuestionTagResponse createTag(QuestionTagRequest request) {
-        Subject subject = subjectRepository.findById(request.getSubjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
-        validateManagePermission(subject);
 
-        questionTagRepository.findBySubject_IdAndNameIgnoreCase(subject.getId(), request.getName())
-                .ifPresent(existing -> {
-                    throw new BusinessException("Question tag already exists in this subject");
-                });
-
-        QuestionTag tag = new QuestionTag();
-        tag.setName(request.getName().trim());
-        tag.setSubject(subject);
-        return convertTag(questionTagRepository.save(tag));
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<QuestionTagResponse> getTags(Integer subjectId) {
-        List<QuestionTag> tags = subjectId != null
-                ? questionTagRepository.findBySubject_Id(subjectId)
-                : questionTagRepository.findAll();
-        return tags.stream().map(this::convertTag).toList();
-    }
-
-    @Override
-    @Transactional
-    public QuestionBankMemberResponse addMember(Integer questionBankId, QuestionBankMemberRequest request) {
-        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireOwnerPermission(questionBank);
-
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (request.getRole() == QuestionBankMemberRole.OWNER) {
-            transferOwnership(questionBank, user);
-            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
-                    questionBankId,
-                    user.getId()
-            ).orElseThrow());
-        }
-
-        QuestionBankMember member = createOrUpdateMembership(questionBank, user, request.getRole());
-        return convertMember(member);
-    }
-
-    @Override
-    @Transactional
-    public QuestionBankMemberResponse updateMemberRole(
-            Integer questionBankId,
-            Integer userId,
-            QuestionBankMemberRoleRequest request
-    ) {
-        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireOwnerPermission(questionBank);
-
-        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
-
-        if (request.getRole() == QuestionBankMemberRole.OWNER) {
-            transferOwnership(questionBank, member.getUser());
-            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
-                    questionBankId,
-                    userId
-            ).orElseThrow());
-        }
-
-        if (member.getRole() == QuestionBankMemberRole.OWNER) {
-            throw new BusinessException("Owner role cannot be downgraded directly. Transfer ownership first.");
-        }
-        member.setRole(request.getRole());
-        return convertMember(questionBankMemberRepository.save(member));
-    }
-
-    @Override
-    @Transactional
-    public void removeMember(Integer questionBankId, Integer userId) {
-        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireOwnerPermission(questionBank);
-
-        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
-
-        if (member.getRole() == QuestionBankMemberRole.OWNER) {
-            throw new BusinessException("Cannot remove the owner from question bank");
-        }
-
-        questionBankMemberRepository.delete(member);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<QuestionBankMemberResponse> getMembers(Integer questionBankId) {
-        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireViewPermission(questionBank);
-
-        return questionBankMemberRepository.findByQuestionBank_Id(questionBankId).stream()
-                .map(this::convertMember)
-                .sorted((left, right) -> Integer.compare(roleRank(left.getRole()), roleRank(right.getRole())))
-                .toList();
-    }
-
+    // TODO: UNDERSTAND THIS CODE
     private List<String> splitGiftQuestionBlocks(String rawContent) {
         String normalized = rawContent.replace("\r\n", "\n").replace("\r", "\n");
         String[] lines = normalized.split("\n", -1);
@@ -337,13 +232,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 }
                 continue;
             }
-
-            if (current.length() > 0) {
+            if (!current.isEmpty()) {
                 current.append('\n');
             }
             current.append(line);
         }
-
         if (StringUtils.hasText(current.toString())) {
             blocks.add(current.toString().trim());
         }
@@ -354,7 +247,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (!StringUtils.hasText(block)) {
             return null;
         }
-
         String cleanedBlock = stripGiftCommentLines(block).trim();
         if (!StringUtils.hasText(cleanedBlock)) {
             return null;
@@ -362,7 +254,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (cleanedBlock.toUpperCase(Locale.ROOT).startsWith("$CATEGORY:")) {
             return null;
         }
-
         int openBrace = findFirstUnescaped(cleanedBlock, '{');
         if (openBrace < 0) {
             throw new BusinessException("GIFT question must contain answer block wrapped by { ... }");
@@ -621,6 +512,115 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private record GiftAnswerToken(String content, boolean correct) {
+    }
+
+    //END OF TODO
+
+    @Override
+    @Transactional
+    public QuestionTagResponse createTag(QuestionTagRequest request) {
+        Subject subject = subjectRepository.findById(request.getSubjectId())
+                .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
+        validateManagePermission(subject);
+
+        questionTagRepository.findBySubject_IdAndNameIgnoreCase(subject.getId(), request.getName())
+                .ifPresent(existing -> {
+                    throw new BusinessException("Question tag already exists in this subject");
+                });
+
+        QuestionTag tag = new QuestionTag();
+        tag.setName(request.getName().trim());
+        tag.setSubject(subject);
+        return convertTag(questionTagRepository.save(tag));
+    }
+
+    @Override
+    public List<QuestionTagResponse> getTags(Integer subjectId) {
+        List<QuestionTag> tags = subjectId != null
+                ? questionTagRepository.findBySubject_Id(subjectId)
+                : questionTagRepository.findAll();
+        return tags.stream().map(this::convertTag).toList();
+    }
+
+    @Override
+    @Transactional
+    public QuestionBankMemberResponse addMember(Integer questionBankId, QuestionBankMemberRequest request) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (request.getRole() == QuestionBankMemberRole.OWNER) {
+            transferOwnership(questionBank, user);
+            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                    questionBankId,
+                    user.getId()
+            ).orElseThrow());
+        }
+
+        QuestionBankMember member = createOrUpdateMembership(questionBank, user, request.getRole());
+        return convertMember(member);
+    }
+
+    @Override
+    @Transactional
+    public QuestionBankMemberResponse updateMemberRole(
+            Integer questionBankId,
+            Integer userId,
+            QuestionBankMemberRoleRequest request
+    ) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
+
+        if (request.getRole() == QuestionBankMemberRole.OWNER) {
+            transferOwnership(questionBank, member.getUser());
+            return convertMember(questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
+                    questionBankId,
+                    userId
+            ).orElseThrow());
+        }
+
+        if (member.getRole() == QuestionBankMemberRole.OWNER) {
+            throw new BusinessException("Owner role cannot be downgraded directly. Transfer ownership first.");
+        }
+        member.setRole(request.getRole());
+        return convertMember(questionBankMemberRepository.save(member));
+    }
+
+    @Override
+    @Transactional
+    public void removeMember(Integer questionBankId, Integer userId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+
+        QuestionBankMember member = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(questionBankId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank member not found"));
+
+        if (member.getRole() == QuestionBankMemberRole.OWNER) {
+            throw new BusinessException("Cannot remove the owner from question bank");
+        }
+
+        questionBankMemberRepository.delete(member);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionBankMemberResponse> getMembers(Integer questionBankId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireViewPermission(questionBank);
+
+        return questionBankMemberRepository.findByQuestionBank_Id(questionBankId).stream()
+                .map(this::convertMember)
+                .sorted((left, right) -> Integer.compare(roleRank(left.getRole()), roleRank(right.getRole())))
+                .toList();
     }
 
     private int roleRank(QuestionBankMemberRole role) {
