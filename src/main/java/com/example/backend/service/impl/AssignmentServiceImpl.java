@@ -3,11 +3,13 @@ package com.example.backend.service.impl;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.AssignmentRequest;
+import com.example.backend.dto.request.ResourceRequest;
 import com.example.backend.dto.response.AssignmentResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.Resource;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
@@ -18,6 +20,7 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.service.AssignmentService;
 import com.example.backend.service.ClassMemberAuthorizationService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +43,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final ResourceService resourceService;
 
     @Override
     @Transactional
@@ -49,7 +53,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         requireTeacherOrTaPermission(classSection);
 
         Assignment assignment = new Assignment();
-        applyRequest(assignment, request, classSection);
+        applyRequest(assignment, request, classSection, true);
         return convertToResponse(assignmentRepository.save(assignment));
     }
 
@@ -68,7 +72,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         requireTeacherPermission(classSection);
 
-        applyRequest(assignment, request, classSection);
+        applyRequest(assignment, request, classSection, false);
         return convertToResponse(assignmentRepository.save(assignment));
     }
 
@@ -137,7 +141,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignmentRepository.delete(assignment);
     }
 
-    private void applyRequest(Assignment assignment, AssignmentRequest request, ClassSection classSection) {
+    private void applyRequest(Assignment assignment, AssignmentRequest request, ClassSection classSection, boolean createMode) {
         assignment.setTitle(request.getTitle().trim());
         assignment.setDescription(request.getDescription());
         assignment.setInstruction(request.getInstruction());
@@ -145,6 +149,29 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setDueAt(request.getDueAt());
         assignment.setAllowLateSubmission(Boolean.TRUE.equals(request.getAllowLateSubmission()));
         assignment.setClassSection(classSection);
+
+        if (createMode || request.getResources() != null) {
+            replaceAssignmentResources(assignment, request.getResources());
+        }
+    }
+
+    private void replaceAssignmentResources(Assignment assignment, List<ResourceRequest> resourceRequests) {
+        if (assignment.getResources() == null) {
+            assignment.setResources(new ArrayList<>());
+        }
+        assignment.getResources().clear();
+
+        if (resourceRequests == null || resourceRequests.isEmpty()) {
+            return;
+        }
+
+        for (ResourceRequest resourceRequest : resourceRequests) {
+            Resource resource = resourceService.buildDetachedResource(resourceRequest);
+            resource.setAssignment(assignment);
+            resource.setLesson(null);
+            resource.setSubmission(null);
+            assignment.getResources().add(resource);
+        }
     }
 
     private Assignment resolveAssignment(ClassContentItem item) {
@@ -176,6 +203,11 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setDueAt(assignment.getDueAt());
         response.setAllowLateSubmission(assignment.isAllowLateSubmission());
         response.setClassSectionId(assignment.getClassSection() != null ? assignment.getClassSection().getId() : null);
+        response.setResources(
+                assignment.getResources() == null
+                        ? List.of()
+                        : assignment.getResources().stream().map(resourceService::convertEntityToDTO).toList()
+        );
         return response;
     }
 

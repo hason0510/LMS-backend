@@ -17,16 +17,27 @@ public interface ResourceService {
     @Transactional
     ResourceResponse createResource(Integer lessonId, ResourceRequest request);
 
+    @Transactional
+    ResourceResponse createAssignmentResource(Integer assignmentId, ResourceRequest request);
+
+    @Transactional
+    ResourceResponse createSubmissionResource(Integer submissionId, ResourceRequest request);
+
     ResourceResponse updateResource(Integer id, ResourceRequest request);
     void deleteResource(Integer id);
 
     PageResponse<ResourceResponse> getResourcePage(Pageable pageable);
 
     List<ResourceResponse> getResourcesByLessonId(Integer lessonId);
+    List<ResourceResponse> getResourcesByAssignmentId(Integer assignmentId);
+    List<ResourceResponse> getResourcesBySubmissionId(Integer submissionId);
 
     ResourceResponse convertEntityToDTO(Resource resource);
+    Resource buildDetachedResource(ResourceRequest request);
 
     CloudinaryResponse uploadVideoResource(Integer id, MultipartFile file);
 
     CloudinaryResponse uploadSlideResource(Integer id, MultipartFile file);
+
+    CloudinaryResponse uploadAttachmentResource(Integer id, MultipartFile file);
 }

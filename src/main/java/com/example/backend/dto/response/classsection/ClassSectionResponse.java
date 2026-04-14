@@ -30,4 +30,5 @@ public class ClassSectionResponse {
     private Integer curriculumTemplateId;
     private Boolean templateBased;
     private List<ClassChapterResponse> chapters;
+    private Long totalEnrollments;
 }

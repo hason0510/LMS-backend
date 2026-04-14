@@ -1,6 +1,8 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.ResourceSource;
+import com.example.backend.entity.assignment.Assignment;
+import com.example.backend.entity.assignment.Submission;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -24,6 +26,8 @@ public class Resource extends BaseEntity {
     private String embedUrl;
     private String cloudinaryId;
     private String description;
+    private String mimeType;
+    private Long fileSize;
     @Enumerated(EnumType.STRING)
     @Column(name = "filetype")
     private ResourceType type;
@@ -31,4 +35,10 @@ public class Resource extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
+    @ManyToOne
+    @JoinColumn(name = "assignment_id")
+    private Assignment assignment;
+    @ManyToOne
+    @JoinColumn(name = "submission_id")
+    private Submission submission;
 }

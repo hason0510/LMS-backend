@@ -47,10 +47,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class QuestionBankServiceImpl implements QuestionBankService {
+    private static final Pattern AIKEN_OPTION_PATTERN = Pattern.compile("^([A-Z])\\.\\s+(.+)$");
+    private static final Pattern AIKEN_ANSWER_PATTERN = Pattern.compile("^ANSWER\\s*:\\s*([A-Z])\\s*$", Pattern.CASE_INSENSITIVE);
+
 
     private final QuestionBankRepository questionBankRepository;
     private final BankQuestionRepository bankQuestionRepository;
@@ -157,7 +162,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         String originalFileName = file.getOriginalFilename();
         if (StringUtils.hasText(originalFileName)
                 && !originalFileName.toLowerCase(Locale.ROOT).endsWith(".txt")) {
-            throw new BusinessException("Only .txt GIFT files are supported");
+            throw new BusinessException("Only .txt GIFT/AIKEN files are supported");
         }
 
         String rawContent;
@@ -176,10 +181,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             String block = blocks.get(index);
             int questionNumber = index + 1;
             try {
-                ParsedGiftQuestion parsed = parseGiftBlock(block);
+                ParsedGiftQuestion parsed = parseTextQuestionBlock(block);
                 if (parsed == null) {
                     skippedCount++;
-                    warnings.add("Question #" + questionNumber + ": empty or unsupported format");
+                    warnings.add("Question #" + questionNumber + ": empty or unsupported GIFT/AIKEN format");
                     continue;
                 }
 
@@ -243,6 +248,14 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         return blocks;
     }
 
+    private ParsedGiftQuestion parseTextQuestionBlock(String block) {
+        ParsedGiftQuestion giftQuestion = parseGiftBlock(block);
+        if (giftQuestion != null) {
+            return giftQuestion;
+        }
+        return parseAikenBlock(block);
+    }
+
     private ParsedGiftQuestion parseGiftBlock(String block) {
         if (!StringUtils.hasText(block)) {
             return null;
@@ -256,7 +269,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
         int openBrace = findFirstUnescaped(cleanedBlock, '{');
         if (openBrace < 0) {
-            throw new BusinessException("GIFT question must contain answer block wrapped by { ... }");
+            return null;
         }
         int closeBrace = findClosingBrace(cleanedBlock, openBrace);
         if (closeBrace < 0) {
@@ -334,6 +347,103 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             throw new BusinessException("No valid options parsed from GIFT block");
         }
         return new ParsedGiftQuestion(content, questionType, options);
+    }
+
+    private ParsedGiftQuestion parseAikenBlock(String block) {
+        if (!StringUtils.hasText(block)) {
+            return null;
+        }
+
+        String normalized = block.replace("\r\n", "\n").replace("\r", "\n");
+        String[] rawLines = normalized.split("\n");
+        List<String> lines = new ArrayList<>();
+        for (String rawLine : rawLines) {
+            if (StringUtils.hasText(rawLine)) {
+                lines.add(rawLine.trim());
+            }
+        }
+        if (lines.isEmpty()) {
+            return null;
+        }
+
+        int firstOptionIndex = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            if (AIKEN_OPTION_PATTERN.matcher(lines.get(i)).matches()) {
+                firstOptionIndex = i;
+                break;
+            }
+        }
+        if (firstOptionIndex <= 0) {
+            // Not AIKEN if we cannot find at least one question-content line before options.
+            return null;
+        }
+
+        StringBuilder contentBuilder = new StringBuilder();
+        for (int i = 0; i < firstOptionIndex; i++) {
+            if (!contentBuilder.isEmpty()) {
+                contentBuilder.append('\n');
+            }
+            contentBuilder.append(lines.get(i));
+        }
+        String content = contentBuilder.toString().trim();
+        if (!StringUtils.hasText(content)) {
+            throw new BusinessException("AIKEN question content is empty");
+        }
+
+        List<AikenOptionLine> parsedOptions = new ArrayList<>();
+        Character answerLetter = null;
+
+        for (int i = firstOptionIndex; i < lines.size(); i++) {
+            String line = lines.get(i);
+            Matcher optionMatcher = AIKEN_OPTION_PATTERN.matcher(line);
+            if (optionMatcher.matches()) {
+                char letter = optionMatcher.group(1).charAt(0);
+                String optionContent = optionMatcher.group(2).trim();
+                if (!StringUtils.hasText(optionContent)) {
+                    throw new BusinessException("AIKEN option content is empty");
+                }
+                parsedOptions.add(new AikenOptionLine(letter, unescapeGiftText(optionContent)));
+                continue;
+            }
+
+            Matcher answerMatcher = AIKEN_ANSWER_PATTERN.matcher(line);
+            if (answerMatcher.matches()) {
+                answerLetter = answerMatcher.group(1).toUpperCase(Locale.ROOT).charAt(0);
+                if (i != lines.size() - 1) {
+                    throw new BusinessException("AIKEN ANSWER line must be the last line of question block");
+                }
+                break;
+            }
+
+            throw new BusinessException("Unsupported AIKEN line: " + line);
+        }
+
+        if (parsedOptions.size() < 2) {
+            throw new BusinessException("AIKEN question must contain at least 2 options");
+        }
+        if (answerLetter == null) {
+            throw new BusinessException("AIKEN question missing 'ANSWER: X' line");
+        }
+        char resolvedAnswerLetter = answerLetter;
+
+        boolean hasCorrectOption = false;
+        for (AikenOptionLine parsedOption : parsedOptions) {
+            if (parsedOption.letter() == resolvedAnswerLetter) {
+                hasCorrectOption = true;
+                break;
+            }
+        }
+        if (!hasCorrectOption) {
+            throw new BusinessException("AIKEN ANSWER does not match any option label");
+        }
+
+        List<BankQuestionOption> options = new ArrayList<>();
+        int orderIndex = 1;
+        for (AikenOptionLine parsedOption : parsedOptions) {
+            options.add(buildOption(parsedOption.content(), parsedOption.letter() == resolvedAnswerLetter, orderIndex++));
+        }
+
+        return new ParsedGiftQuestion(content, QuestionType.SINGLE_CHOICE, options);
     }
 
     private List<GiftAnswerToken> parseGiftAnswerTokens(String answerBlock) {
@@ -512,6 +622,9 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private record GiftAnswerToken(String content, boolean correct) {
+    }
+
+    private record AikenOptionLine(char letter, String content) {
     }
 
     //END OF TODO

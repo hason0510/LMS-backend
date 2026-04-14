@@ -9,5 +9,7 @@ import java.util.List;
 @Repository
 public interface ResourceRepository extends JpaRepository<Resource, Integer> {
     List<Resource> findByLesson_Id(Integer lessonId);
+    List<Resource> findByAssignment_Id(Integer assignmentId);
+    List<Resource> findBySubmission_Id(Integer submissionId);
 
 }

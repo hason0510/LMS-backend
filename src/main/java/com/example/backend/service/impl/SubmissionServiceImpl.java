@@ -1,8 +1,10 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
+import com.example.backend.dto.request.ResourceRequest;
 import com.example.backend.dto.request.SubmissionGradeRequest;
 import com.example.backend.dto.request.SubmissionRequest;
 import com.example.backend.dto.request.SubmissionReturnRequest;
@@ -10,6 +12,7 @@ import com.example.backend.dto.response.SubmissionResponse;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Enrollment;
+import com.example.backend.entity.Resource;
 import com.example.backend.entity.assignment.Submission;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
@@ -21,6 +24,7 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.SubmissionRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.SubmissionService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +50,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final EnrollmentRepository enrollmentRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final ResourceService resourceService;
 
     @Override
     @Transactional
@@ -83,10 +88,10 @@ public class SubmissionServiceImpl implements SubmissionService {
                     return created;
                 });
 
+        List<ResourceRequest> requestedResources = resolveRequestedResources(request);
         submission.setDescription(request.getDescription());
-        submission.setFileUrl(request.getFileUrl());
-        submission.setEmbedUrl(request.getEmbedUrl());
-        submission.setCloudinaryId(request.getCloudinaryId());
+        applySubmissionResources(submission, requestedResources);
+        syncLegacySubmissionFields(submission);
         submission.setSubmissionTime(now);
         submission.setStatus(lateSubmission ? SubmissionStatus.LATE_SUBMITTED : SubmissionStatus.SUBMITTED);
         submission.setSubmissionCount((submission.getSubmissionCount() == null ? 0 : submission.getSubmissionCount()) + 1);
@@ -266,10 +271,73 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     private void validateSubmissionPayload(SubmissionRequest request) {
         boolean hasDescription = StringUtils.hasText(request.getDescription());
-        boolean hasFile = StringUtils.hasText(request.getFileUrl());
-        boolean hasEmbed = StringUtils.hasText(request.getEmbedUrl());
-        if (!hasDescription && !hasFile && !hasEmbed) {
-            throw new BusinessException("Submission must include text, fileUrl, or embedUrl");
+        boolean hasResources = !resolveRequestedResources(request).isEmpty();
+        if (!hasDescription && !hasResources) {
+            throw new BusinessException("Submission must include text or resources");
+        }
+    }
+
+    private List<ResourceRequest> resolveRequestedResources(SubmissionRequest request) {
+        List<ResourceRequest> resources = new ArrayList<>();
+        if (request.getResources() != null) {
+            resources.addAll(request.getResources());
+        }
+
+        if (StringUtils.hasText(request.getFileUrl()) || StringUtils.hasText(request.getCloudinaryId())) {
+            ResourceRequest fileResource = new ResourceRequest();
+            fileResource.setTitle("Attachment");
+            fileResource.setSource(ResourceSource.UPLOAD);
+            fileResource.setFileUrl(request.getFileUrl());
+            fileResource.setCloudinaryId(request.getCloudinaryId());
+            resources.add(fileResource);
+        }
+
+        if (StringUtils.hasText(request.getEmbedUrl())) {
+            ResourceRequest linkResource = new ResourceRequest();
+            linkResource.setTitle("Link");
+            linkResource.setSource(ResourceSource.EMBED);
+            linkResource.setEmbedUrl(request.getEmbedUrl());
+            resources.add(linkResource);
+        }
+        return resources;
+    }
+
+    private void applySubmissionResources(Submission submission, List<ResourceRequest> requestedResources) {
+        if (submission.getResources() == null) {
+            submission.setResources(new ArrayList<>());
+        }
+        submission.getResources().clear();
+
+        if (requestedResources == null || requestedResources.isEmpty()) {
+            return;
+        }
+
+        for (ResourceRequest request : requestedResources) {
+            Resource resource = resourceService.buildDetachedResource(request);
+            resource.setSubmission(submission);
+            resource.setAssignment(null);
+            resource.setLesson(null);
+            submission.getResources().add(resource);
+        }
+    }
+
+    private void syncLegacySubmissionFields(Submission submission) {
+        submission.setFileUrl(null);
+        submission.setEmbedUrl(null);
+        submission.setCloudinaryId(null);
+        if (submission.getResources() == null) {
+            return;
+        }
+
+        for (Resource resource : submission.getResources()) {
+            if (resource.getSource() == ResourceSource.UPLOAD && submission.getFileUrl() == null) {
+                submission.setFileUrl(resource.getFileUrl());
+                submission.setCloudinaryId(resource.getCloudinaryId());
+                continue;
+            }
+            if (resource.getSource() == ResourceSource.EMBED && submission.getEmbedUrl() == null) {
+                submission.setEmbedUrl(resource.getEmbedUrl());
+            }
         }
     }
 
@@ -337,6 +405,11 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setDueAt(submission.getAssignment() != null ? submission.getAssignment().getDueAt() : null);
         response.setLate(submission.getStatus() == SubmissionStatus.LATE_SUBMITTED);
         response.setCanResubmit(submission.getAssignment() != null && canResubmit(submission.getAssignment()));
+        response.setResources(
+                submission.getResources() == null
+                        ? List.of()
+                        : submission.getResources().stream().map(resourceService::convertEntityToDTO).toList()
+        );
         return response;
     }
 
@@ -352,6 +425,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setDueAt(assignment.getDueAt());
         response.setLate(false);
         response.setCanResubmit(canResubmit(assignment));
+        response.setResources(List.of());
         return response;
     }
 

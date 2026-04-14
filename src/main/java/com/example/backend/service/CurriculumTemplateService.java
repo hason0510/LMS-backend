@@ -41,14 +41,12 @@ public interface CurriculumTemplateService {
 
     void deleteTemplate(Integer id);
 
-    // ── Lesson Template CRUD ──────────────────────────────────────────────────
     LessonTemplateResponse createLessonTemplate(LessonTemplateRequest request);
 
     LessonTemplateResponse getLessonTemplateById(Integer id);
 
     LessonTemplateResponse updateLessonTemplate(Integer id, LessonTemplateRequest request);
 
-    // ── Quiz Template CRUD ────────────────────────────────────────────────────
     QuizTemplateResponse createQuizTemplate(QuizTemplateRequest request);
 
     QuizTemplateResponse getQuizTemplateById(Integer id);

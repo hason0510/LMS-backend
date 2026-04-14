@@ -1,5 +1,6 @@
 package com.example.backend.utils;
 
+import com.example.backend.constant.ResourceType;
 import com.example.backend.exception.BusinessException;
 import lombok.experimental.UtilityClass;
 import org.apache.commons.io.FilenameUtils;
@@ -14,6 +15,7 @@ public class FileUploadUtil {
     public static final long MAX_IMAGE_SIZE = 20 * 1024 * 1024;  // 20MB
     public static final long MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
     public static final long MAX_PDF_SIZE   = 20 * 1024 * 1024;  // 20MB
+    public static final long MAX_RESOURCE_SIZE = 500L * 1024 * 1024; // 500MB
 
     public static final Set<String> IMAGE_EXTENSIONS =
             Set.of("jpg", "jpeg", "png", "gif", "bmp", "webp");
@@ -23,6 +25,14 @@ public class FileUploadUtil {
 
     public static final Set<String> PDF_EXTENSIONS =
             Set.of("pdf");
+
+    public static final Set<String> RESOURCE_EXTENSIONS =
+            Set.of(
+                    "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "csv",
+                    "jpg", "jpeg", "png", "gif", "bmp", "webp",
+                    "mp4", "mov", "avi", "mkv",
+                    "zip", "rar", "7z"
+            );
 
     public static final String DATE_FORMAT = "yyyyMMddHHmmss";
     public static final String FILE_NAME_FORMAT = "%s_%s";
@@ -58,8 +68,38 @@ public class FileUploadUtil {
                 if (isInvalidExtension(fileName, PDF_EXTENSIONS))
                     throw new BusinessException("Invalid PDF file");
             }
+            case "resource", "attachment" -> {
+                if (size > MAX_RESOURCE_SIZE) {
+                    throw new BusinessException("Attachment size must be <= 500MB");
+                }
+                if (isInvalidExtension(fileName, RESOURCE_EXTENSIONS)) {
+                    throw new BusinessException("Invalid attachment file");
+                }
+            }
             default -> throw new BusinessException("Unsupported file type");
         }
+    }
+
+    public static ResourceType resolveResourceType(String fileName) {
+        String ext = FilenameUtils.getExtension(fileName);
+        if (!org.springframework.util.StringUtils.hasText(ext)) {
+            return ResourceType.FILE;
+        }
+        String normalized = ext.toLowerCase();
+
+        if (VIDEO_EXTENSIONS.contains(normalized)) {
+            return ResourceType.VIDEO;
+        }
+        if (IMAGE_EXTENSIONS.contains(normalized)) {
+            return ResourceType.IMAGE;
+        }
+        if ("pdf".equals(normalized)) {
+            return ResourceType.PDF;
+        }
+        if (Set.of("doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "csv").contains(normalized)) {
+            return ResourceType.DOCX;
+        }
+        return ResourceType.FILE;
     }
 
     public static String getFileName(String originalName) {

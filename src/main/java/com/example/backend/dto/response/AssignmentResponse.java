@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -20,4 +21,5 @@ public class AssignmentResponse {
     private LocalDateTime dueAt;
     private Boolean allowLateSubmission;
     private Integer classSectionId;
+    private List<ResourceResponse> resources;
 }

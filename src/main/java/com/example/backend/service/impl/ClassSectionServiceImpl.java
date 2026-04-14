@@ -509,6 +509,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .map(this::convertChapterToResponse)
                 .toList()
                 : null);
+        response.setTotalEnrollments(
+                enrollmentRepository.countApprovedEnrollmentsByClassSectionId(classSection.getId()));
         return response;
     }
 

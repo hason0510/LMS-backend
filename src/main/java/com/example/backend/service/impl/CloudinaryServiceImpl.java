@@ -27,16 +27,18 @@ public class CloudinaryServiceImpl implements CloudinaryService {
         try {
             Map<String, Object> options = new HashMap<>();
             options.put("public_id", fileName);
-            if ("video".equalsIgnoreCase(type)) {
-                options.put("resource_type", "video");
-            } else {
-                options.put("resource_type", "auto"); // image, pdf
+            String normalizedType = type == null ? "auto" : type.toLowerCase();
+            switch (normalizedType) {
+                case "video" -> options.put("resource_type", "video");
+                case "raw" -> options.put("resource_type", "raw");
+                case "image" -> options.put("resource_type", "image");
+                default -> options.put("resource_type", "auto");
             }
             Map result = cloudinary.uploader().upload(file.getBytes(), options);
             return CloudinaryResponse.builder()
                     .publicId((String) result.get("public_id"))
                     .url((String) result.get("secure_url"))
-                    .type(type)
+                    .type(normalizedType)
                     .build();
         } catch (Exception e) {
             throw new BusinessException("Failed to upload " + type);
@@ -50,10 +52,10 @@ public class CloudinaryServiceImpl implements CloudinaryService {
 
             if (type == ResourceType.VIDEO) {
                 options.put("resource_type", "video");
-            } else if (type == ResourceType.PDF) {
-                options.put("resource_type", "raw");
-            } else {
+            } else if (type == ResourceType.IMAGE) {
                 options.put("resource_type", "image");
+            } else {
+                options.put("resource_type", "raw");
             }
             cloudinary.uploader().destroy(publicId, options);
         } catch (Exception e) {

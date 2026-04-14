@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -28,6 +29,8 @@ public class AssignmentRequest {
     private LocalDateTime dueAt;
 
     private Boolean allowLateSubmission;
+
+    private List<ResourceRequest> resources;
 
     @NotNull(message = "classSectionId is required")
     private Integer classSectionId;

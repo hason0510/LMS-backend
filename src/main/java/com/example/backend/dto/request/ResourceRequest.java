@@ -11,10 +11,15 @@ import lombok.*;
 public class ResourceRequest {
     private String title;
     private String description;
+    private String fileUrl;
     private String embedUrl;
     private Integer lessonId;
+    private Integer assignmentId;
+    private Integer submissionId;
     private ResourceType type;
     private ResourceSource source;
     private String cloudinaryId;
+    private String mimeType;
+    private Long fileSize;
 
 }

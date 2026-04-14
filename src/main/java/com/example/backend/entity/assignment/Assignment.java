@@ -2,6 +2,7 @@ package com.example.backend.entity.assignment;
 
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,6 +12,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -50,5 +52,8 @@ public class Assignment extends BaseEntity {
 
     @OneToMany(mappedBy = "assignment")
     private List<Submission> submissions;
+
+    @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Resource> resources = new ArrayList<>();
 
 }

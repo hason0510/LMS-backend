@@ -3,6 +3,7 @@ package com.example.backend.entity.assignment;
 import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.Resource;
 import com.example.backend.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -13,6 +14,8 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "submission")
@@ -66,4 +69,7 @@ public class Submission extends BaseEntity {
 
     @Column(name = "graded_at")
     private LocalDateTime gradedAt;
+
+    @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Resource> resources = new ArrayList<>();
 }
