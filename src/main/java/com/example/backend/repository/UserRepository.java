@@ -27,6 +27,8 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
 
     boolean existsByStudentNumber(String studentNumber);
 
+    long countByUserNameStartingWith(String prefix);
+
     @Query("""
         SELECT u
         FROM User u

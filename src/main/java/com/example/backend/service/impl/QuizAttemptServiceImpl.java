@@ -63,11 +63,34 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             throw new UnauthorizedException("Chỉ học sinh đăng ký khóa học mới được truy cập vào nội dung này");
         }
 
+        Optional<ClassContentItem> directClassContentItem = classContentItemRepository.findById(chapterItemId);
+        if (directClassContentItem.isPresent()) {
+            ClassContentItem classContentItem = directClassContentItem.get();
+            if (classContentItem.getItemType() == ContentItemType.QUIZ
+                    && classContentItem.getQuiz() != null
+                    && classContentItem.getQuiz().getId().equals(quizId)) {
+                return startQuizAttemptForClassContentItem(quizId, chapterItemId);
+            }
+        }
+
+        Optional<ChapterItem> chapterItemOptional = chapterItemRepository.findById(chapterItemId);
+        if (chapterItemOptional.isEmpty()) {
+            return startQuizAttemptForClassContentItem(quizId, chapterItemId);
+        }
+
         // Validate ChapterItem
-        ChapterItem chapterItem = chapterItemRepository.findById(chapterItemId)
-                .orElseThrow(() -> new BusinessException("Quiz chưa được thêm vào chương tương ứng"));
+        ChapterItem chapterItem = chapterItemOptional.get();
 
         if (chapterItem.getType() != ItemType.QUIZ || !chapterItem.getRefId().equals(quizId)) {
+            Optional<ClassContentItem> classContentItemOptional = classContentItemRepository.findById(chapterItemId);
+            if (classContentItemOptional.isPresent()) {
+                ClassContentItem classContentItem = classContentItemOptional.get();
+                if (classContentItem.getItemType() == ContentItemType.QUIZ
+                        && classContentItem.getQuiz() != null
+                        && classContentItem.getQuiz().getId().equals(quizId)) {
+                    return startQuizAttemptForClassContentItem(quizId, chapterItemId);
+                }
+            }
             throw new ResourceNotFoundException("Quiz không tồn tại");
         }
 
@@ -321,13 +344,30 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     @Override
     public QuizAttemptDetailResponse getCurrentAttempt(Integer chapterItemId) {
         User currentUser = userService.getCurrentUser();
-        QuizAttempt attempt = quizAttemptRepository
-                .findLatestByChapterItem_IdAndStudent_IdAndStatus(
-                        chapterItemId, currentUser.getId(), AttemptStatus.IN_PROGRESS
-                )
-                .orElseThrow(() -> new ResourceNotFoundException("Không có bài làm nào đang diễn ra"));
+        Optional<QuizAttempt> classContentAttempt = quizAttemptRepository
+                .findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(
+                        chapterItemId,
+                        currentUser.getId(),
+                        AttemptStatus.IN_PROGRESS
+                );
+        if (classContentAttempt.isPresent()) {
+            return convertToDetailResponse(classContentAttempt.get());
+        }
 
-        return convertToDetailResponse(attempt);
+        Optional<QuizAttempt> legacyAttempt = Optional.empty();
+        if (chapterItemRepository.findById(chapterItemId).isPresent()) {
+            legacyAttempt = quizAttemptRepository.findLatestByChapterItem_IdAndStudent_IdAndStatus(
+                    chapterItemId,
+                    currentUser.getId(),
+                    AttemptStatus.IN_PROGRESS
+            );
+        }
+
+        if (legacyAttempt.isPresent()) {
+            return convertToDetailResponse(legacyAttempt.get());
+        }
+
+        throw new ResourceNotFoundException("Không có bài làm nào đang diễn ra");
     }
 
     @Override

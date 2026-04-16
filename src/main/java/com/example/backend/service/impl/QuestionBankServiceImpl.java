@@ -781,7 +781,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             question.setParentQuestion(null);
         }
 
-        List<BankQuestionOption> options = new ArrayList<>();
+        List<BankQuestionOption> incomingOptions = new ArrayList<>();
         int orderIndex = 1;
         if (request.getOptions() != null) {
             for (BankQuestionOptionRequest optionRequest : request.getOptions()) {
@@ -793,10 +793,17 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 option.setEmbedUrl(optionRequest.getEmbedUrl());
                 option.setCloudinaryId(optionRequest.getCloudinaryId());
                 option.setOrderIndex(optionRequest.getOrderIndex() != null ? optionRequest.getOrderIndex() : orderIndex++);
-                options.add(option);
+                incomingOptions.add(option);
             }
         }
-        question.setOptions(options);
+
+        // Keep Hibernate-managed collection reference to avoid orphan-removal errors on update.
+        if (question.getOptions() == null) {
+            question.setOptions(new ArrayList<>());
+        } else {
+            question.getOptions().clear();
+        }
+        question.getOptions().addAll(incomingOptions);
     }
 
     private void syncQuestionTags(BankQuestion question, List<Integer> tagIds) {

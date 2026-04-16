@@ -21,6 +21,12 @@ public class AuthController {
     @Value("${hayson.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
 
+    @Value("${hayson.jwt.refresh-cookie-secure:false}")
+    private boolean refreshTokenCookieSecure;
+
+    @Value("${hayson.jwt.refresh-cookie-same-site:Lax}")
+    private String refreshTokenCookieSameSite;
+
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
@@ -31,7 +37,8 @@ public class AuthController {
         LoginResponse response = authService.login(loginRequest);
         ResponseCookie springCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
                 .path("/")
                 .maxAge(refreshTokenExpiration)
                 .build();
@@ -57,7 +64,8 @@ public class AuthController {
         ResponseCookie refreshCookie = ResponseCookie
                 .from("refresh_token", response.getRefreshToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
                 .path("/")
                 .maxAge(refreshTokenExpiration)
                 .build();
@@ -111,7 +119,8 @@ public class AuthController {
         LoginResponse response = authService.googleLogin(request);
         ResponseCookie springCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
                 .path("/")
                 .maxAge(refreshTokenExpiration)
                 .build();
@@ -130,7 +139,8 @@ public class AuthController {
         ResponseCookie cookie = ResponseCookie
                 .from("refresh_token", response.getRefreshToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
                 .maxAge(refreshTokenExpiration)
                 .path("/")
                 .build();

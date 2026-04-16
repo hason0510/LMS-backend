@@ -247,7 +247,7 @@ public class UserServiceImpl implements UserService {
         return new PageResponse<>(
                 userResponse.getNumber() + 1,
                 userResponse.getTotalPages(),
-                userResponse.getNumberOfElements(),
+                userResponse.getTotalElements(),
                 userResponse.getContent()
         );
     }

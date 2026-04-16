@@ -75,7 +75,11 @@ public class UserController {
             @RequestParam(value = "pageSize", defaultValue = "3", required = false) Integer pageSize
     ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
+        long start = System.currentTimeMillis();
         PageResponse<UserInfoResponse> userPage = userService.getUserPage(pageable);
+        long elapsed = System.currentTimeMillis() - start;
+        System.out.printf("[TIMING] GET /users page=%d size=%d -> %dms (totalElements=%d)%n",
+                pageNumber, pageSize, elapsed, userPage.getTotalElements());
         return ResponseEntity.ok(userPage);
     }
 
