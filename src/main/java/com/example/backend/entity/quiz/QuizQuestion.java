@@ -2,6 +2,7 @@ package com.example.backend.entity.quiz;
 
 import com.example.backend.constant.QuestionType;
 import com.example.backend.entity.BaseEntity;
+import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -21,11 +22,11 @@ public class QuizQuestion extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private String content;
-
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
     private Integer points;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_id")
+    private Resource resource;
 
     @ManyToOne
     @JoinColumn(name = "quiz_id")
@@ -41,4 +42,12 @@ public class QuizQuestion extends BaseEntity {
 
     @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuizAnswer> answers;
+
+    @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionInteractionItem> interactionItems;
+
+    @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionContentBlock> contentBlocks;
 }

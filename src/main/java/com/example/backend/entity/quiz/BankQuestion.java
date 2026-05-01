@@ -3,6 +3,7 @@ package com.example.backend.entity.quiz;
 import com.example.backend.constant.DifficultyLevel;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.entity.BaseEntity;
+import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -32,9 +33,9 @@ public class BankQuestion extends BaseEntity {
     @Column(columnDefinition = "LONGTEXT")
     private String explanation;
 
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_id")
+    private Resource resource;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -58,6 +59,14 @@ public class BankQuestion extends BaseEntity {
     @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<BankQuestionOption> options;
+
+    @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionInteractionItem> interactionItems;
+
+    @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionContentBlock> contentBlocks;
 
     @OneToMany(mappedBy = "bankQuestion")
     private List<BankQuestionTag> tagMappings;

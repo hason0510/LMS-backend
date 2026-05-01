@@ -1,0 +1,7 @@
+{
+  "difficulty": {
+    "EASY": ["easy", "de", "dễ"],
+    "MEDIUM": ["medium", "trung bình", "trung-binh", "trung binh"],
+    "HARD": ["hard", "kho", "khó"]
+  }
+}

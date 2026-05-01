@@ -1,23 +1,34 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.QuestionBankMemberRole;
+import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.RoleType;
+import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionOptionRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRoleRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankRequest;
+import com.example.backend.dto.request.questionbank.QuestionTagBatchRequest;
 import com.example.backend.dto.request.questionbank.QuestionTagRequest;
+import com.example.backend.constant.DifficultyLevel;
 import com.example.backend.dto.response.questionbank.BankQuestionOptionResponse;
 import com.example.backend.dto.response.questionbank.BankQuestionResponse;
 import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
+import com.example.backend.dto.request.quiz.QuestionContentBlockRequest;
+import com.example.backend.dto.response.ResourceResponse;
+import com.example.backend.dto.response.quiz.QuestionContentBlockResponse;
+import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
+import com.example.backend.entity.Resource;
 import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.BankQuestionTag;
+import com.example.backend.entity.quiz.QuestionContentBlock;
+import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionBankMember;
 import com.example.backend.entity.quiz.QuestionTag;
@@ -30,12 +41,17 @@ import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.BankQuestionTagRepository;
 import com.example.backend.repository.QuestionBankMemberRepository;
 import com.example.backend.repository.QuestionBankRepository;
+import com.example.backend.repository.QuestionContentBlockRepository;
 import com.example.backend.repository.QuestionTagRepository;
+import com.example.backend.repository.QuizBankSourceRepository;
+import com.example.backend.repository.ResourceRepository;
+import com.example.backend.service.DifficultyTagResolver;
 import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -45,16 +61,23 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class QuestionBankServiceImpl implements QuestionBankService {
     private static final Pattern AIKEN_OPTION_PATTERN = Pattern.compile("^([A-Z])\\.\\s+(.+)$");
     private static final Pattern AIKEN_ANSWER_PATTERN = Pattern.compile("^ANSWER\\s*:\\s*([A-Z])\\s*$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GIFT_TAG_METADATA_PATTERN = Pattern.compile("\\[tag:(.+?)]", Pattern.CASE_INSENSITIVE);
 
 
     private final QuestionBankRepository questionBankRepository;
@@ -65,6 +88,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final QuestionBankMemberRepository questionBankMemberRepository;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final QuizBankSourceRepository quizBankSourceRepository;
+    private final DifficultyTagResolver difficultyTagResolver;
+    private final ResourceRepository resourceRepository;
+    private final QuestionContentBlockRepository questionContentBlockRepository;
 
     @Override
     @Transactional
@@ -85,6 +112,15 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         requireOwnerPermission(questionBank);
         applyQuestionBankRequest(questionBank, request);
         return convertQuestionBank(questionBankRepository.save(questionBank), false, false);
+    }
+
+    @Override
+    @Transactional
+    public void deleteQuestionBank(Integer id) {
+        QuestionBank questionBank = questionBankRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireOwnerPermission(questionBank);
+        questionBankRepository.delete(questionBank);
     }
 
     @Override
@@ -115,13 +151,15 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public BankQuestionResponse createQuestion(Integer questionBankId, BankQuestionRequest request) {
         QuestionBank questionBank = questionBankRepository.findById(questionBankId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireEditPermission(questionBank);
+        QuestionBankMemberRole currentRole = requireEditPermission(questionBank);
 
         BankQuestion question = new BankQuestion();
         question.setQuestionBank(questionBank);
         applyQuestionRequest(question, request);
+        TagResolutionResult tagResolution = resolveTags(questionBank, request.getTagNames(), request.getDifficultyLevel(), true);
+        question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
-        syncQuestionTags(question, request.getTagIds());
+        syncQuestionTags(question, tagResolution.tagNames(), currentRole, true);
         return convertQuestion(bankQuestionRepository.findById(question.getId()).orElseThrow(), true);
     }
 
@@ -130,12 +168,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public BankQuestionResponse updateQuestion(Integer questionId, BankQuestionRequest request) {
         BankQuestion question = bankQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank question not found"));
-        requireEditPermission(question.getQuestionBank());
+        QuestionBankMemberRole currentRole = requireEditPermission(question.getQuestionBank());
 
         applyQuestionRequest(question, request);
+        TagResolutionResult tagResolution = resolveTags(question.getQuestionBank(), request.getTagNames(), request.getDifficultyLevel(), true);
+        question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
-        bankQuestionTagRepository.deleteByBankQuestion_Id(question.getId());
-        syncQuestionTags(question, request.getTagIds());
+        syncQuestionTags(question, tagResolution.tagNames(), currentRole, false);
         return convertQuestion(bankQuestionRepository.findById(question.getId()).orElseThrow(), true);
     }
 
@@ -145,6 +184,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         BankQuestion question = bankQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank question not found"));
         requireEditPermission(question.getQuestionBank());
+        bankQuestionTagRepository.deleteByBankQuestion_Id(questionId);
         bankQuestionRepository.delete(question);
     }
 
@@ -154,7 +194,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     public GiftImportResultResponse importGiftQuestions(Integer questionBankId, MultipartFile file) {
         QuestionBank questionBank = questionBankRepository.findById(questionBankId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireEditPermission(questionBank);
+        QuestionBankMemberRole currentRole = requireEditPermission(questionBank);
 
         if (file == null || file.isEmpty()) {
             throw new BusinessException("File import is empty");
@@ -180,6 +220,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         for (int index = 0; index < blocks.size(); index++) {
             String block = blocks.get(index);
             int questionNumber = index + 1;
+            BankQuestion question = null;
             try {
                 ParsedGiftQuestion parsed = parseTextQuestionBlock(block);
                 if (parsed == null) {
@@ -187,12 +228,19 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                     warnings.add("Question #" + questionNumber + ": empty or unsupported GIFT/AIKEN format");
                     continue;
                 }
+                TagResolutionResult tagResolution = resolveTags(
+                        questionBank,
+                        extractGiftMetadataTags(block),
+                        null,
+                        true
+                );
 
-                BankQuestion question = new BankQuestion();
+                question = new BankQuestion();
                 question.setQuestionBank(questionBank);
                 question.setContent(parsed.content());
                 question.setType(parsed.type());
                 question.setDefaultPoints(1);
+                question.setDifficultyLevel(tagResolution.difficultyLevel());
                 question.setOptions(parsed.options());
 
                 if (question.getOptions() != null) {
@@ -202,14 +250,20 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                     question.getOptions().sort(Comparator.comparing(BankQuestionOption::getOrderIndex));
                 }
 
-                bankQuestionRepository.save(question);
+                question = bankQuestionRepository.save(question);
+                syncQuestionTags(question, tagResolution.tagNames(), currentRole, true);
+                if (tagResolution.hasMultipleDifficultyTags()) {
+                    warnings.add("Question #" + questionNumber + ": multiple difficulty tags found; using last one");
+                }
                 importedCount++;
             } catch (BusinessException ex) {
+                cleanupImportedQuestion(question);
                 skippedCount++;
                 warnings.add("Question #" + questionNumber + ": " + ex.getMessage());
             } catch (Exception ex) {
+                cleanupImportedQuestion(question);
                 skippedCount++;
-                warnings.add("Question #" + questionNumber + ": parse failed");
+                warnings.add("Question #" + questionNumber + ": " + (StringUtils.hasText(ex.getMessage()) ? ex.getMessage() : "parse failed"));
             }
         }
 
@@ -219,6 +273,31 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 skippedCount,
                 warnings
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String exportGiftQuestions(Integer questionBankId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+
+        List<BankQuestion> questions = bankQuestionRepository.findByQuestionBank_Id(questionBankId).stream()
+                .sorted(Comparator.comparing(BankQuestion::getId))
+                .toList();
+
+        StringBuilder output = new StringBuilder();
+        for (BankQuestion question : questions) {
+            String block = buildGiftExportBlock(question);
+            if (!StringUtils.hasText(block)) {
+                continue;
+            }
+            if (output.length() > 0) {
+                output.append("\n\n");
+            }
+            output.append(block);
+        }
+        return output.toString();
     }
 
 
@@ -246,6 +325,118 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             blocks.add(current.toString().trim());
         }
         return blocks;
+    }
+
+    private String buildGiftExportBlock(BankQuestion question) {
+        if (question == null || !StringUtils.hasText(question.getContent())) {
+            return null;
+        }
+
+        if (question.getType() != QuestionType.SINGLE_CHOICE
+                && question.getType() != QuestionType.MULTIPLE_CHOICE
+                && question.getType() != QuestionType.SHORT_ANSWER) {
+            return "// skipped question id=" + question.getId() + ": unsupported type " + question.getType();
+        }
+
+        List<BankQuestionOption> options = question.getOptions() != null
+                ? question.getOptions().stream()
+                .sorted(Comparator.comparing(BankQuestionOption::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
+                .toList()
+                : List.of();
+
+        if (options.isEmpty()) {
+            return "// skipped question id=" + question.getId() + ": no options";
+        }
+
+        List<String> answerLines = new ArrayList<>();
+        for (BankQuestionOption option : options) {
+            if (!StringUtils.hasText(option.getContent())) {
+                continue;
+            }
+            boolean correct = Boolean.TRUE.equals(option.getIsCorrect());
+            if (question.getType() == QuestionType.SHORT_ANSWER) {
+                if (!correct) {
+                    continue;
+                }
+                answerLines.add("=" + escapeGiftText(option.getContent()));
+            } else {
+                answerLines.add((correct ? "=" : "~") + escapeGiftText(option.getContent()));
+            }
+        }
+
+        if (answerLines.isEmpty()) {
+            return "// skipped question id=" + question.getId() + ": no valid answer lines";
+        }
+
+        String metadataLine = buildGiftMetadataLine(question);
+        StringBuilder block = new StringBuilder();
+        if (StringUtils.hasText(metadataLine)) {
+            block.append(metadataLine).append('\n');
+        }
+        block.append("::Q").append(question.getId()).append("::")
+                .append(escapeGiftText(question.getContent()))
+                .append(" {\n");
+        for (String answerLine : answerLines) {
+            block.append(answerLine).append('\n');
+        }
+        block.append('}');
+        return block.toString();
+    }
+
+    private String buildGiftMetadataLine(BankQuestion question) {
+        Set<String> tagNames = new LinkedHashSet<>();
+        List<BankQuestionTag> mappings = bankQuestionTagRepository.findByBankQuestion_Id(question.getId());
+        for (BankQuestionTag mapping : mappings) {
+            if (mapping == null || mapping.getTag() == null || !StringUtils.hasText(mapping.getTag().getName())) {
+                continue;
+            }
+            tagNames.add(mapping.getTag().getName().trim().toLowerCase(Locale.ROOT));
+        }
+        if (question.getDifficultyLevel() != null) {
+            tagNames.add(mapDifficultyToGiftTag(question.getDifficultyLevel()));
+        }
+        if (tagNames.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder line = new StringBuilder("// ");
+        int index = 0;
+        for (String tagName : tagNames) {
+            if (index > 0) {
+                line.append(' ');
+            }
+            line.append("[tag:").append(tagName).append(']');
+            index++;
+        }
+        return line.toString();
+    }
+
+    private String mapDifficultyToGiftTag(DifficultyLevel difficultyLevel) {
+        if (difficultyLevel == null) {
+            return "";
+        }
+        return switch (difficultyLevel) {
+            case EASY -> "easy";
+            case MEDIUM -> "medium";
+            case HARD -> "hard";
+        };
+    }
+
+    private String escapeGiftText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .replace("\\", "\\\\")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace("~", "\\~")
+                .replace("=", "\\=")
+                .replace("#", "\\#")
+                .replace("\n", "\\n")
+                .trim();
     }
 
     private ParsedGiftQuestion parseTextQuestionBlock(String block) {
@@ -332,12 +523,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         boolean hasIncorrect = tokens.stream().anyMatch(token -> !token.correct());
         QuestionType questionType = hasIncorrect
                 ? (correctCount == 1 ? QuestionType.SINGLE_CHOICE : QuestionType.MULTIPLE_CHOICE)
-                : QuestionType.ESSAY;
+                : QuestionType.SHORT_ANSWER;
 
         List<BankQuestionOption> options = new ArrayList<>();
         int orderIndex = 1;
         for (GiftAnswerToken token : tokens) {
-            if (questionType == QuestionType.ESSAY && !token.correct()) {
+            if (questionType == QuestionType.SHORT_ANSWER && !token.correct()) {
                 continue;
             }
             options.add(buildOption(token.content(), token.correct(), orderIndex++));
@@ -621,6 +812,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private record ParsedGiftQuestion(String content, QuestionType type, List<BankQuestionOption> options) {
     }
 
+    private record TagResolutionResult(
+            Set<String> tagNames,
+            DifficultyLevel difficultyLevel,
+            boolean hasMultipleDifficultyTags
+    ) {
+    }
+
     private record GiftAnswerToken(String content, boolean correct) {
     }
 
@@ -631,28 +829,91 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     @Override
     @Transactional
-    public QuestionTagResponse createTag(QuestionTagRequest request) {
-        Subject subject = subjectRepository.findById(request.getSubjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
-        validateManagePermission(subject);
+    public QuestionTagResponse createTag(Integer questionBankId, QuestionTagRequest request) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+        String normalizedName = normalizeTagName(request.getName());
+        QuestionTag tag = findOrCreateQuestionTag(questionBank, normalizedName);
+        return convertTag(tag);
+    }
 
-        questionTagRepository.findBySubject_IdAndNameIgnoreCase(subject.getId(), request.getName())
+    @Override
+    @Transactional
+    public List<QuestionTagResponse> createTagsBatch(Integer questionBankId, QuestionTagBatchRequest request) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+        Set<String> normalizedNames = normalizeTagNames(request.getNames());
+        if (normalizedNames.isEmpty()) {
+            throw new BusinessException("Tag names must not be empty");
+        }
+        List<QuestionTagResponse> responses = new ArrayList<>();
+        for (String normalizedName : normalizedNames) {
+            responses.add(convertTag(findOrCreateQuestionTag(questionBank, normalizedName)));
+        }
+        return responses;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionTagResponse> getTags(Integer questionBankId, String search) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireViewPermission(questionBank);
+
+        List<QuestionTag> tags = StringUtils.hasText(search)
+                ? questionTagRepository.searchByQuestionBank(questionBankId, search.trim())
+                : questionTagRepository.findByQuestionBank_IdOrderByNameAsc(questionBankId);
+        return tags.stream().map(this::convertTag).toList();
+    }
+
+    @Override
+    @Transactional
+    public QuestionTagResponse updateTag(Integer questionBankId, Integer tagId, QuestionTagRequest request) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+
+        QuestionTag tag = questionTagRepository.findById(tagId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question tag not found"));
+        if (tag.getQuestionBank() == null || !Objects.equals(tag.getQuestionBank().getId(), questionBankId)) {
+            throw new BusinessException("Question tag does not belong to this question bank");
+        }
+
+        String normalizedName = normalizeTagName(request.getName());
+        questionTagRepository.findByQuestionBank_IdAndNameIgnoreCase(questionBankId, normalizedName)
+                .filter(existing -> !existing.getId().equals(tag.getId()))
                 .ifPresent(existing -> {
-                    throw new BusinessException("Question tag already exists in this subject");
+                    throw new BusinessException("Question tag already exists in this question bank");
                 });
 
-        QuestionTag tag = new QuestionTag();
-        tag.setName(request.getName().trim());
-        tag.setSubject(subject);
+        tag.setName(normalizedName);
         return convertTag(questionTagRepository.save(tag));
     }
 
     @Override
-    public List<QuestionTagResponse> getTags(Integer subjectId) {
-        List<QuestionTag> tags = subjectId != null
-                ? questionTagRepository.findBySubject_Id(subjectId)
-                : questionTagRepository.findAll();
-        return tags.stream().map(this::convertTag).toList();
+    @Transactional
+    public void deleteTag(Integer questionBankId, Integer tagId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+
+        QuestionTag tag = questionTagRepository.findById(tagId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question tag not found"));
+        if (tag.getQuestionBank() == null || !Objects.equals(tag.getQuestionBank().getId(), questionBankId)) {
+            throw new BusinessException("Question tag does not belong to this question bank");
+        }
+        long questionUsageCount = bankQuestionTagRepository.countByTag_Id(tagId);
+        long quizUsageCount = quizBankSourceRepository.countByTag_Id(tagId);
+        if (questionUsageCount > 0 || quizUsageCount > 0) {
+            throw new BusinessException(
+                    "Cannot delete question tag because it is currently in use by "
+                            + questionUsageCount + " questions and "
+                            + quizUsageCount + " quiz rules"
+            );
+        }
+        questionTagRepository.delete(tag);
     }
 
     @Override
@@ -764,11 +1025,15 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private void applyQuestionRequest(BankQuestion question, BankQuestionRequest request) {
+        validateInteractionItems(request.getType(), request.getItems());
+
         question.setContent(request.getContent());
         question.setExplanation(request.getExplanation());
-        question.setFileUrl(request.getFileUrl());
-        question.setEmbedUrl(request.getEmbedUrl());
-        question.setCloudinaryId(request.getCloudinaryId());
+        if (request.getResourceId() != null) {
+            question.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+        } else {
+            question.setResource(null);
+        }
         question.setType(request.getType());
         question.setDifficultyLevel(request.getDifficultyLevel());
         question.setDefaultPoints(request.getDefaultPoints());
@@ -783,15 +1048,15 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
         List<BankQuestionOption> incomingOptions = new ArrayList<>();
         int orderIndex = 1;
-        if (request.getOptions() != null) {
+        if (!isInteractionQuestionType(request.getType()) && request.getOptions() != null) {
             for (BankQuestionOptionRequest optionRequest : request.getOptions()) {
                 BankQuestionOption option = new BankQuestionOption();
                 option.setBankQuestion(question);
                 option.setContent(optionRequest.getContent());
                 option.setIsCorrect(Boolean.TRUE.equals(optionRequest.getIsCorrect()));
-                option.setFileUrl(optionRequest.getFileUrl());
-                option.setEmbedUrl(optionRequest.getEmbedUrl());
-                option.setCloudinaryId(optionRequest.getCloudinaryId());
+                if (optionRequest.getResourceId() != null) {
+                    option.setResource(resourceRepository.findById(optionRequest.getResourceId()).orElse(null));
+                }
                 option.setOrderIndex(optionRequest.getOrderIndex() != null ? optionRequest.getOrderIndex() : orderIndex++);
                 incomingOptions.add(option);
             }
@@ -804,26 +1069,307 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             question.getOptions().clear();
         }
         question.getOptions().addAll(incomingOptions);
+
+        applyInteractionItems(question, request.getItems());
+        applyContentBlocks(question, request.getBlocks());
     }
 
-    private void syncQuestionTags(BankQuestion question, List<Integer> tagIds) {
-        if (tagIds == null || tagIds.isEmpty()) {
+    private void applyInteractionItems(BankQuestion question, List<QuestionInteractionItemRequest> requests) {
+        List<QuestionInteractionItem> incomingItems = new ArrayList<>();
+        int orderIndex = 1;
+        if (requests != null) {
+            for (QuestionInteractionItemRequest itemRequest : requests) {
+                QuestionInteractionItem item = new QuestionInteractionItem();
+                item.setBankQuestion(question);
+                item.setContent(resolveItemContent(itemRequest, orderIndex));
+                item.setItemKey(resolveItemKey(itemRequest, orderIndex));
+                item.setRole(itemRequest.getRole());
+                item.setCorrectMatchKey(StringUtils.hasText(itemRequest.getCorrectMatchKey())
+                        ? itemRequest.getCorrectMatchKey().trim()
+                        : null);
+                item.setCorrectOrderIndex(itemRequest.getCorrectOrderIndex());
+                item.setBlankIndex(itemRequest.getBlankIndex());
+                item.setAcceptedAnswers(joinAcceptedAnswers(itemRequest.getAcceptedAnswers()));
+                if (itemRequest.getResourceId() != null) {
+                    item.setResource(resourceRepository.findById(itemRequest.getResourceId()).orElse(null));
+                }
+                item.setOrderIndex(itemRequest.getOrderIndex() != null ? itemRequest.getOrderIndex() : orderIndex);
+                incomingItems.add(item);
+                orderIndex++;
+            }
+        }
+
+        if (question.getInteractionItems() == null) {
+            question.setInteractionItems(new ArrayList<>());
+        } else {
+            question.getInteractionItems().clear();
+        }
+        question.getInteractionItems().addAll(incomingItems);
+    }
+
+    private void validateInteractionItems(QuestionType type, List<QuestionInteractionItemRequest> items) {
+        if (!isInteractionQuestionType(type)) {
             return;
         }
 
-        for (Integer tagId : tagIds) {
-            QuestionTag tag = questionTagRepository.findById(tagId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Question tag not found"));
-            if (question.getQuestionBank().getSubject() != null
-                    && tag.getSubject() != null
-                    && !question.getQuestionBank().getSubject().getId().equals(tag.getSubject().getId())) {
-                throw new BusinessException("Question tag must belong to the same subject as the question bank");
+        List<QuestionInteractionItemRequest> safeItems = items != null ? items : List.of();
+        if (type == QuestionType.MATCHING) {
+            List<QuestionInteractionItemRequest> prompts = filterItemsByRole(safeItems, QuestionInteractionItemRole.PROMPT);
+            List<QuestionInteractionItemRequest> matches = filterItemsByRole(safeItems, QuestionInteractionItemRole.MATCH);
+            if (prompts.isEmpty() || matches.isEmpty()) {
+                throw new BusinessException("MATCHING requires prompt and match items");
             }
 
+            Set<String> matchKeys = new HashSet<>();
+            for (QuestionInteractionItemRequest match : matches) {
+                if (!StringUtils.hasText(match.getContent()) || !StringUtils.hasText(match.getItemKey())) {
+                    throw new BusinessException("MATCHING match items require content and itemKey");
+                }
+                matchKeys.add(match.getItemKey().trim());
+            }
+            for (QuestionInteractionItemRequest prompt : prompts) {
+                if (!StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
+                    throw new BusinessException("MATCHING prompt items require content and correctMatchKey");
+                }
+                if (!matchKeys.contains(prompt.getCorrectMatchKey().trim())) {
+                    throw new BusinessException("MATCHING correctMatchKey must reference a match itemKey");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.DRAG_ORDER) {
+            List<QuestionInteractionItemRequest> orderItems = filterItemsByRole(safeItems, QuestionInteractionItemRole.ORDER_ITEM);
+            if (orderItems.size() < 2) {
+                throw new BusinessException("DRAG_ORDER requires at least two order items");
+            }
+
+            Set<Integer> orderIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest item : orderItems) {
+                if (!StringUtils.hasText(item.getContent()) || item.getCorrectOrderIndex() == null) {
+                    throw new BusinessException("DRAG_ORDER items require content and correctOrderIndex");
+                }
+                if (!orderIndexes.add(item.getCorrectOrderIndex())) {
+                    throw new BusinessException("DRAG_ORDER correctOrderIndex values must be unique");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.CLOZE) {
+            List<QuestionInteractionItemRequest> blanks = filterItemsByRole(safeItems, QuestionInteractionItemRole.BLANK);
+            if (blanks.isEmpty()) {
+                throw new BusinessException("CLOZE requires at least one blank item");
+            }
+
+            Set<Integer> blankIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest blank : blanks) {
+                if (blank.getBlankIndex() == null) {
+                    throw new BusinessException("CLOZE blank items require blankIndex");
+                }
+                if (!blankIndexes.add(blank.getBlankIndex())) {
+                    throw new BusinessException("CLOZE blankIndex values must be unique");
+                }
+                List<String> acceptedAnswers = normalizeAcceptedAnswers(blank.getAcceptedAnswers());
+                if (acceptedAnswers.isEmpty()) {
+                    throw new BusinessException("CLOZE blank items require acceptedAnswers");
+                }
+            }
+        }
+    }
+
+    private List<QuestionInteractionItemRequest> filterItemsByRole(
+            List<QuestionInteractionItemRequest> items,
+            QuestionInteractionItemRole role
+    ) {
+        return items.stream()
+                .filter(item -> item != null && item.getRole() == role)
+                .toList();
+    }
+
+    private boolean isInteractionQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.DRAG_ORDER
+                || type == QuestionType.CLOZE;
+    }
+
+    private String resolveItemContent(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getContent())) {
+            return itemRequest.getContent().trim();
+        }
+        return itemRequest != null && itemRequest.getRole() == QuestionInteractionItemRole.BLANK
+                ? "Blank " + orderIndex
+                : "Item " + orderIndex;
+    }
+
+    private String resolveItemKey(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getItemKey())) {
+            return itemRequest.getItemKey().trim();
+        }
+        String prefix = itemRequest != null && itemRequest.getRole() != null
+                ? itemRequest.getRole().name().toLowerCase(Locale.ROOT)
+                : "item";
+        return prefix + "-" + orderIndex;
+    }
+
+    private String joinAcceptedAnswers(List<String> acceptedAnswers) {
+        List<String> normalized = normalizeAcceptedAnswers(acceptedAnswers);
+        return normalized.isEmpty() ? null : String.join("\n", normalized);
+    }
+
+    private List<String> normalizeAcceptedAnswers(List<String> acceptedAnswers) {
+        if (acceptedAnswers == null) {
+            return List.of();
+        }
+        return acceptedAnswers.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
+    private TagResolutionResult resolveTags(
+            QuestionBank questionBank,
+            List<String> rawTagNames,
+            DifficultyLevel requestDifficulty,
+            boolean allowCreateTag
+    ) {
+        Set<String> normalizedTagNames = normalizeTagNames(rawTagNames);
+        DifficultyLevel resolvedDifficulty = requestDifficulty;
+        boolean hasMultipleDifficultyTags = false;
+        int difficultyCount = 0;
+        Set<String> contentTags = new LinkedHashSet<>();
+
+        for (String normalizedTagName : normalizedTagNames) {
+            DifficultyLevel byTag = difficultyTagResolver.resolve(normalizedTagName).orElse(null);
+            if (byTag != null) {
+                difficultyCount++;
+                if (difficultyCount > 1) {
+                    hasMultipleDifficultyTags = true;
+                }
+                resolvedDifficulty = byTag;
+                continue;
+            }
+            if (allowCreateTag) {
+                contentTags.add(normalizedTagName);
+            }
+        }
+
+        return new TagResolutionResult(contentTags, resolvedDifficulty, hasMultipleDifficultyTags);
+    }
+
+    private List<String> extractGiftMetadataTags(String block) {
+        String normalized = block.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = normalized.split("\n");
+        List<String> tags = new ArrayList<>();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("//")) {
+                continue;
+            }
+            Matcher matcher = GIFT_TAG_METADATA_PATTERN.matcher(trimmed);
+            while (matcher.find()) {
+                tags.add(matcher.group(1));
+            }
+        }
+        return tags;
+    }
+
+    private Set<String> normalizeTagNames(List<String> tagNames) {
+        if (tagNames == null) {
+            return Set.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String tagName : tagNames) {
+            if (!StringUtils.hasText(tagName)) {
+                continue;
+            }
+            normalized.add(normalizeTagName(tagName));
+        }
+        return normalized;
+    }
+
+    private String normalizeTagName(String tagName) {
+        if (!StringUtils.hasText(tagName)) {
+            throw new BusinessException("Question tag name must not be blank");
+        }
+        String normalized = tagName.trim().toLowerCase(Locale.ROOT);
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException("Question tag name must not be blank");
+        }
+        return normalized;
+    }
+
+    private QuestionTag findOrCreateQuestionTag(QuestionBank questionBank, String normalizedName) {
+        return questionTagRepository.findByQuestionBank_IdAndNameIgnoreCase(questionBank.getId(), normalizedName)
+                .orElseGet(() -> {
+                    QuestionTag created = new QuestionTag();
+                    created.setQuestionBank(questionBank);
+                    created.setName(normalizedName);
+                    return questionTagRepository.save(created);
+                });
+    }
+
+    private void enforceTagMutationPermission(BankQuestion question, QuestionBankMemberRole currentRole) {
+        User currentUser = requireCurrentUser();
+        if (currentUser.getRole().getRoleName() == RoleType.ADMIN
+                || currentRole == QuestionBankMemberRole.OWNER
+                || currentRole == QuestionBankMemberRole.EDITOR) {
+            return;
+        }
+        throw new UnauthorizedException("You do not have permission to modify tags for this question");
+    }
+
+    private void cleanupImportedQuestion(BankQuestion question) {
+        if (question == null || question.getId() == null) {
+            return;
+        }
+        if (bankQuestionRepository.existsById(question.getId())) {
+            bankQuestionTagRepository.deleteByBankQuestion_Id(question.getId());
+            bankQuestionRepository.delete(question);
+        }
+    }
+
+    private void syncQuestionTags(
+            BankQuestion question,
+            Set<String> normalizedTagNames,
+            QuestionBankMemberRole currentRole,
+            boolean isCreate
+    ) {
+        Set<String> targetTagNames = normalizedTagNames != null ? normalizedTagNames : Set.of();
+
+        List<BankQuestionTag> currentMappings = bankQuestionTagRepository.findByBankQuestion_Id(question.getId());
+        Map<String, BankQuestionTag> currentMap = currentMappings.stream()
+                .filter(mapping -> mapping.getTag() != null && StringUtils.hasText(mapping.getTag().getName()))
+                .collect(java.util.stream.Collectors.toMap(
+                        mapping -> normalizeTagName(mapping.getTag().getName()),
+                        mapping -> mapping,
+                        (left, right) -> left
+                ));
+
+        if (currentMap.keySet().equals(targetTagNames)) {
+            return;
+        }
+        enforceTagMutationPermission(question, currentRole);
+
+        for (String currentTagName : currentMap.keySet()) {
+            if (!targetTagNames.contains(currentTagName)) {
+                bankQuestionTagRepository.delete(currentMap.get(currentTagName));
+            }
+        }
+
+        for (String targetTagName : targetTagNames) {
+            if (currentMap.containsKey(targetTagName)) {
+                continue;
+            }
+            QuestionTag tag = findOrCreateQuestionTag(question.getQuestionBank(), targetTagName);
             BankQuestionTag mapping = new BankQuestionTag();
             mapping.setBankQuestion(question);
             mapping.setTag(tag);
             bankQuestionTagRepository.save(mapping);
+        }
+        if (!isCreate && targetTagNames.isEmpty() && !currentMappings.isEmpty()) {
+            bankQuestionTagRepository.deleteByBankQuestion_Id(question.getId());
         }
     }
 
@@ -842,10 +1388,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
     }
 
-    private void requireEditPermission(QuestionBank questionBank) {
+    private QuestionBankMemberRole requireEditPermission(QuestionBank questionBank) {
         User currentUser = requireCurrentUser();
         if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
-            return;
+            return QuestionBankMemberRole.OWNER;
         }
         QuestionBankMember membership = questionBankMemberRepository.findByQuestionBank_IdAndUser_Id(
                         questionBank.getId(),
@@ -854,7 +1400,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 .orElse(null);
         if (membership != null && (membership.getRole() == QuestionBankMemberRole.OWNER
                 || membership.getRole() == QuestionBankMemberRole.EDITOR)) {
-            return;
+            return membership.getRole();
         }
         throw new UnauthorizedException("You do not have edit permission for this question bank");
     }
@@ -971,9 +1517,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         response.setParentQuestionId(question.getParentQuestion() != null ? question.getParentQuestion().getId() : null);
         response.setContent(question.getContent());
         response.setExplanation(question.getExplanation());
-        response.setFileUrl(question.getFileUrl());
-        response.setEmbedUrl(question.getEmbedUrl());
-        response.setCloudinaryId(question.getCloudinaryId());
+        response.setResource(convertResourceToDTO(question.getResource()));
         response.setType(question.getType());
         response.setDifficultyLevel(question.getDifficultyLevel());
         response.setDefaultPoints(question.getDefaultPoints());
@@ -987,8 +1531,41 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             response.setOptions(question.getOptions() != null
                     ? question.getOptions().stream().map(this::convertOption).toList()
                     : List.of());
+            response.setItems(question.getInteractionItems() != null
+                    ? question.getInteractionItems().stream().map(item -> convertInteractionItem(item, true)).toList()
+                    : List.of());
+            response.setBlocks(convertBlocksToDTOs(question.getContentBlocks()));
         }
         return response;
+    }
+
+    private QuestionInteractionItemResponse convertInteractionItem(
+            QuestionInteractionItem item,
+            boolean showCorrectAnswer
+    ) {
+        return new QuestionInteractionItemResponse(
+                item.getId(),
+                item.getContent(),
+                item.getItemKey(),
+                item.getRole(),
+                showCorrectAnswer ? item.getCorrectMatchKey() : null,
+                showCorrectAnswer ? item.getCorrectOrderIndex() : null,
+                item.getBlankIndex(),
+                showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getResource() != null ? item.getResource().getId() : null,
+                item.getOrderIndex()
+        );
+    }
+
+    private List<String> parseAcceptedAnswers(String acceptedAnswers) {
+        if (!StringUtils.hasText(acceptedAnswers)) {
+            return List.of();
+        }
+        return Pattern.compile("\\R")
+                .splitAsStream(acceptedAnswers)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private BankQuestionOptionResponse convertOption(BankQuestionOption option) {
@@ -996,18 +1573,80 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 option.getId(),
                 option.getContent(),
                 option.getIsCorrect(),
-                option.getFileUrl(),
-                option.getEmbedUrl(),
-                option.getCloudinaryId(),
+                option.getResource() != null ? option.getResource().getId() : null,
                 option.getOrderIndex()
         );
     }
 
+    private void applyContentBlocks(BankQuestion question, List<QuestionContentBlockRequest> requests) {
+        if (question.getId() != null) {
+            questionContentBlockRepository.deleteByBankQuestion_Id(question.getId());
+        }
+        if (requests == null || requests.isEmpty()) {
+            if (question.getContentBlocks() != null) question.getContentBlocks().clear();
+            return;
+        }
+        List<QuestionContentBlock> blocks = new ArrayList<>();
+        for (int i = 0; i < requests.size(); i++) {
+            QuestionContentBlockRequest req = requests.get(i);
+            QuestionContentBlock block = new QuestionContentBlock();
+            block.setBankQuestion(question);
+            block.setBlockType(req.getBlockType());
+            block.setOrderIndex(req.getOrderIndex() != null ? req.getOrderIndex() : i + 1);
+            block.setContent(req.getContent());
+            block.setLanguage(req.getLanguage());
+            block.setBlankKey(req.getBlankKey());
+            if (req.getResourceId() != null) {
+                block.setResource(resourceRepository.findById(req.getResourceId()).orElse(null));
+            }
+            blocks.add(block);
+        }
+        questionContentBlockRepository.saveAll(blocks);
+    }
+
+    private ResourceResponse convertResourceToDTO(Resource resource) {
+        if (resource == null) return null;
+        ResourceResponse r = new ResourceResponse();
+        r.setId(resource.getId());
+        r.setTitle(resource.getTitle());
+        r.setFileUrl(resource.getFileUrl());
+        r.setEmbedUrl(resource.getEmbedUrl());
+        r.setCloudinaryId(resource.getCloudinaryId());
+        r.setHlsUrl(resource.getHlsUrl());
+        r.setDescription(resource.getDescription());
+        r.setMimeType(resource.getMimeType());
+        r.setFileSize(resource.getFileSize());
+        r.setType(resource.getType());
+        r.setSource(resource.getSource());
+        return r;
+    }
+
+    private List<QuestionContentBlockResponse> convertBlocksToDTOs(List<QuestionContentBlock> blocks) {
+        if (blocks == null) return List.of();
+        return blocks.stream().map(block -> {
+            QuestionContentBlockResponse dto = new QuestionContentBlockResponse();
+            dto.setId(block.getId());
+            dto.setBlockType(block.getBlockType());
+            dto.setOrderIndex(block.getOrderIndex());
+            dto.setContent(block.getContent());
+            dto.setLanguage(block.getLanguage());
+            dto.setBlankKey(block.getBlankKey());
+            dto.setResource(convertResourceToDTO(block.getResource()));
+            return dto;
+        }).toList();
+    }
+
     private QuestionTagResponse convertTag(QuestionTag tag) {
+        long questionUsageCount = bankQuestionTagRepository.countByTag_Id(tag.getId());
+        long quizUsageCount = quizBankSourceRepository.countByTag_Id(tag.getId());
+        long totalUsageCount = questionUsageCount + quizUsageCount;
         return new QuestionTagResponse(
                 tag.getId(),
                 StringUtils.hasText(tag.getName()) ? tag.getName().trim() : tag.getName(),
-                tag.getSubject() != null ? tag.getSubject().getId() : null
+                tag.getQuestionBank() != null ? tag.getQuestionBank().getId() : null,
+                questionUsageCount,
+                quizUsageCount,
+                totalUsageCount
         );
     }
 

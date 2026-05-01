@@ -27,6 +27,8 @@ public interface ClassContentItemRepository extends JpaRepository<ClassContentIt
 
     Optional<ClassContentItem> findByAssignment_Id(Integer assignmentId);
 
+    Optional<ClassContentItem> findByLesson_Id(Integer lessonId);
+
     @Query("""
             select cci from ClassContentItem cci
             where cci.classChapter.classSection.id = :classSectionId

@@ -1,7 +1,6 @@
 package com.example.backend.entity.quiz;
 
 import com.example.backend.entity.BaseEntity;
-import com.example.backend.entity.Subject;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -29,8 +28,8 @@ public class QuestionTag extends BaseEntity {
     private String name;
 
     @ManyToOne
-    @JoinColumn(name = "subject_id", nullable = false)
-    private Subject subject;
+    @JoinColumn(name = "question_bank_id", nullable = false)
+    private QuestionBank questionBank;
 
     @OneToMany(mappedBy = "tag")
     private List<BankQuestionTag> questionMappings;

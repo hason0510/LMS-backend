@@ -12,5 +12,8 @@ import lombok.Setter;
 public class QuestionTagResponse {
     private Integer id;
     private String name;
-    private Integer subjectId;
+    private Integer questionBankId;
+    private Long questionUsageCount;
+    private Long quizUsageCount;
+    private Long totalUsageCount;
 }

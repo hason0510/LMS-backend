@@ -4,6 +4,7 @@ import com.example.backend.dto.request.questionbank.BankQuestionRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRoleRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankRequest;
+import com.example.backend.dto.request.questionbank.QuestionTagBatchRequest;
 import com.example.backend.dto.request.questionbank.QuestionTagRequest;
 import com.example.backend.dto.response.questionbank.BankQuestionResponse;
 import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
@@ -13,6 +14,7 @@ import com.example.backend.dto.response.questionbank.QuestionTagResponse;
 import com.example.backend.service.QuestionBankService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -42,6 +45,13 @@ public class QuestionBankController {
             @Valid @RequestBody QuestionBankRequest request
     ) {
         return ResponseEntity.ok(questionBankService.updateQuestionBank(id, request));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteQuestionBank(@PathVariable Integer id) {
+        questionBankService.deleteQuestionBank(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -94,15 +104,61 @@ public class QuestionBankController {
     }
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    @PostMapping("/tags")
-    public ResponseEntity<QuestionTagResponse> createTag(@Valid @RequestBody QuestionTagRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(questionBankService.createTag(request));
+    @GetMapping(value = "/{questionBankId}/export-gift", produces = "text/plain; charset=UTF-8")
+    public ResponseEntity<byte[]> exportGiftQuestions(@PathVariable Integer questionBankId) {
+        String giftContent = questionBankService.exportGiftQuestions(questionBankId);
+        String fileName = "question-bank-" + questionBankId + ".gift.txt";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType("text/plain; charset=UTF-8"))
+                .body(giftContent.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PostMapping("/{questionBankId}/tags")
+    public ResponseEntity<QuestionTagResponse> createTag(
+            @PathVariable Integer questionBankId,
+            @Valid @RequestBody QuestionTagRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(questionBankService.createTag(questionBankId, request));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PostMapping("/{questionBankId}/tags/batch")
+    public ResponseEntity<List<QuestionTagResponse>> createTagsBatch(
+            @PathVariable Integer questionBankId,
+            @Valid @RequestBody QuestionTagBatchRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(questionBankService.createTagsBatch(questionBankId, request));
     }
 
     @PreAuthorize("isAuthenticated()")
-    @GetMapping("/tags")
-    public ResponseEntity<List<QuestionTagResponse>> getTags(@RequestParam(required = false) Integer subjectId) {
-        return ResponseEntity.ok(questionBankService.getTags(subjectId));
+    @GetMapping("/{questionBankId}/tags")
+    public ResponseEntity<List<QuestionTagResponse>> getTags(
+            @PathVariable Integer questionBankId,
+            @RequestParam(required = false) String search
+    ) {
+        return ResponseEntity.ok(questionBankService.getTags(questionBankId, search));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PutMapping("/{questionBankId}/tags/{tagId}")
+    public ResponseEntity<QuestionTagResponse> updateTag(
+            @PathVariable Integer questionBankId,
+            @PathVariable Integer tagId,
+            @Valid @RequestBody QuestionTagRequest request
+    ) {
+        return ResponseEntity.ok(questionBankService.updateTag(questionBankId, tagId, request));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @DeleteMapping("/{questionBankId}/tags/{tagId}")
+    public ResponseEntity<Void> deleteTag(
+            @PathVariable Integer questionBankId,
+            @PathVariable Integer tagId
+    ) {
+        questionBankService.deleteTag(questionBankId, tagId);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

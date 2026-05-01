@@ -9,4 +9,8 @@ import java.util.List;
 @Repository
 public interface QuizBankSourceRepository extends JpaRepository<QuizBankSource, Integer> {
     List<QuizBankSource> findByQuiz_IdOrderByOrderIndexAsc(Integer quizId);
+
+    boolean existsByTag_Id(Integer tagId);
+
+    long countByTag_Id(Integer tagId);
 }

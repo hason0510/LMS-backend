@@ -30,6 +30,15 @@ public class Quiz extends BaseEntity {
     private Integer maxAttempts;
     private LocalDateTime availableFrom;
     private LocalDateTime availableUntil;
+
+    @Column(name = "generate_questions_per_attempt", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean generateQuestionsPerAttempt = false;
+
+    @Column(name = "shuffle_questions", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean shuffleQuestions = false;
+
+    @Column(name = "shuffle_answers", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean shuffleAnswers = false;
     @OneToMany(mappedBy = "quiz")
     private List<QuizQuestion> questions;
 

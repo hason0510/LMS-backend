@@ -1,6 +1,7 @@
 package com.example.backend.entity.quiz;
 
 import com.example.backend.entity.BaseEntity;
+import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -26,7 +27,7 @@ public class QuizAnswer extends BaseEntity {
     @JoinColumn(name = "quiz_question_id")
     private QuizQuestion quizQuestion;
 
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_id")
+    private Resource resource;
 }

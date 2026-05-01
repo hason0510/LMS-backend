@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.dto.response.CloudinaryResponse;
 import com.example.backend.exception.BusinessException;
@@ -9,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,11 +37,31 @@ public class CloudinaryServiceImpl implements CloudinaryService {
                 case "image" -> options.put("resource_type", "image");
                 default -> options.put("resource_type", "auto");
             }
+
+            // Add eager HLS transformation for video
+            if ("video".equals(normalizedType)) {
+                options.put("eager", Collections.singletonList(
+                    ObjectUtils.asMap("streaming_profile", "sp_auto", "format", "m3u8")
+                ));
+                options.put("eager_async", false);
+            }
+
             Map result = cloudinary.uploader().upload(file.getBytes(), options);
+
+            // Extract HLS URL from eager transformation results
+            String hlsUrl = null;
+            if ("video".equals(normalizedType)) {
+                List<Map> eager = (List<Map>) result.get("eager");
+                if (eager != null && !eager.isEmpty()) {
+                    hlsUrl = (String) eager.get(0).get("secure_url");
+                }
+            }
+
             return CloudinaryResponse.builder()
                     .publicId((String) result.get("public_id"))
                     .url((String) result.get("secure_url"))
                     .type(normalizedType)
+                    .hlsUrl(hlsUrl)
                     .build();
         } catch (Exception e) {
             throw new BusinessException("Failed to upload " + type);

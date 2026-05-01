@@ -11,4 +11,5 @@ public class CloudinaryResponse {
     private String publicId;
     private String url;
     private String type;
+    private String hlsUrl;
 }

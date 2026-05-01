@@ -1,6 +1,7 @@
 package com.example.backend.entity.quiz;
 
 import com.example.backend.entity.BaseEntity;
+import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -28,9 +29,9 @@ public class BankQuestionOption extends BaseEntity {
     @Column(name = "is_correct", nullable = false)
     private Boolean isCorrect = false;
 
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resource_id")
+    private Resource resource;
 
     @Column(name = "order_index")
     private Integer orderIndex;

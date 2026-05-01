@@ -22,7 +22,12 @@ public class FormatApiResponse implements ResponseBodyAdvice<Object> {
     public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> selectedConverterType, ServerHttpRequest request, ServerHttpResponse response) {
         HttpServletResponse ServletResponse = ((ServletServerHttpResponse) response).getServletResponse();
         int status = ServletResponse.getStatus();
-        if (body instanceof String || body instanceof Resource) {
+        if (body instanceof String || body instanceof Resource || body instanceof byte[]) {
+            return body;
+        }
+        if (selectedContentType != null
+                && !MediaType.APPLICATION_JSON.includes(selectedContentType)
+                && !selectedContentType.getSubtype().endsWith("+json")) {
             return body;
         }
         ApiResponse<Object> res = new ApiResponse<>();

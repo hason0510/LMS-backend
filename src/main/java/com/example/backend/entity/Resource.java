@@ -25,6 +25,7 @@ public class Resource extends BaseEntity {
     private String fileUrl;
     private String embedUrl;
     private String cloudinaryId;
+    private String hlsUrl;
     private String description;
     private String mimeType;
     private Long fileSize;

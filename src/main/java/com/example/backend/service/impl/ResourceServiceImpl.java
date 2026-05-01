@@ -180,6 +180,7 @@ public class ResourceServiceImpl implements ResourceService {
         response.setEmbedUrl(resource.getEmbedUrl());
         response.setCloudinaryId(resource.getCloudinaryId());
         response.setFileUrl(resource.getFileUrl());
+        response.setHlsUrl(resource.getHlsUrl());
         response.setMimeType(resource.getMimeType());
         response.setFileSize(resource.getFileSize());
         response.setLessonId(resource.getLesson() != null ? resource.getLesson().getId() : null);
@@ -226,6 +227,7 @@ public class ResourceServiceImpl implements ResourceService {
         final CloudinaryResponse response = this.cloudinaryService.uploadFile(file, fileName, "video");
         uploadResource.setFileUrl(response.getUrl());
         uploadResource.setCloudinaryId(response.getPublicId());
+        uploadResource.setHlsUrl(response.getHlsUrl());
         uploadResource.setMimeType(file.getContentType());
         uploadResource.setFileSize(file.getSize());
         resourceRepository.save(uploadResource);

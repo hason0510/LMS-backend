@@ -12,7 +12,5 @@ public class QuizAnswerResponse {
     @JsonProperty("isCorrect")
     private Boolean isCorrect;
     private String content;
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    private Integer resourceId;
 }

@@ -1,19 +1,15 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
-import com.example.backend.constant.ItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.CommentRequest;
 import com.example.backend.dto.response.CommentResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.entity.*;
-import com.example.backend.entity.old.ChapterItem;
-import com.example.backend.entity.old.Course;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.*;
-import com.example.backend.repository.old.ChapterItemRepository;
 import com.example.backend.service.CommentService;
 import com.example.backend.service.NotificationService;
 import com.example.backend.service.UserService;
@@ -31,7 +27,7 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentRepository commentRepository;
     private final LessonRepository lessonRepository;
-    private final ChapterItemRepository chapterItemRepository;
+    private final ClassContentItemRepository classContentItemRepository;
     private final UserService userService;
     private final NotificationService notificationService;
     private final EnrollmentRepository enrollmentRepository;
@@ -40,20 +36,23 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public CommentResponse addComment(Integer lessonId, CommentRequest request) {
         Lesson lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
-
-        // tìm ChapterItem có refId trùng với lessonId này
-        ChapterItem chapterItem = chapterItemRepository
-                .findByRefIdAndType(lessonId, ItemType.LESSON)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng!"));
+
+        ClassContentItem contentItem = classContentItemRepository.findByLesson_Id(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng trong lớp học!"));
+
+        ClassSection classSection = contentItem.getClassChapter().getClassSection();
 
         User currentUser = userService.getCurrentUser();
         RoleType currentRole = currentUser.getRole().getRoleName();
-        Course course = chapterItem.getChapter().getCourse();
-        boolean check = (currentRole == RoleType.ADMIN) || (currentUser.getId().equals(course.getTeacher().getId()))
-                ||  enrollmentRepository.existsByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), course.getId(), EnrollmentStatus.APPROVED);
-        if(!check){
+
+        boolean isTeacher = currentUser.getId().equals(classSection.getTeacher().getId());
+        boolean isClassMember = classSection.getClassMembers() != null &&
+                classSection.getClassMembers().stream().anyMatch(m -> m.getUser().getId().equals(currentUser.getId()));
+        boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
+                currentUser.getId(), classSection.getId(), EnrollmentStatus.APPROVED);
+
+        if (currentRole != RoleType.ADMIN && !isTeacher && !isClassMember && !isEnrolled) {
             throw new UnauthorizedException("Chỉ người dùng nằm trong khóa học này mới được bình luận!");
         }
 
@@ -73,42 +72,39 @@ public class CommentServiceImpl implements CommentService {
 
         Comment savedComment = commentRepository.save(comment);
 
-        // Tách logic ra hàm riêng
-        processNotification(savedComment, course, lesson, currentUser);
+        processNotification(savedComment, classSection, lesson, currentUser);
 
         return convertEntityToDTO(savedComment);
     }
 
-    private void processNotification(Comment comment, Course course, Lesson lesson, User currentUser) {
+    private void processNotification(Comment comment, ClassSection classSection, Lesson lesson, User currentUser) {
         RoleType currentRole = currentUser.getRole().getRoleName();
         boolean isRootComment = comment.getParent() == null;
-        User teacher = course.getTeacher();
-
+        User teacher = classSection.getTeacher();
 
         if (!isRootComment) {
             User parentAuthor = comment.getParent().getUser();
             if (!parentAuthor.getId().equals(currentUser.getId())) {
-                String msg = String.format("%s %s đã trả lời bình luận của bạn trong bài giảng %s trong khóa học %s",
-                        getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), course.getTitle());
+                String msg = String.format("%s %s đã trả lời bình luận của bạn trong bài giảng %s trong lớp %s",
+                        getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
                 notificationService.createNotification(parentAuthor, "Có trả lời bình luận mới", msg, "COMMENT", null, null);
             }
             return;
         }
 
         if (currentRole == RoleType.STUDENT) {
-            String msg = String.format("Học viên %s đã bình luận bài giảng %s trong khóa học %s",
-                    currentUser.getFullName(), lesson.getTitle(),  course.getTitle());
+            String msg = String.format("Học viên %s đã bình luận bài giảng %s trong lớp %s",
+                    currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
             notificationService.createNotification(teacher, "Có bình luận mới từ học viên", msg, "COMMENT", null, null);
             return;
         }
 
-
         if (currentRole == RoleType.TEACHER || currentRole == RoleType.ADMIN) {
-            List<Enrollment> enrollments = enrollmentRepository.findByCourse_IdAndApprovalStatus(
-                    course.getId(), EnrollmentStatus.APPROVED);
+            List<Enrollment> enrollments = enrollmentRepository.findByClassSection_IdAndApprovalStatus(
+                    classSection.getId(), EnrollmentStatus.APPROVED);
 
-            String msg = String.format("%s %s có thông báo mới trong bài giảng %s trong khóa học %s",
-                    getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), course.getTitle());
+            String msg = String.format("%s %s có thông báo mới trong bài giảng %s trong lớp %s",
+                    getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
 
             enrollments.forEach(e -> notificationService.createNotification(e.getStudent(), "Có thông báo mới từ giáo viên", msg, "COMMENT", null, null));
 
@@ -118,7 +114,6 @@ public class CommentServiceImpl implements CommentService {
         }
     }
 
-    // Helper lấy tên hiển thị của Role
     private String getRoleDisplayName(RoleType role) {
         return switch (role) {
             case ADMIN -> "Quản trị viên";
@@ -149,21 +144,20 @@ public class CommentServiceImpl implements CommentService {
             Integer lessonId,
             Pageable pageable
     ) {
-        Lesson lesson = lessonRepository.findById(lessonId)
+        lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng!"));
-        // 1. Lấy toàn bộ comment của lesson (1 query)
-        List<Comment> comments =
-                commentRepository.findAllByLesson_Id(lessonId);
+
+        List<Comment> comments = commentRepository.findAllByLesson_Id(lessonId);
         if (comments.isEmpty()) {
             return new PageResponse<>(1, 0, 0, List.of());
         }
-        // 2. Convert sang DTO + put vào Map
+
         Map<Integer, CommentResponse> nodeMap = new HashMap<>();
         for (Comment c : comments) {
             CommentResponse dto = convertEntityToDTO(c);
             nodeMap.put(dto.getCommentId(), dto);
         }
-        // 3. Build cây comment
+
         List<CommentResponse> roots = new ArrayList<>();
         for (CommentResponse node : nodeMap.values()) {
             if (node.getParentId() != null) {
@@ -175,12 +169,10 @@ public class CommentServiceImpl implements CommentService {
                 roots.add(node);
             }
         }
-        // 4. Sort ROOT comment (DESC theo createdAt)
+
         roots.sort(Comparator.comparing(CommentResponse::getCreatedAt).reversed());
-        // 5. Sort replies (ASC)
         roots.forEach(root -> sortRepliesAscending(root.getReplies()));
 
-        // 6. Manual pagination trên ROOT comment
         int start = (int) pageable.getOffset();
         int end = Math.min(start + pageable.getPageSize(), roots.size());
 
@@ -198,7 +190,6 @@ public class CommentServiceImpl implements CommentService {
 
     private void sortRepliesAscending(List<CommentResponse> replies) {
         if (replies == null || replies.isEmpty()) return;
-
         replies.sort(Comparator.comparing(CommentResponse::getCreatedAt));
         replies.forEach(r -> sortRepliesAscending(r.getReplies()));
     }
@@ -215,25 +206,25 @@ public class CommentServiceImpl implements CommentService {
     public void deleteComment(Integer id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
-
         validateActionComment(comment);
-
         commentRepository.delete(comment);
     }
 
     private void validateActionComment(Comment comment) {
         Lesson lesson = lessonRepository.findById(comment.getLesson().getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
-        ChapterItem chapterItem = chapterItemRepository
-                .findByRefIdAndType(lesson.getId(), ItemType.LESSON)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng!"));
+
+        ClassContentItem contentItem = classContentItemRepository.findByLesson_Id(lesson.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng trong lớp học!"));
+
+        ClassSection classSection = contentItem.getClassChapter().getClassSection();
         User currentUser = userService.getCurrentUser();
         RoleType currentRole = currentUser.getRole().getRoleName();
-        Course course = chapterItem.getChapter().getCourse();
+
         boolean commentOwner = currentUser.getId().equals(comment.getUser().getId());
-        boolean check = (currentRole == RoleType.ADMIN) || (currentUser.getId().equals(course.getTeacher().getId()))
-                || commentOwner;
-        if(!check){
+        boolean isTeacher = currentUser.getId().equals(classSection.getTeacher().getId());
+
+        if (currentRole != RoleType.ADMIN && !isTeacher && !commentOwner) {
             throw new UnauthorizedException("Chỉ người dùng nằm trong khóa học này mới được sửa / xóa bình luận!");
         }
     }
@@ -252,7 +243,7 @@ public class CommentServiceImpl implements CommentService {
         if (comment.getParent() != null) {
             response.setParentId(comment.getParent().getId());
         }
-        response.setReplies(new ArrayList<>()); // Khởi tạo replies trống, sẽ được xây dựng trong getCommentsByLesson
+        response.setReplies(new ArrayList<>());
         return response;
     }
 }

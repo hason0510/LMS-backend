@@ -4,6 +4,7 @@ import com.example.backend.dto.request.questionbank.BankQuestionRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRoleRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankRequest;
+import com.example.backend.dto.request.questionbank.QuestionTagBatchRequest;
 import com.example.backend.dto.request.questionbank.QuestionTagRequest;
 import com.example.backend.dto.response.questionbank.BankQuestionResponse;
 import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
@@ -19,6 +20,8 @@ public interface QuestionBankService {
 
     QuestionBankResponse updateQuestionBank(Integer id, QuestionBankRequest request);
 
+    void deleteQuestionBank(Integer id);
+
     QuestionBankResponse getQuestionBankById(Integer id);
 
     List<QuestionBankResponse> getQuestionBanks(Integer subjectId, boolean includeQuestions);
@@ -31,9 +34,17 @@ public interface QuestionBankService {
 
     GiftImportResultResponse importGiftQuestions(Integer questionBankId, MultipartFile file);
 
-    QuestionTagResponse createTag(QuestionTagRequest request);
+    String exportGiftQuestions(Integer questionBankId);
 
-    List<QuestionTagResponse> getTags(Integer subjectId);
+    QuestionTagResponse createTag(Integer questionBankId, QuestionTagRequest request);
+
+    List<QuestionTagResponse> createTagsBatch(Integer questionBankId, QuestionTagBatchRequest request);
+
+    List<QuestionTagResponse> getTags(Integer questionBankId, String search);
+
+    QuestionTagResponse updateTag(Integer questionBankId, Integer tagId, QuestionTagRequest request);
+
+    void deleteTag(Integer questionBankId, Integer tagId);
 
     QuestionBankMemberResponse addMember(Integer questionBankId, QuestionBankMemberRequest request);
 

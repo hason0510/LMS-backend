@@ -13,8 +13,8 @@ public class QuizQuestionRequest {
     private String content;
     private QuestionType type;
     private Integer points;
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    private Integer resourceId;
     private List<QuizAnswerRequest> answers;
+    private List<QuestionInteractionItemRequest> items;
+    private List<QuestionContentBlockRequest> blocks;
 }

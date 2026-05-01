@@ -41,6 +41,9 @@ public class QuestionBank extends BaseEntity {
     @OneToMany(mappedBy = "questionBank")
     private List<QuizBankSource> quizSources;
 
+    @OneToMany(mappedBy = "questionBank")
+    private List<QuestionTag> questionTags;
+
     @OneToMany(mappedBy = "questionBank", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionBankMember> members;
 }

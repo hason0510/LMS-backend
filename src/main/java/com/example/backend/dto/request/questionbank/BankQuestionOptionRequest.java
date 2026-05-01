@@ -12,8 +12,6 @@ import lombok.Setter;
 public class BankQuestionOptionRequest {
     private String content;
     private Boolean isCorrect;
-    private String fileUrl;
-    private String embedUrl;
-    private String cloudinaryId;
+    private Integer resourceId;
     private Integer orderIndex;
 }
