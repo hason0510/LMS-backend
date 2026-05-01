@@ -17,4 +17,5 @@ public class QuizQuestionRequest {
     private String embedUrl;
     private String cloudinaryId;
     private List<QuizAnswerRequest> answers;
+    private List<QuestionInteractionItemRequest> items;
 }

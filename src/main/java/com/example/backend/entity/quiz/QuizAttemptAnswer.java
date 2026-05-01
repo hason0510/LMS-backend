@@ -30,6 +30,10 @@ public class QuizAttemptAnswer extends BaseEntity {
     private QuizAttempt attempt;
 
     @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "attempt_question_id")
+    private QuizAttemptQuestion attemptQuestion;
+
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "question_id")
     private QuizQuestion question;
 
@@ -44,4 +48,15 @@ public class QuizAttemptAnswer extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "quiz_answer_id")
     )
     private List<QuizAnswer> selectedAnswers;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "quiz_attempt_selected_options",
+            joinColumns = @JoinColumn(name = "attempt_answer_id"),
+            inverseJoinColumns = @JoinColumn(name = "attempt_question_option_id")
+    )
+    private List<QuizAttemptQuestionOption> selectedOptions;
+
+    @OneToMany(mappedBy = "attemptAnswer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QuizAttemptAnswerItem> answerItems;
 }

@@ -16,6 +16,9 @@ public class QuizRequest {
     private Integer maxAttempts;
     private LocalDateTime availableFrom;
     private LocalDateTime availableUntil;
+    private Boolean generateQuestionsPerAttempt;
+    private Boolean shuffleQuestions;
+    private Boolean shuffleAnswers;
     private Integer classSectionId;
     private Integer classContentItemId;
     private List<QuizBankSourceRequest> bankSources;

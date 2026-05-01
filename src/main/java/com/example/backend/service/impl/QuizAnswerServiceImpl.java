@@ -61,14 +61,15 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
 
         QuizAnswer answer = new QuizAnswer();
         answer.setQuizQuestion(question);
-        if(question.getType().equals(QuestionType.MULTIPLE_CHOICE)){
+        if(question.getType().equals(QuestionType.SINGLE_CHOICE)
+                || question.getType().equals(QuestionType.MULTIPLE_CHOICE)){
             answer.setContent(request.getContent());
             answer.setIsCorrect(request.getIsCorrect());
         }
-        if(question.getType().equals(QuestionType.ESSAY)){
+        if(question.getType().equals(QuestionType.SHORT_ANSWER)){
             boolean exists = quizAnswerRepository.existsByQuizQuestion_Id(questionId);
             if (exists) {
-                throw new RuntimeException("ESSAY question can only have one answer");
+                throw new RuntimeException("SHORT_ANSWER question can only have one answer");
             }
             answer.setContent(request.getContent());
             answer.setIsCorrect(true);
@@ -83,7 +84,8 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
         QuizAnswer answer = quizAnswerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Quiz Answer not found with id: " + id));
 
-        if(answer.getQuizQuestion().getType().equals(QuestionType.MULTIPLE_CHOICE)){
+        if(answer.getQuizQuestion().getType().equals(QuestionType.SINGLE_CHOICE)
+                || answer.getQuizQuestion().getType().equals(QuestionType.MULTIPLE_CHOICE)){
             if(request.getContent() != null){
                 answer.setContent(request.getContent());
             }
@@ -91,7 +93,7 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
                 answer.setIsCorrect(request.getIsCorrect());
             }
         }
-        if(answer.getQuizQuestion().getType().equals(QuestionType.ESSAY)){
+        if(answer.getQuizQuestion().getType().equals(QuestionType.SHORT_ANSWER)){
             if(request.getContent() != null){
                 answer.setContent(request.getContent());
             }

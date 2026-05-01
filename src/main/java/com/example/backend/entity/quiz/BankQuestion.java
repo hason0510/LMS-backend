@@ -59,6 +59,10 @@ public class BankQuestion extends BaseEntity {
     @OrderBy("orderIndex ASC")
     private List<BankQuestionOption> options;
 
+    @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionInteractionItem> interactionItems;
+
     @OneToMany(mappedBy = "bankQuestion")
     private List<BankQuestionTag> tagMappings;
 

@@ -1,8 +1,10 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.QuestionBankMemberRole;
+import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.RoleType;
+import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionOptionRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionRequest;
 import com.example.backend.dto.request.questionbank.QuestionBankMemberRequest;
@@ -15,9 +17,11 @@ import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
+import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
 import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.BankQuestionTag;
+import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionBankMember;
 import com.example.backend.entity.quiz.QuestionTag;
@@ -45,8 +49,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -332,12 +339,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         boolean hasIncorrect = tokens.stream().anyMatch(token -> !token.correct());
         QuestionType questionType = hasIncorrect
                 ? (correctCount == 1 ? QuestionType.SINGLE_CHOICE : QuestionType.MULTIPLE_CHOICE)
-                : QuestionType.ESSAY;
+                : QuestionType.SHORT_ANSWER;
 
         List<BankQuestionOption> options = new ArrayList<>();
         int orderIndex = 1;
         for (GiftAnswerToken token : tokens) {
-            if (questionType == QuestionType.ESSAY && !token.correct()) {
+            if (questionType == QuestionType.SHORT_ANSWER && !token.correct()) {
                 continue;
             }
             options.add(buildOption(token.content(), token.correct(), orderIndex++));
@@ -764,6 +771,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private void applyQuestionRequest(BankQuestion question, BankQuestionRequest request) {
+        validateInteractionItems(request.getType(), request.getItems());
+
         question.setContent(request.getContent());
         question.setExplanation(request.getExplanation());
         question.setFileUrl(request.getFileUrl());
@@ -783,7 +792,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
         List<BankQuestionOption> incomingOptions = new ArrayList<>();
         int orderIndex = 1;
-        if (request.getOptions() != null) {
+        if (!isInteractionQuestionType(request.getType()) && request.getOptions() != null) {
             for (BankQuestionOptionRequest optionRequest : request.getOptions()) {
                 BankQuestionOption option = new BankQuestionOption();
                 option.setBankQuestion(question);
@@ -804,6 +813,162 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             question.getOptions().clear();
         }
         question.getOptions().addAll(incomingOptions);
+
+        applyInteractionItems(question, request.getItems());
+    }
+
+    private void applyInteractionItems(BankQuestion question, List<QuestionInteractionItemRequest> requests) {
+        List<QuestionInteractionItem> incomingItems = new ArrayList<>();
+        int orderIndex = 1;
+        if (requests != null) {
+            for (QuestionInteractionItemRequest itemRequest : requests) {
+                QuestionInteractionItem item = new QuestionInteractionItem();
+                item.setBankQuestion(question);
+                item.setContent(resolveItemContent(itemRequest, orderIndex));
+                item.setItemKey(resolveItemKey(itemRequest, orderIndex));
+                item.setRole(itemRequest.getRole());
+                item.setCorrectMatchKey(StringUtils.hasText(itemRequest.getCorrectMatchKey())
+                        ? itemRequest.getCorrectMatchKey().trim()
+                        : null);
+                item.setCorrectOrderIndex(itemRequest.getCorrectOrderIndex());
+                item.setBlankIndex(itemRequest.getBlankIndex());
+                item.setAcceptedAnswers(joinAcceptedAnswers(itemRequest.getAcceptedAnswers()));
+                item.setFileUrl(itemRequest.getFileUrl());
+                item.setEmbedUrl(itemRequest.getEmbedUrl());
+                item.setCloudinaryId(itemRequest.getCloudinaryId());
+                item.setOrderIndex(itemRequest.getOrderIndex() != null ? itemRequest.getOrderIndex() : orderIndex);
+                incomingItems.add(item);
+                orderIndex++;
+            }
+        }
+
+        if (question.getInteractionItems() == null) {
+            question.setInteractionItems(new ArrayList<>());
+        } else {
+            question.getInteractionItems().clear();
+        }
+        question.getInteractionItems().addAll(incomingItems);
+    }
+
+    private void validateInteractionItems(QuestionType type, List<QuestionInteractionItemRequest> items) {
+        if (!isInteractionQuestionType(type)) {
+            return;
+        }
+
+        List<QuestionInteractionItemRequest> safeItems = items != null ? items : List.of();
+        if (type == QuestionType.MATCHING) {
+            List<QuestionInteractionItemRequest> prompts = filterItemsByRole(safeItems, QuestionInteractionItemRole.PROMPT);
+            List<QuestionInteractionItemRequest> matches = filterItemsByRole(safeItems, QuestionInteractionItemRole.MATCH);
+            if (prompts.isEmpty() || matches.isEmpty()) {
+                throw new BusinessException("MATCHING requires prompt and match items");
+            }
+
+            Set<String> matchKeys = new HashSet<>();
+            for (QuestionInteractionItemRequest match : matches) {
+                if (!StringUtils.hasText(match.getContent()) || !StringUtils.hasText(match.getItemKey())) {
+                    throw new BusinessException("MATCHING match items require content and itemKey");
+                }
+                matchKeys.add(match.getItemKey().trim());
+            }
+            for (QuestionInteractionItemRequest prompt : prompts) {
+                if (!StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
+                    throw new BusinessException("MATCHING prompt items require content and correctMatchKey");
+                }
+                if (!matchKeys.contains(prompt.getCorrectMatchKey().trim())) {
+                    throw new BusinessException("MATCHING correctMatchKey must reference a match itemKey");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.DRAG_ORDER) {
+            List<QuestionInteractionItemRequest> orderItems = filterItemsByRole(safeItems, QuestionInteractionItemRole.ORDER_ITEM);
+            if (orderItems.size() < 2) {
+                throw new BusinessException("DRAG_ORDER requires at least two order items");
+            }
+
+            Set<Integer> orderIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest item : orderItems) {
+                if (!StringUtils.hasText(item.getContent()) || item.getCorrectOrderIndex() == null) {
+                    throw new BusinessException("DRAG_ORDER items require content and correctOrderIndex");
+                }
+                if (!orderIndexes.add(item.getCorrectOrderIndex())) {
+                    throw new BusinessException("DRAG_ORDER correctOrderIndex values must be unique");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.CLOZE) {
+            List<QuestionInteractionItemRequest> blanks = filterItemsByRole(safeItems, QuestionInteractionItemRole.BLANK);
+            if (blanks.isEmpty()) {
+                throw new BusinessException("CLOZE requires at least one blank item");
+            }
+
+            Set<Integer> blankIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest blank : blanks) {
+                if (blank.getBlankIndex() == null) {
+                    throw new BusinessException("CLOZE blank items require blankIndex");
+                }
+                if (!blankIndexes.add(blank.getBlankIndex())) {
+                    throw new BusinessException("CLOZE blankIndex values must be unique");
+                }
+                List<String> acceptedAnswers = normalizeAcceptedAnswers(blank.getAcceptedAnswers());
+                if (acceptedAnswers.isEmpty()) {
+                    throw new BusinessException("CLOZE blank items require acceptedAnswers");
+                }
+            }
+        }
+    }
+
+    private List<QuestionInteractionItemRequest> filterItemsByRole(
+            List<QuestionInteractionItemRequest> items,
+            QuestionInteractionItemRole role
+    ) {
+        return items.stream()
+                .filter(item -> item != null && item.getRole() == role)
+                .toList();
+    }
+
+    private boolean isInteractionQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.DRAG_ORDER
+                || type == QuestionType.CLOZE;
+    }
+
+    private String resolveItemContent(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getContent())) {
+            return itemRequest.getContent().trim();
+        }
+        return itemRequest != null && itemRequest.getRole() == QuestionInteractionItemRole.BLANK
+                ? "Blank " + orderIndex
+                : "Item " + orderIndex;
+    }
+
+    private String resolveItemKey(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getItemKey())) {
+            return itemRequest.getItemKey().trim();
+        }
+        String prefix = itemRequest != null && itemRequest.getRole() != null
+                ? itemRequest.getRole().name().toLowerCase(Locale.ROOT)
+                : "item";
+        return prefix + "-" + orderIndex;
+    }
+
+    private String joinAcceptedAnswers(List<String> acceptedAnswers) {
+        List<String> normalized = normalizeAcceptedAnswers(acceptedAnswers);
+        return normalized.isEmpty() ? null : String.join("\n", normalized);
+    }
+
+    private List<String> normalizeAcceptedAnswers(List<String> acceptedAnswers) {
+        if (acceptedAnswers == null) {
+            return List.of();
+        }
+        return acceptedAnswers.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private void syncQuestionTags(BankQuestion question, List<Integer> tagIds) {
@@ -987,8 +1152,42 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             response.setOptions(question.getOptions() != null
                     ? question.getOptions().stream().map(this::convertOption).toList()
                     : List.of());
+            response.setItems(question.getInteractionItems() != null
+                    ? question.getInteractionItems().stream().map(item -> convertInteractionItem(item, true)).toList()
+                    : List.of());
         }
         return response;
+    }
+
+    private QuestionInteractionItemResponse convertInteractionItem(
+            QuestionInteractionItem item,
+            boolean showCorrectAnswer
+    ) {
+        return new QuestionInteractionItemResponse(
+                item.getId(),
+                item.getContent(),
+                item.getItemKey(),
+                item.getRole(),
+                showCorrectAnswer ? item.getCorrectMatchKey() : null,
+                showCorrectAnswer ? item.getCorrectOrderIndex() : null,
+                item.getBlankIndex(),
+                showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getFileUrl(),
+                item.getEmbedUrl(),
+                item.getCloudinaryId(),
+                item.getOrderIndex()
+        );
+    }
+
+    private List<String> parseAcceptedAnswers(String acceptedAnswers) {
+        if (!StringUtils.hasText(acceptedAnswers)) {
+            return List.of();
+        }
+        return Pattern.compile("\\R")
+                .splitAsStream(acceptedAnswers)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private BankQuestionOptionResponse convertOption(BankQuestionOption option) {

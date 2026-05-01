@@ -13,6 +13,9 @@ public interface QuizAttemptAnswerRepository extends JpaRepository<QuizAttemptAn
     Optional<QuizAttemptAnswer> findByAttempt_IdAndQuestion_Id(
             Integer attemptId, Integer questionId);
 
+    Optional<QuizAttemptAnswer> findByAttempt_IdAndAttemptQuestion_Id(
+            Integer attemptId, Integer attemptQuestionId);
+
     @Query("SELECT qaa FROM QuizAttemptAnswer qaa " +
            "LEFT JOIN FETCH qaa.selectedAnswers " +
            "WHERE qaa.attempt.id = :attemptId")

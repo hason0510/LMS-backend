@@ -18,6 +18,10 @@ public class QuizResponse {
     private Integer maxAttempts;
     private LocalDateTime availableFrom;
     private LocalDateTime availableUntil;
+    private Boolean generateQuestionsPerAttempt;
+    private Boolean shuffleQuestions;
+    private Boolean shuffleAnswers;
+    private Integer questionCount;
     private Integer classSectionId;
     private Integer classContentItemId;
     private List<QuizBankSourceResponse> bankSources;

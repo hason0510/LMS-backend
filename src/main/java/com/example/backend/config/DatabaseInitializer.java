@@ -5,19 +5,39 @@ import com.example.backend.entity.Role;
 import com.example.backend.entity.User;
 import com.example.backend.repository.RoleRepository;
 import com.example.backend.repository.UserRepository;
+import com.example.backend.service.BenchmarkUserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
+
 import java.util.List;
 
+@Slf4j
 @Component
 public class DatabaseInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final BenchmarkUserService benchmarkUserService;
 
-    public DatabaseInitializer(UserRepository userRepository, RoleRepository roleRepository) {
+    @Value("${benchmark.seed-users-on-startup:false}")
+    private boolean seedUsersOnStartup;
+
+    @Value("${benchmark.startup-users-count:1000000}")
+    private int startupUsersCount;
+
+    @Value("${benchmark.startup-batch-size:5000}")
+    private int startupBatchSize;
+
+    public DatabaseInitializer(
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            BenchmarkUserService benchmarkUserService
+    ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.benchmarkUserService = benchmarkUserService;
     }
 
     @Override
@@ -107,5 +127,23 @@ public class DatabaseInitializer implements CommandLineRunner {
             student3.setVerified(true);
             userRepository.saveAll(List.of(admin, teacher1, teacher2, student0, student1, student2, student3));
         }
+
+       /* if (seedUsersOnStartup) {
+            long existingBenchUsers = userRepository.countByUserNameStartingWith("bench_user_");
+            if (existingBenchUsers >= startupUsersCount) {
+                log.info("Skip startup benchmark seeding. Existing benchmark users={}", existingBenchUsers);
+                return;
+            }
+
+            int remaining = (int) (startupUsersCount - existingBenchUsers);
+            log.info(
+                    "Startup benchmark seeding enabled. Existing={} target={} seedingRemaining={}",
+                    existingBenchUsers,
+                    startupUsersCount,
+                    remaining
+            );
+            benchmarkUserService.seedUsers(remaining, startupBatchSize);
+            log.info("Startup benchmark user seeding completed.");
+        }*/
     }
 }

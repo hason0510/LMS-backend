@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.*;
+import com.example.backend.dto.request.quiz.QuizAttemptAnswerItemRequest;
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.*;
@@ -24,10 +25,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -40,6 +42,12 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final QuizAnswerRepository quizAnswerRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
+    private final QuizAttemptQuestionRepository quizAttemptQuestionRepository;
+    private final QuizAttemptQuestionOptionRepository quizAttemptQuestionOptionRepository;
+    private final QuizAttemptQuestionItemRepository quizAttemptQuestionItemRepository;
+    private final QuizAttemptAnswerItemRepository quizAttemptAnswerItemRepository;
+    private final QuizBankSourceRepository quizBankSourceRepository;
+    private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ChapterItemRepository chapterItemRepository;
@@ -128,8 +136,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .attemptNumber(currentAttempt + 1)
                 .grade(0)
                 .isPassed(false)
-                .totalQuestions(chosenQuiz.getQuestions().size())
-                .unansweredQuestions(chosenQuiz.getQuestions().size())
+                .totalQuestions(0)
+                .unansweredQuestions(0)
                 .incorrectAnswers(0)
                 .correctAnswers(0)
                 .startTime(LocalDateTime.now())
@@ -138,13 +146,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         quizAttemptRepository.save(attempt);
 
-        // Init empty answers
-        for (QuizQuestion question : chosenQuiz.getQuestions()) {
-            QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
-            attemptAnswer.setAttempt(attempt);
-            attemptAnswer.setQuestion(question);
-            quizAttemptAnswerRepository.save(attemptAnswer);
-        }
+        initializeAttemptContent(attempt, chosenQuiz);
 
         // Return detail response (bao gồm list câu hỏi vừa tạo)
         return convertToDetailResponse(attempt);
@@ -196,8 +198,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .attemptNumber(currentAttempt + 1)
                 .grade(0)
                 .isPassed(false)
-                .totalQuestions(chosenQuiz.getQuestions().size())
-                .unansweredQuestions(chosenQuiz.getQuestions().size())
+                .totalQuestions(0)
+                .unansweredQuestions(0)
                 .incorrectAnswers(0)
                 .correctAnswers(0)
                 .startTime(LocalDateTime.now())
@@ -205,14 +207,342 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .build();
         quizAttemptRepository.save(attempt);
 
-        for (QuizQuestion question : chosenQuiz.getQuestions()) {
-            QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
-            attemptAnswer.setAttempt(attempt);
-            attemptAnswer.setQuestion(question);
-            quizAttemptAnswerRepository.save(attemptAnswer);
-        }
+        initializeAttemptContent(attempt, chosenQuiz);
 
         return convertToDetailResponse(attempt);
+    }
+
+    private void initializeAttemptContent(QuizAttempt attempt, Quiz quiz) {
+        boolean useAttemptSnapshot = quiz.isGenerateQuestionsPerAttempt()
+                || quiz.isShuffleQuestions()
+                || quiz.isShuffleAnswers()
+                || hasInteractiveQuestions(quiz);
+
+        if (!useAttemptSnapshot) {
+            List<QuizQuestion> questions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
+            attempt.setTotalQuestions(questions.size());
+            attempt.setUnansweredQuestions(questions.size());
+            quizAttemptRepository.save(attempt);
+
+            for (QuizQuestion question : questions) {
+                QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
+                attemptAnswer.setAttempt(attempt);
+                attemptAnswer.setQuestion(question);
+                quizAttemptAnswerRepository.save(attemptAnswer);
+            }
+            return;
+        }
+
+        Random random = new Random(computeAttemptSeed(attempt));
+        List<QuizAttemptQuestion> attemptQuestions = quiz.isGenerateQuestionsPerAttempt()
+                ? buildAttemptQuestionsFromBankSources(attempt, quiz, random)
+                : buildAttemptQuestionsFromQuizQuestions(attempt, quiz, random);
+
+        if (quiz.isShuffleQuestions()) {
+            Collections.shuffle(attemptQuestions, random);
+        }
+        applyQuestionOrdering(attemptQuestions);
+        quizAttemptQuestionRepository.saveAll(attemptQuestions);
+
+        attempt.setTotalQuestions(attemptQuestions.size());
+        attempt.setUnansweredQuestions(attemptQuestions.size());
+        quizAttemptRepository.save(attempt);
+
+        for (QuizAttemptQuestion attemptQuestion : attemptQuestions) {
+            QuizAttemptAnswer attemptAnswer = new QuizAttemptAnswer();
+            attemptAnswer.setAttempt(attempt);
+            attemptAnswer.setAttemptQuestion(attemptQuestion);
+            quizAttemptAnswerRepository.save(attemptAnswer);
+        }
+    }
+
+    private long computeAttemptSeed(QuizAttempt attempt) {
+        Integer attemptId = attempt.getId();
+        Integer quizId = attempt.getQuiz() != null ? attempt.getQuiz().getId() : null;
+        Integer studentId = attempt.getStudent() != null ? attempt.getStudent().getId() : null;
+        return Objects.hash(attemptId, quizId, studentId);
+    }
+
+    private void applyQuestionOrdering(List<QuizAttemptQuestion> questions) {
+        int order = 1;
+        for (QuizAttemptQuestion question : questions) {
+            question.setOrderIndex(order++);
+            if (question.getOptions() != null) {
+                int optionOrder = 1;
+                for (QuizAttemptQuestionOption option : question.getOptions()) {
+                    option.setOrderIndex(optionOrder++);
+                }
+            }
+            if (question.getItems() != null) {
+                int itemOrder = 1;
+                for (QuizAttemptQuestionItem item : question.getItems()) {
+                    if (item.getOrderIndex() == null) {
+                        item.setOrderIndex(itemOrder);
+                    }
+                    itemOrder++;
+                }
+            }
+        }
+    }
+
+    private boolean hasInteractiveQuestions(Quiz quiz) {
+        List<QuizQuestion> questions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
+        return questions.stream().anyMatch(question -> isInteractionQuestionType(question.getType()));
+    }
+
+    private List<QuizAttemptQuestion> buildAttemptQuestionsFromQuizQuestions(QuizAttempt attempt, Quiz quiz, Random random) {
+        List<QuizQuestion> quizQuestions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
+        List<QuizAttemptQuestion> attemptQuestions = new ArrayList<>();
+
+        for (QuizQuestion sourceQuestion : quizQuestions) {
+            QuizAttemptQuestion attemptQuestion = new QuizAttemptQuestion();
+            attemptQuestion.setAttempt(attempt);
+            attemptQuestion.setSourceQuizQuestion(sourceQuestion);
+            attemptQuestion.setSourceBankQuestion(sourceQuestion.getSourceBankQuestion());
+            attemptQuestion.setContent(sourceQuestion.getContent());
+            attemptQuestion.setType(sourceQuestion.getType());
+            attemptQuestion.setFileUrl(sourceQuestion.getFileUrl());
+            attemptQuestion.setEmbedUrl(sourceQuestion.getEmbedUrl());
+            attemptQuestion.setCloudinaryId(sourceQuestion.getCloudinaryId());
+            attemptQuestion.setPoints(sourceQuestion.getPoints() != null ? sourceQuestion.getPoints() : 1);
+
+            List<QuizAttemptQuestionOption> options = new ArrayList<>();
+            if (sourceQuestion.getAnswers() != null) {
+                for (QuizAnswer sourceAnswer : sourceQuestion.getAnswers()) {
+                    QuizAttemptQuestionOption option = new QuizAttemptQuestionOption();
+                    option.setAttemptQuestion(attemptQuestion);
+                    option.setSourceQuizAnswer(sourceAnswer);
+                    option.setContent(sourceAnswer.getContent());
+                    option.setIsCorrect(sourceAnswer.getIsCorrect());
+                    option.setFileUrl(sourceAnswer.getFileUrl());
+                    option.setEmbedUrl(sourceAnswer.getEmbedUrl());
+                    option.setCloudinaryId(sourceAnswer.getCloudinaryId());
+                    options.add(option);
+                }
+            }
+            if (quiz.isShuffleAnswers() && options.size() > 1) {
+                Collections.shuffle(options, random);
+            }
+            attemptQuestion.setOptions(options);
+            attemptQuestion.setItems(copyQuizQuestionItems(sourceQuestion, attemptQuestion));
+            randomizeInteractionDisplayOrder(attemptQuestion, random);
+            attemptQuestions.add(attemptQuestion);
+        }
+
+        return attemptQuestions;
+    }
+
+    private List<QuizAttemptQuestion> buildAttemptQuestionsFromBankSources(QuizAttempt attempt, Quiz quiz, Random random) {
+        List<QuizBankSource> sources = quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(quiz.getId());
+        if (sources.isEmpty()) {
+            throw new BusinessException("Quiz has no question bank sources configured");
+        }
+
+        LinkedHashMap<Integer, BankQuestion> selectedQuestions = new LinkedHashMap<>();
+        HashSet<Integer> excludedIds = new HashSet<>();
+
+        for (QuizBankSource source : sources) {
+            List<BankQuestion> selectedForSource = selectBankQuestionsForSource(source, random, excludedIds);
+            for (BankQuestion question : selectedForSource) {
+                if (selectedQuestions.putIfAbsent(question.getId(), question) == null) {
+                    excludedIds.add(question.getId());
+                }
+            }
+        }
+
+        if (selectedQuestions.isEmpty()) {
+            throw new BusinessException("No questions matched the configured question bank sources");
+        }
+
+        List<QuizAttemptQuestion> attemptQuestions = new ArrayList<>();
+        for (BankQuestion sourceQuestion : selectedQuestions.values()) {
+            QuizAttemptQuestion attemptQuestion = new QuizAttemptQuestion();
+            attemptQuestion.setAttempt(attempt);
+            attemptQuestion.setSourceBankQuestion(sourceQuestion);
+            attemptQuestion.setContent(sourceQuestion.getContent());
+            attemptQuestion.setType(sourceQuestion.getType());
+            attemptQuestion.setFileUrl(sourceQuestion.getFileUrl());
+            attemptQuestion.setEmbedUrl(sourceQuestion.getEmbedUrl());
+            attemptQuestion.setCloudinaryId(sourceQuestion.getCloudinaryId());
+            attemptQuestion.setPoints(sourceQuestion.getDefaultPoints() != null ? sourceQuestion.getDefaultPoints() : 1);
+
+            List<QuizAttemptQuestionOption> options = new ArrayList<>();
+            if (sourceQuestion.getOptions() != null) {
+                for (BankQuestionOption sourceOption : sourceQuestion.getOptions()) {
+                    QuizAttemptQuestionOption option = new QuizAttemptQuestionOption();
+                    option.setAttemptQuestion(attemptQuestion);
+                    option.setSourceBankQuestionOption(sourceOption);
+                    option.setContent(sourceOption.getContent());
+                    option.setIsCorrect(sourceOption.getIsCorrect());
+                    option.setFileUrl(sourceOption.getFileUrl());
+                    option.setEmbedUrl(sourceOption.getEmbedUrl());
+                    option.setCloudinaryId(sourceOption.getCloudinaryId());
+                    options.add(option);
+                }
+            }
+            if (quiz.isShuffleAnswers() && options.size() > 1) {
+                Collections.shuffle(options, random);
+            }
+            attemptQuestion.setOptions(options);
+            attemptQuestion.setItems(copyBankQuestionItems(sourceQuestion, attemptQuestion));
+            randomizeInteractionDisplayOrder(attemptQuestion, random);
+            attemptQuestions.add(attemptQuestion);
+        }
+
+        return attemptQuestions;
+    }
+
+    private List<QuizAttemptQuestionItem> copyQuizQuestionItems(
+            QuizQuestion sourceQuestion,
+            QuizAttemptQuestion attemptQuestion
+    ) {
+        if (sourceQuestion.getInteractionItems() == null) {
+            return List.of();
+        }
+        List<QuizAttemptQuestionItem> items = new ArrayList<>();
+        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
+            QuizAttemptQuestionItem item = new QuizAttemptQuestionItem();
+            item.setAttemptQuestion(attemptQuestion);
+            item.setSourceItem(sourceItem);
+            copyInteractionItemFields(sourceItem, item);
+            items.add(item);
+        }
+        return items;
+    }
+
+    private List<QuizAttemptQuestionItem> copyBankQuestionItems(
+            BankQuestion sourceQuestion,
+            QuizAttemptQuestion attemptQuestion
+    ) {
+        if (sourceQuestion.getInteractionItems() == null) {
+            return List.of();
+        }
+        List<QuizAttemptQuestionItem> items = new ArrayList<>();
+        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
+            QuizAttemptQuestionItem item = new QuizAttemptQuestionItem();
+            item.setAttemptQuestion(attemptQuestion);
+            item.setSourceItem(sourceItem);
+            copyInteractionItemFields(sourceItem, item);
+            items.add(item);
+        }
+        return items;
+    }
+
+    private void copyInteractionItemFields(QuestionInteractionItem sourceItem, QuizAttemptQuestionItem targetItem) {
+        targetItem.setContent(sourceItem.getContent());
+        targetItem.setItemKey(sourceItem.getItemKey());
+        targetItem.setRole(sourceItem.getRole());
+        targetItem.setCorrectMatchKey(sourceItem.getCorrectMatchKey());
+        targetItem.setCorrectOrderIndex(sourceItem.getCorrectOrderIndex());
+        targetItem.setBlankIndex(sourceItem.getBlankIndex());
+        targetItem.setAcceptedAnswers(sourceItem.getAcceptedAnswers());
+        targetItem.setFileUrl(sourceItem.getFileUrl());
+        targetItem.setEmbedUrl(sourceItem.getEmbedUrl());
+        targetItem.setCloudinaryId(sourceItem.getCloudinaryId());
+        targetItem.setOrderIndex(sourceItem.getOrderIndex());
+    }
+
+    private void randomizeInteractionDisplayOrder(QuizAttemptQuestion question, Random random) {
+        if (question.getItems() == null || question.getItems().size() < 2) {
+            return;
+        }
+
+        if (question.getType() == QuestionType.DRAG_ORDER) {
+            List<QuizAttemptQuestionItem> orderItems = question.getItems().stream()
+                    .filter(item -> item.getRole() == QuestionInteractionItemRole.ORDER_ITEM)
+                    .toList();
+            if (orderItems.size() > 1) {
+                List<QuizAttemptQuestionItem> shuffled = new ArrayList<>(orderItems);
+                Collections.shuffle(shuffled, random);
+                for (int i = 0; i < shuffled.size(); i++) {
+                    shuffled.get(i).setOrderIndex(i + 1);
+                }
+            }
+            return;
+        }
+
+        if (question.getType() == QuestionType.MATCHING) {
+            List<QuizAttemptQuestionItem> matches = question.getItems().stream()
+                    .filter(item -> item.getRole() == QuestionInteractionItemRole.MATCH)
+                    .toList();
+            if (matches.size() > 1) {
+                List<QuizAttemptQuestionItem> shuffled = new ArrayList<>(matches);
+                Collections.shuffle(shuffled, random);
+                for (int i = 0; i < shuffled.size(); i++) {
+                    shuffled.get(i).setOrderIndex(i + 1);
+                }
+            }
+        }
+    }
+
+    private List<BankQuestion> selectBankQuestionsForSource(QuizBankSource source, Random random, Set<Integer> excludedQuestionIds) {
+        List<BankQuestion> matchedQuestions = bankQuestionRepository.findSelectableQuestions(
+                source.getQuestionBank().getId(),
+                source.getDifficultyLevel(),
+                source.getTag() != null ? source.getTag().getId() : null
+        );
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+            if (excludedQuestionIds == null || excludedQuestionIds.isEmpty()) {
+                return matchedQuestions;
+            }
+            return matchedQuestions.stream()
+                    .filter(q -> !excludedQuestionIds.contains(q.getId()))
+                    .toList();
+        }
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
+            if (source.getQuestionCount() == null || source.getQuestionCount() <= 0) {
+                throw new BusinessException("questionCount is required for RANDOM question bank sources");
+            }
+            List<BankQuestion> candidates = matchedQuestions.stream()
+                    .filter(q -> excludedQuestionIds == null || !excludedQuestionIds.contains(q.getId()))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            if (candidates.size() < source.getQuestionCount()) {
+                throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
+            }
+            Collections.shuffle(candidates, random);
+            return candidates.subList(0, source.getQuestionCount());
+        }
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
+            List<Integer> selectedIds = parseCsvIds(source.getManualQuestionIds());
+            if (selectedIds.isEmpty()) {
+                throw new BusinessException("manualQuestionIds is required for MANUAL question bank sources");
+            }
+            List<BankQuestion> selectedQuestions = bankQuestionRepository.findAllById(selectedIds);
+            if (selectedQuestions.size() != selectedIds.size()) {
+                throw new BusinessException("Some manually selected bank questions do not exist");
+            }
+            for (BankQuestion question : selectedQuestions) {
+                if (!question.getQuestionBank().getId().equals(source.getQuestionBank().getId())) {
+                    throw new BusinessException("Manual question selection must belong to the configured question bank");
+                }
+            }
+            selectedQuestions.sort((left, right) -> Integer.compare(selectedIds.indexOf(left.getId()), selectedIds.indexOf(right.getId())));
+            if (excludedQuestionIds == null || excludedQuestionIds.isEmpty()) {
+                return selectedQuestions;
+            }
+            return selectedQuestions.stream()
+                    .filter(q -> !excludedQuestionIds.contains(q.getId()))
+                    .toList();
+        }
+
+        throw new BusinessException("Unsupported question bank selection mode");
+    }
+
+    private List<Integer> parseCsvIds(String csv) {
+        if (csv == null || csv.trim().isEmpty()) {
+            return List.of();
+        }
+        List<Integer> ids = new ArrayList<>();
+        for (String value : csv.split(",")) {
+            String trimmed = value.trim();
+            if (!trimmed.isEmpty()) {
+                ids.add(Integer.valueOf(trimmed));
+            }
+        }
+        return ids;
     }
 
     @Override
@@ -238,50 +568,188 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         }
 
         QuizAttemptAnswer attemptAnswer = quizAttemptAnswerRepository
-                .findByAttempt_IdAndQuestion_Id(attemptId, questionId)
+                .findByAttempt_IdAndAttemptQuestion_Id(attemptId, questionId)
+                .or(() -> quizAttemptAnswerRepository.findByAttempt_IdAndQuestion_Id(attemptId, questionId))
                 .orElseThrow(() -> new ResourceNotFoundException("Answer attempt not found"));
 
+        QuizAttemptQuestion attemptQuestion = attemptAnswer.getAttemptQuestion();
         QuizQuestion question = attemptAnswer.getQuestion();
+        QuestionType questionType = attemptQuestion != null ? attemptQuestion.getType() : question.getType();
 
         // Xử lý Single Choice
-        if (question.getType() == QuestionType.SINGLE_CHOICE) {
-            List<QuizAnswer> selectedAnswers = quizAnswerRepository.findAllById(request.getSelectedAnswerIds());
-
-            if (selectedAnswers.size() != request.getSelectedAnswerIds().size()) {
-                throw new BusinessException("Một số đáp án không tồn tại");
-            }
-            for (QuizAnswer ans : selectedAnswers) {
-                if (!ans.getQuizQuestion().getId().equals(questionId)) {
-                    throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+        if (questionType == QuestionType.SINGLE_CHOICE) {
+            List<Integer> selectedIds = request.getSelectedAnswerIds() != null ? request.getSelectedAnswerIds() : List.of();
+            if (attemptQuestion != null) {
+                List<QuizAttemptQuestionOption> selectedOptions = quizAttemptQuestionOptionRepository.findAllById(selectedIds);
+                if (selectedOptions.size() != selectedIds.size()) {
+                    throw new BusinessException("Một số đáp án không tồn tại");
                 }
+                for (QuizAttemptQuestionOption opt : selectedOptions) {
+                    if (opt.getAttemptQuestion() == null || !opt.getAttemptQuestion().getId().equals(attemptQuestion.getId())) {
+                        throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+                    }
+                }
+                attemptAnswer.setSelectedOptions(selectedOptions);
+                attemptAnswer.setSelectedAnswers(null);
+                attemptAnswer.setTextAnswer(null);
+            } else {
+                List<QuizAnswer> selectedAnswers = quizAnswerRepository.findAllById(selectedIds);
+
+                if (selectedAnswers.size() != selectedIds.size()) {
+                    throw new BusinessException("Một số đáp án không tồn tại");
+                }
+                for (QuizAnswer ans : selectedAnswers) {
+                    if (!ans.getQuizQuestion().getId().equals(questionId)) {
+                        throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+                    }
+                }
+                attemptAnswer.setSelectedAnswers(selectedAnswers);
+                attemptAnswer.setSelectedOptions(null);
+                attemptAnswer.setTextAnswer(null);
             }
-            attemptAnswer.setSelectedAnswers(selectedAnswers);
-            attemptAnswer.setTextAnswer(null);
         }
         // Xử lý Multiple Choice
-        else if (question.getType() == QuestionType.MULTIPLE_CHOICE) {
-            List<QuizAnswer> selectedAnswers = quizAnswerRepository.findAllById(request.getSelectedAnswerIds());
-
-            if (selectedAnswers.size() != request.getSelectedAnswerIds().size()) {
-                throw new BusinessException("Một số đáp án không tồn tại");
-            }
-            for (QuizAnswer ans : selectedAnswers) {
-                if (!ans.getQuizQuestion().getId().equals(questionId)) {
-                    throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+        else if (questionType == QuestionType.MULTIPLE_CHOICE) {
+            List<Integer> selectedIds = request.getSelectedAnswerIds() != null ? request.getSelectedAnswerIds() : List.of();
+            if (attemptQuestion != null) {
+                List<QuizAttemptQuestionOption> selectedOptions = quizAttemptQuestionOptionRepository.findAllById(selectedIds);
+                if (selectedOptions.size() != selectedIds.size()) {
+                    throw new BusinessException("Một số đáp án không tồn tại");
                 }
+                for (QuizAttemptQuestionOption opt : selectedOptions) {
+                    if (opt.getAttemptQuestion() == null || !opt.getAttemptQuestion().getId().equals(attemptQuestion.getId())) {
+                        throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+                    }
+                }
+                attemptAnswer.setSelectedOptions(selectedOptions);
+                attemptAnswer.setSelectedAnswers(null);
+                attemptAnswer.setTextAnswer(null);
+            } else {
+                List<QuizAnswer> selectedAnswers = quizAnswerRepository.findAllById(selectedIds);
+
+                if (selectedAnswers.size() != selectedIds.size()) {
+                    throw new BusinessException("Một số đáp án không tồn tại");
+                }
+                for (QuizAnswer ans : selectedAnswers) {
+                    if (!ans.getQuizQuestion().getId().equals(questionId)) {
+                        throw new BusinessException("Đáp án không thuộc về câu hỏi này");
+                    }
+                }
+                attemptAnswer.setSelectedAnswers(selectedAnswers);
+                attemptAnswer.setSelectedOptions(null);
+                attemptAnswer.setTextAnswer(null);
             }
-            attemptAnswer.setSelectedAnswers(selectedAnswers);
-            attemptAnswer.setTextAnswer(null);
         }
-        // Xử lý Essay
-        else if (question.getType() == QuestionType.ESSAY) {
+        // Xử lý Short answer
+        else if (questionType == QuestionType.SHORT_ANSWER) {
             String userAnswer = request.getTextAnswer() != null ? request.getTextAnswer().trim() : "";
             attemptAnswer.setTextAnswer(userAnswer);
             attemptAnswer.setSelectedAnswers(null);
+            attemptAnswer.setSelectedOptions(null);
+        }
+        // Xử lý câu hỏi tương tác
+        else if (isInteractionQuestionType(questionType)) {
+            saveInteractionAnswerItems(attemptAnswer, attemptQuestion, questionType, request);
         }
 
         attemptAnswer.setCompletedAt(LocalDateTime.now());
         quizAttemptAnswerRepository.save(attemptAnswer);
+    }
+
+    private void saveInteractionAnswerItems(
+            QuizAttemptAnswer attemptAnswer,
+            QuizAttemptQuestion attemptQuestion,
+            QuestionType questionType,
+            QuizAttemptAnswerRequest request
+    ) {
+        if (attemptQuestion == null) {
+            throw new BusinessException("Interactive questions require attempt snapshot data");
+        }
+
+        List<QuizAttemptQuestionItem> questionItems = quizAttemptQuestionItemRepository
+                .findByAttemptQuestion_IdOrderByOrderIndexAsc(attemptQuestion.getId());
+        Map<Integer, QuizAttemptQuestionItem> itemsById = new HashMap<>();
+        Map<Integer, QuizAttemptQuestionItem> blanksByIndex = new HashMap<>();
+        for (QuizAttemptQuestionItem item : questionItems) {
+            itemsById.put(item.getId(), item);
+            if (item.getBlankIndex() != null) {
+                blanksByIndex.put(item.getBlankIndex(), item);
+            }
+        }
+
+        List<QuizAttemptAnswerItem> incomingAnswerItems = new ArrayList<>();
+        List<QuizAttemptAnswerItemRequest> requestItems = request.getAnswerItems() != null
+                ? request.getAnswerItems()
+                : List.of();
+
+        for (QuizAttemptAnswerItemRequest itemRequest : requestItems) {
+            QuizAttemptQuestionItem questionItem = itemRequest.getItemId() != null
+                    ? itemsById.get(itemRequest.getItemId())
+                    : blanksByIndex.get(itemRequest.getBlankIndex());
+            if (questionItem == null) {
+                throw new BusinessException("Answer item does not belong to this question");
+            }
+
+            QuizAttemptQuestionItem selectedItem = null;
+            if (itemRequest.getSelectedItemId() != null) {
+                selectedItem = itemsById.get(itemRequest.getSelectedItemId());
+                if (selectedItem == null) {
+                    throw new BusinessException("Selected item does not belong to this question");
+                }
+            }
+
+            validateInteractionAnswerItem(questionType, questionItem, selectedItem, itemRequest);
+
+            QuizAttemptAnswerItem answerItem = new QuizAttemptAnswerItem();
+            answerItem.setAttemptAnswer(attemptAnswer);
+            answerItem.setAttemptQuestionItem(questionItem);
+            answerItem.setSelectedItem(selectedItem);
+            answerItem.setAnswerText(itemRequest.getAnswerText() != null ? itemRequest.getAnswerText().trim() : null);
+            answerItem.setSubmittedOrderIndex(itemRequest.getSubmittedOrderIndex());
+            answerItem.setBlankIndex(itemRequest.getBlankIndex() != null
+                    ? itemRequest.getBlankIndex()
+                    : questionItem.getBlankIndex());
+            answerItem.setIsCorrect(null);
+            incomingAnswerItems.add(answerItem);
+        }
+
+        if (attemptAnswer.getAnswerItems() == null) {
+            attemptAnswer.setAnswerItems(new ArrayList<>());
+        } else {
+            attemptAnswer.getAnswerItems().clear();
+        }
+        attemptAnswer.getAnswerItems().addAll(incomingAnswerItems);
+        attemptAnswer.setSelectedAnswers(null);
+        attemptAnswer.setSelectedOptions(null);
+        attemptAnswer.setTextAnswer(null);
+    }
+
+    private void validateInteractionAnswerItem(
+            QuestionType questionType,
+            QuizAttemptQuestionItem questionItem,
+            QuizAttemptQuestionItem selectedItem,
+            QuizAttemptAnswerItemRequest itemRequest
+    ) {
+        if (questionType == QuestionType.MATCHING) {
+            if (questionItem.getRole() != QuestionInteractionItemRole.PROMPT
+                    || selectedItem == null
+                    || selectedItem.getRole() != QuestionInteractionItemRole.MATCH) {
+                throw new BusinessException("MATCHING answers must map a prompt item to a match item");
+            }
+            return;
+        }
+
+        if (questionType == QuestionType.DRAG_ORDER) {
+            if (questionItem.getRole() != QuestionInteractionItemRole.ORDER_ITEM
+                    || itemRequest.getSubmittedOrderIndex() == null) {
+                throw new BusinessException("DRAG_ORDER answers require order item and submittedOrderIndex");
+            }
+            return;
+        }
+
+        if (questionType == QuestionType.CLOZE && questionItem.getRole() != QuestionInteractionItemRole.BLANK) {
+            throw new BusinessException("CLOZE answers must reference blank items");
+        }
     }
 
     @Override
@@ -420,10 +888,10 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         for (QuizAttemptAnswer submitAnswer : attemptAnswers) {
             QuizQuestion question = submitAnswer.getQuestion();
 
-            if (question.getType() == QuestionType.ESSAY) {
-                String userAnswer = submitAnswer.getTextAnswer();
-                if (userAnswer != null && !userAnswer.trim().isEmpty()) {
-                    answered++;
+             if (question.getType() == QuestionType.SHORT_ANSWER) {
+                 String userAnswer = submitAnswer.getTextAnswer();
+                 if (userAnswer != null && !userAnswer.trim().isEmpty()) {
+                     answered++;
                     QuizAnswer correctAnswer = question.getAnswers().get(0);
                     boolean isCorrect = correctAnswer.getContent().trim().equalsIgnoreCase(userAnswer.trim());
                     submitAnswer.setIsCorrect(isCorrect);
@@ -456,128 +924,188 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private void updateAttemptStatistics(QuizAttempt attempt) {
         List<QuizAttemptAnswer> attemptAnswers = quizAttemptAnswerRepository.findByAttempt_Id(attempt.getId());
 
-        int answered = 0;
-        int correctCount = 0;   // Đếm số câu Full điểm
-        int incorrectCount = 0; // Đếm số câu 0 điểm hoặc điểm thành phần
+        int answeredCount = 0;
+        int fullCorrectCount = 0;   // Đếm số câu Full điểm
+        int incorrectCount = 0;     // Đếm số câu 0 điểm (đã trả lời)
 
         double totalEarnedScore = 0.0;
         int totalMaxScore = 0;
 
         for (QuizAttemptAnswer submitAnswer : attemptAnswers) {
-            QuizQuestion question = submitAnswer.getQuestion();
-            int questionPoints = (question.getPoints() != null) ? question.getPoints() : 1;
+            QuizAttemptQuestion attemptQuestion = submitAnswer.getAttemptQuestion();
+            QuizQuestion quizQuestion = submitAnswer.getQuestion();
+
+            QuestionType questionType = attemptQuestion != null ? attemptQuestion.getType() : quizQuestion.getType();
+            int questionPoints = attemptQuestion != null
+                    ? (attemptQuestion.getPoints() != null ? attemptQuestion.getPoints() : 1)
+                    : (quizQuestion.getPoints() != null ? quizQuestion.getPoints() : 1);
             totalMaxScore += questionPoints;
 
+            boolean answeredThisQuestion = false;
             boolean isFullScore = false;
             double earnedPoints = 0.0;
 
             // ===== 1. SINGLE CHOICE =====
-            if (question.getType() == QuestionType.SINGLE_CHOICE) {
-                List<QuizAnswer> selectedAnswers = submitAnswer.getSelectedAnswers();
-
-                if (selectedAnswers != null && !selectedAnswers.isEmpty()) {
-                    answered++;
-
-                    // Lấy đáp án đúng của câu hỏi
-                    QuizAnswer correctAnswer = question.getAnswers().stream()
-                            .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
-                            .findFirst()
-                            .orElse(null);
-
-                    if (correctAnswer != null && selectedAnswers.get(0).getId().equals(correctAnswer.getId())) {
-                        earnedPoints = questionPoints;
-                        isFullScore = true;
-                    } else {
-                        earnedPoints = 0;
+            if (questionType == QuestionType.SINGLE_CHOICE) {
+                if (attemptQuestion != null) {
+                    List<QuizAttemptQuestionOption> selectedOptions = submitAnswer.getSelectedOptions();
+                    if (selectedOptions != null && !selectedOptions.isEmpty()) {
+                        answeredThisQuestion = true;
+                        QuizAttemptQuestionOption correctOption = attemptQuestion.getOptions() == null
+                                ? null
+                                : attemptQuestion.getOptions().stream()
+                                .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
+                                .findFirst()
+                                .orElse(null);
+                        if (correctOption != null && selectedOptions.get(0).getId().equals(correctOption.getId())) {
+                            earnedPoints = questionPoints;
+                            isFullScore = true;
+                        }
+                    }
+                } else {
+                    List<QuizAnswer> selectedAnswers = submitAnswer.getSelectedAnswers();
+                    if (selectedAnswers != null && !selectedAnswers.isEmpty()) {
+                        answeredThisQuestion = true;
+                        QuizAnswer correctAnswer = quizQuestion.getAnswers().stream()
+                                .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
+                                .findFirst()
+                                .orElse(null);
+                        if (correctAnswer != null && selectedAnswers.get(0).getId().equals(correctAnswer.getId())) {
+                            earnedPoints = questionPoints;
+                            isFullScore = true;
+                        }
                     }
                 }
             }
-            // ===== 2. ESSAY (Giữ nguyên) =====
-            else if (question.getType() == QuestionType.ESSAY) {
+            // ===== 2. SHORT_ANSWER =====
+            else if (questionType == QuestionType.SHORT_ANSWER) {
                 String userAnswer = submitAnswer.getTextAnswer();
                 if (userAnswer != null && !userAnswer.trim().isEmpty()) {
-                    answered++;
-                    if (!question.getAnswers().isEmpty()) {
-                        QuizAnswer correctAnswer = question.getAnswers().get(0);
-                        if (correctAnswer.getContent().trim().equalsIgnoreCase(userAnswer.trim())) {
-                            earnedPoints = questionPoints;
-                            isFullScore = true;
+                    answeredThisQuestion = true;
+                    List<String> acceptedAnswers = attemptQuestion != null
+                            ? (attemptQuestion.getOptions() == null
+                                    ? List.of()
+                                    : attemptQuestion.getOptions().stream()
+                                    .filter(opt -> Boolean.TRUE.equals(opt.getIsCorrect()))
+                                    .map(QuizAttemptQuestionOption::getContent)
+                                    .filter(Objects::nonNull)
+                                    .map(String::trim)
+                                    .filter(v -> !v.isEmpty())
+                                    .toList())
+                            : (quizQuestion.getAnswers() == null
+                                    ? List.of()
+                                    : quizQuestion.getAnswers().stream()
+                                    .filter(ans -> Boolean.TRUE.equals(ans.getIsCorrect()))
+                                    .map(QuizAnswer::getContent)
+                                    .filter(Objects::nonNull)
+                                    .map(String::trim)
+                                    .filter(v -> !v.isEmpty())
+                                    .toList());
+
+                    if (!acceptedAnswers.isEmpty()
+                            && acceptedAnswers.stream().anyMatch(ans -> ans.equalsIgnoreCase(userAnswer.trim()))) {
+                        earnedPoints = questionPoints;
+                        isFullScore = true;
+                    }
+                }
+            }
+            // ===== 3. MULTIPLE CHOICE =====
+            else if (questionType == QuestionType.MULTIPLE_CHOICE) {
+                if (attemptQuestion != null) {
+                    List<QuizAttemptQuestionOption> selectedOptions = submitAnswer.getSelectedOptions();
+                    if (selectedOptions != null && !selectedOptions.isEmpty()) {
+                        answeredThisQuestion = true;
+
+                        var systemCorrectIds = attemptQuestion.getOptions().stream()
+                                .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
+                                .map(QuizAttemptQuestionOption::getId)
+                                .collect(java.util.stream.Collectors.toSet());
+                        int totalCorrectOptions = systemCorrectIds.size();
+
+                        var userSelectedIds = selectedOptions.stream()
+                                .map(QuizAttemptQuestionOption::getId)
+                                .collect(java.util.stream.Collectors.toSet());
+
+                        if (totalCorrectOptions > 0) {
+                            long userRightCount = userSelectedIds.stream()
+                                    .filter(systemCorrectIds::contains)
+                                    .count();
+                            long userWrongCount = userSelectedIds.size() - userRightCount;
+                            long netCorrectCount = userRightCount - userWrongCount;
+
+                            if (netCorrectCount > 0) {
+                                double ratio = (double) netCorrectCount / totalCorrectOptions;
+                                if (ratio >= 1.0) {
+                                    earnedPoints = questionPoints;
+                                    isFullScore = true;
+                                } else if (ratio >= 0.5) {
+                                    earnedPoints = questionPoints / 2.0;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    List<QuizAnswer> selectedAnswers = submitAnswer.getSelectedAnswers();
+                    if (selectedAnswers != null && !selectedAnswers.isEmpty()) {
+                        answeredThisQuestion = true;
+
+                        var systemCorrectIds = quizQuestion.getAnswers().stream()
+                                .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
+                                .map(QuizAnswer::getId)
+                                .collect(java.util.stream.Collectors.toSet());
+                        int totalCorrectOptions = systemCorrectIds.size();
+
+                        var userSelectedIds = selectedAnswers.stream()
+                                .map(QuizAnswer::getId)
+                                .collect(java.util.stream.Collectors.toSet());
+
+                        if (totalCorrectOptions > 0) {
+                            long userRightCount = userSelectedIds.stream()
+                                    .filter(systemCorrectIds::contains)
+                                    .count();
+                            long userWrongCount = userSelectedIds.size() - userRightCount;
+                            long netCorrectCount = userRightCount - userWrongCount;
+
+                            if (netCorrectCount > 0) {
+                                double ratio = (double) netCorrectCount / totalCorrectOptions;
+                                if (ratio >= 1.0) {
+                                    earnedPoints = questionPoints;
+                                    isFullScore = true;
+                                } else if (ratio >= 0.5) {
+                                    earnedPoints = questionPoints / 2.0;
+                                }
+                            }
                         }
                     }
                 }
             }
-            // ===== 3. MULTIPLE CHOICE (Sửa Logic) =====
-            else if (question.getType() == QuestionType.MULTIPLE_CHOICE) {
-                List<QuizAnswer> selectedAnswers = submitAnswer.getSelectedAnswers();
-
-                if (selectedAnswers != null && !selectedAnswers.isEmpty()) {
-                    answered++;
-
-                    // 1. Lấy tập ID đáp án ĐÚNG của hệ thống
-                    var systemCorrectIds = question.getAnswers().stream()
-                            .filter(a -> Boolean.TRUE.equals(a.getIsCorrect()))
-                            .map(QuizAnswer::getId)
-                            .collect(java.util.stream.Collectors.toSet());
-
-                    int totalCorrectOptions = systemCorrectIds.size(); // Tổng số đáp án đúng có thể chọn
-
-                    // 2. Lấy tập ID đáp án USER chọn
-                    var userSelectedIds = selectedAnswers.stream()
-                            .map(QuizAnswer::getId)
-                            .collect(java.util.stream.Collectors.toSet());
-
-                    // 3. Tính toán
-                    // Số lượng user chọn ĐÚNG
-                    long userRightCount = userSelectedIds.stream()
-                            .filter(systemCorrectIds::contains)
-                            .count();
-
-                    // Số lượng user chọn SAI (Chọn thừa)
-                    long userWrongCount = userSelectedIds.size() - userRightCount;
-
-                    // 4. Logic Triệt Tiêu: Đúng trừ Sai
-                    long netCorrectCount = userRightCount - userWrongCount;
-
-                    // Chỉ tính điểm nếu số câu đúng "ròng" > 0
-                    if (netCorrectCount > 0) {
-                        double ratio = (double) netCorrectCount / totalCorrectOptions;
-
-                        // Case 1: Đúng tuyệt đối (Chọn đủ ý đúng, ko chọn sai ý nào)
-                        // ratio == 1.0 nghĩa là netCorrectCount == totalCorrectOptions
-                        if (ratio >= 1.0) {
-                            earnedPoints = questionPoints;
-                            isFullScore = true;
-                        }
-                        // Case 2: Đúng được >= 50% (sau khi đã bị trừ câu sai)
-                        else if (ratio >= 0.5) {
-                            earnedPoints = questionPoints / 2.0;
-                        }
-                        // Case 3: Còn lại (ví dụ đúng 1/3) thì coi như chưa đạt -> 0 điểm
-                        else {
-                            earnedPoints = 0;
-                        }
-                    } else {
-                        // Chọn sai nhiều hơn hoặc bằng chọn đúng -> 0 điểm
-                        earnedPoints = 0;
-                    }
-                }
+            // ===== 4. INTERACTION QUESTIONS =====
+            else if (isInteractionQuestionType(questionType) && attemptQuestion != null) {
+                InteractionGrade interactionGrade = gradeInteractionQuestion(submitAnswer, attemptQuestion, questionType, questionPoints);
+                answeredThisQuestion = interactionGrade.answered();
+                isFullScore = interactionGrade.fullScore();
+                earnedPoints = interactionGrade.earnedPoints();
             }
-            // Set kết quả vào DB
+
+            if (answeredThisQuestion) {
+                answeredCount++;
+            }
+
             submitAnswer.setIsCorrect(isFullScore);
             totalEarnedScore += earnedPoints;
 
             if (earnedPoints == questionPoints) {
-                correctCount++;
-            } else if (earnedPoints == 0 && answered > 0) {
+                fullCorrectCount++;
+            } else if (answeredThisQuestion && earnedPoints == 0.0) {
                 incorrectCount++;
             }
-
         }
 
-        // Tổng kết Attempt
-        attempt.setCorrectAnswers(correctCount);
+        attempt.setCorrectAnswers(fullCorrectCount);
         attempt.setIncorrectAnswers(incorrectCount);
-        attempt.setUnansweredQuestions(attempt.getTotalQuestions() - answered);
+        attempt.setUnansweredQuestions(attempt.getTotalQuestions() != null
+                ? attempt.getTotalQuestions() - answeredCount
+                : 0);
 
         if (totalMaxScore > 0) {
             int finalGrade = (int) Math.round((totalEarnedScore / totalMaxScore) * 100);
@@ -588,6 +1116,172 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         quizAttemptRepository.save(attempt);
         quizAttemptAnswerRepository.saveAll(attemptAnswers);
+    }
+
+    private InteractionGrade gradeInteractionQuestion(
+            QuizAttemptAnswer submitAnswer,
+            QuizAttemptQuestion attemptQuestion,
+            QuestionType questionType,
+            int questionPoints
+    ) {
+        List<QuizAttemptAnswerItem> answerItems = submitAnswer.getAnswerItems() != null
+                ? submitAnswer.getAnswerItems()
+                : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(submitAnswer.getId());
+        boolean answered = answerItems.stream().anyMatch(item -> hasMeaningfulInteractionAnswer(item, questionType));
+        if (!answered) {
+            return new InteractionGrade(false, false, 0.0);
+        }
+
+        double ratio = 0.0;
+        if (questionType == QuestionType.MATCHING) {
+            ratio = gradeMatchingQuestion(attemptQuestion, answerItems);
+        } else if (questionType == QuestionType.DRAG_ORDER) {
+            ratio = gradeDragOrderQuestion(attemptQuestion, answerItems);
+        } else if (questionType == QuestionType.CLOZE) {
+            ratio = gradeClozeQuestion(attemptQuestion, answerItems);
+        }
+
+        boolean fullScore = ratio >= 1.0;
+        return new InteractionGrade(true, fullScore, fullScore ? questionPoints : questionPoints * ratio);
+    }
+
+    private double gradeMatchingQuestion(
+            QuizAttemptQuestion attemptQuestion,
+            List<QuizAttemptAnswerItem> answerItems
+    ) {
+        List<QuizAttemptQuestionItem> prompts = getAttemptQuestionItems(attemptQuestion).stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.PROMPT)
+                .toList();
+        if (prompts.isEmpty()) {
+            return 0.0;
+        }
+
+        Map<Integer, QuizAttemptAnswerItem> answersByPromptId = mapAnswersByQuestionItemId(answerItems);
+        int correctCount = 0;
+        for (QuizAttemptQuestionItem prompt : prompts) {
+            QuizAttemptAnswerItem answerItem = answersByPromptId.get(prompt.getId());
+            boolean correct = answerItem != null
+                    && answerItem.getSelectedItem() != null
+                    && Objects.equals(prompt.getCorrectMatchKey(), answerItem.getSelectedItem().getItemKey());
+            if (answerItem != null) {
+                answerItem.setIsCorrect(correct);
+            }
+            if (correct) {
+                correctCount++;
+            }
+        }
+        return (double) correctCount / prompts.size();
+    }
+
+    private double gradeDragOrderQuestion(
+            QuizAttemptQuestion attemptQuestion,
+            List<QuizAttemptAnswerItem> answerItems
+    ) {
+        List<QuizAttemptQuestionItem> orderItems = getAttemptQuestionItems(attemptQuestion).stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.ORDER_ITEM)
+                .toList();
+        if (orderItems.isEmpty()) {
+            return 0.0;
+        }
+
+        Map<Integer, QuizAttemptAnswerItem> answersByItemId = mapAnswersByQuestionItemId(answerItems);
+        int correctCount = 0;
+        for (QuizAttemptQuestionItem orderItem : orderItems) {
+            QuizAttemptAnswerItem answerItem = answersByItemId.get(orderItem.getId());
+            boolean correct = answerItem != null
+                    && Objects.equals(orderItem.getCorrectOrderIndex(), answerItem.getSubmittedOrderIndex());
+            if (answerItem != null) {
+                answerItem.setIsCorrect(correct);
+            }
+            if (correct) {
+                correctCount++;
+            }
+        }
+        return (double) correctCount / orderItems.size();
+    }
+
+    private double gradeClozeQuestion(
+            QuizAttemptQuestion attemptQuestion,
+            List<QuizAttemptAnswerItem> answerItems
+    ) {
+        List<QuizAttemptQuestionItem> blanks = getAttemptQuestionItems(attemptQuestion).stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.BLANK)
+                .toList();
+        if (blanks.isEmpty()) {
+            return 0.0;
+        }
+
+        Map<Integer, QuizAttemptAnswerItem> answersByItemId = mapAnswersByQuestionItemId(answerItems);
+        int correctCount = 0;
+        for (QuizAttemptQuestionItem blank : blanks) {
+            QuizAttemptAnswerItem answerItem = answersByItemId.get(blank.getId());
+            List<String> acceptedAnswers = parseAcceptedAnswers(blank.getAcceptedAnswers());
+            String submittedAnswer = answerItem != null ? normalizeAnswer(answerItem.getAnswerText()) : "";
+            boolean correct = answerItem != null
+                    && !submittedAnswer.isEmpty()
+                    && acceptedAnswers.stream().map(this::normalizeAnswer).anyMatch(submittedAnswer::equals);
+            if (answerItem != null) {
+                answerItem.setIsCorrect(correct);
+            }
+            if (correct) {
+                correctCount++;
+            }
+        }
+        return (double) correctCount / blanks.size();
+    }
+
+    private List<QuizAttemptQuestionItem> getAttemptQuestionItems(QuizAttemptQuestion attemptQuestion) {
+        if (attemptQuestion.getItems() != null && !attemptQuestion.getItems().isEmpty()) {
+            return attemptQuestion.getItems();
+        }
+        return quizAttemptQuestionItemRepository.findByAttemptQuestion_IdOrderByOrderIndexAsc(attemptQuestion.getId());
+    }
+
+    private Map<Integer, QuizAttemptAnswerItem> mapAnswersByQuestionItemId(List<QuizAttemptAnswerItem> answerItems) {
+        Map<Integer, QuizAttemptAnswerItem> answersByItemId = new HashMap<>();
+        for (QuizAttemptAnswerItem answerItem : answerItems) {
+            if (answerItem.getAttemptQuestionItem() != null && answerItem.getAttemptQuestionItem().getId() != null) {
+                answersByItemId.put(answerItem.getAttemptQuestionItem().getId(), answerItem);
+            }
+        }
+        return answersByItemId;
+    }
+
+    private boolean hasMeaningfulInteractionAnswer(QuizAttemptAnswerItem answerItem, QuestionType questionType) {
+        if (questionType == QuestionType.MATCHING) {
+            return answerItem.getSelectedItem() != null;
+        }
+        if (questionType == QuestionType.DRAG_ORDER) {
+            return answerItem.getSubmittedOrderIndex() != null;
+        }
+        if (questionType == QuestionType.CLOZE) {
+            return StringUtils.hasText(answerItem.getAnswerText());
+        }
+        return false;
+    }
+
+    private boolean isInteractionQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.DRAG_ORDER
+                || type == QuestionType.CLOZE;
+    }
+
+    private String normalizeAnswer(String answer) {
+        return answer == null ? "" : answer.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private List<String> parseAcceptedAnswers(String acceptedAnswers) {
+        if (!StringUtils.hasText(acceptedAnswers)) {
+            return List.of();
+        }
+        return Pattern.compile("\\R")
+                .splitAsStream(acceptedAnswers)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
+    private record InteractionGrade(boolean answered, boolean fullScore, double earnedPoints) {
     }
 
     private boolean isAttemptExpired(QuizAttempt attempt) {
@@ -942,6 +1636,15 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         // Fetch answers và map với cờ bảo mật
         List<QuizAttemptAnswer> answers = quizAttemptAnswerRepository.findByAttempt_Id(attempt.getId());
+        answers.sort(Comparator.comparingInt(answer -> {
+            if (answer.getAttemptQuestion() != null && answer.getAttemptQuestion().getOrderIndex() != null) {
+                return answer.getAttemptQuestion().getOrderIndex();
+            }
+            if (answer.getQuestion() != null && answer.getQuestion().getId() != null) {
+                return answer.getQuestion().getId();
+            }
+            return Integer.MAX_VALUE;
+        }));
         response.setAnswers(
                 answers.stream()
                         .map(ans -> this.convertQuizAttemptAnswerToDTO(ans, showCorrectAnswer))
@@ -957,8 +1660,14 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizAttemptAnswerResponse response = new QuizAttemptAnswerResponse();
         response.setId(entity.getId());
 
+        QuizAttemptQuestion attemptQuestion = entity.getAttemptQuestion();
+        QuizQuestion question = entity.getQuestion();
+        QuestionType questionType = attemptQuestion != null ? attemptQuestion.getType() : (question != null ? question.getType() : null);
+
         // Truyền cờ showCorrectAnswer xuống Question để map
-        response.setQuizQuestion(convertQuizQuestionToDTO(entity.getQuestion(), showCorrectAnswer));
+        response.setQuizQuestion(attemptQuestion != null
+                ? convertAttemptQuestionToDTO(attemptQuestion, showCorrectAnswer)
+                : convertQuizQuestionToDTO(question, showCorrectAnswer));
 
         // Logic ẩn/hiện kết quả đúng sai của chính câu trả lời này
         if (showCorrectAnswer) {
@@ -967,20 +1676,113 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             response.setIsCorrect(null); // Ẩn khi đang làm
         }
 
-        if (entity.getQuestion().getType() == QuestionType.ESSAY) {
+        if (isInteractionQuestionType(questionType)) {
+            response.setAnswerItems(convertAttemptAnswerItems(entity, showCorrectAnswer));
+            response.setSelectedAnswers(null);
+            response.setTextAnswer(null);
+        } else if (questionType == QuestionType.SHORT_ANSWER) {
             response.setTextAnswer(entity.getTextAnswer());
             response.setSelectedAnswers(null);
+            response.setAnswerItems(List.of());
         } else {
-            response.setSelectedAnswers(
-                    entity.getSelectedAnswers() == null
-                            ? List.of()
-                            : entity.getSelectedAnswers().stream()
-                            // Map selected answers (vẫn phải truyền cờ để ẩn isCorrect bên trong nó)
-                            .map(ans -> this.convertQuizAnswerToDTO(ans, showCorrectAnswer))
-                            .toList()
-            );
+            if (attemptQuestion != null) {
+                response.setSelectedAnswers(
+                        entity.getSelectedOptions() == null
+                                ? List.of()
+                                : entity.getSelectedOptions().stream()
+                                .map(opt -> this.convertAttemptOptionToDTO(opt, showCorrectAnswer))
+                                .toList()
+                );
+            } else {
+                response.setSelectedAnswers(
+                        entity.getSelectedAnswers() == null
+                                ? List.of()
+                                : entity.getSelectedAnswers().stream()
+                                // Map selected answers (vẫn phải truyền cờ để ẩn isCorrect bên trong nó)
+                                .map(ans -> this.convertQuizAnswerToDTO(ans, showCorrectAnswer))
+                                .toList()
+                );
+            }
             response.setTextAnswer(null);
+            response.setAnswerItems(List.of());
         }
+        return response;
+    }
+
+    private List<QuizAttemptAnswerItemResponse> convertAttemptAnswerItems(
+            QuizAttemptAnswer entity,
+            boolean showCorrectAnswer
+    ) {
+        List<QuizAttemptAnswerItem> answerItems = entity.getAnswerItems() != null
+                ? entity.getAnswerItems()
+                : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(entity.getId());
+        return answerItems.stream()
+                .map(item -> new QuizAttemptAnswerItemResponse(
+                        item.getId(),
+                        item.getAttemptQuestionItem() != null ? item.getAttemptQuestionItem().getId() : null,
+                        item.getSelectedItem() != null ? item.getSelectedItem().getId() : null,
+                        item.getAnswerText(),
+                        item.getSubmittedOrderIndex(),
+                        item.getBlankIndex(),
+                        showCorrectAnswer ? item.getIsCorrect() : null
+                ))
+                .toList();
+    }
+
+    private QuizQuestionResponse convertAttemptQuestionToDTO(QuizAttemptQuestion question, boolean showCorrectAnswer) {
+        if (question == null) return null;
+        QuizQuestionResponse response = new QuizQuestionResponse();
+        response.setId(question.getId());
+        response.setSourceBankQuestionId(question.getSourceBankQuestion() != null
+                ? question.getSourceBankQuestion().getId()
+                : (question.getSourceQuizQuestion() != null && question.getSourceQuizQuestion().getSourceBankQuestion() != null
+                ? question.getSourceQuizQuestion().getSourceBankQuestion().getId()
+                : null));
+        response.setContent(question.getContent());
+        response.setType(question.getType());
+        response.setFileUrl(question.getFileUrl());
+        response.setEmbedUrl(question.getEmbedUrl());
+        response.setCloudinaryId(question.getCloudinaryId());
+        response.setPoints(question.getPoints());
+        response.setAnswers(question.getOptions() != null
+                ? question.getOptions().stream().map(opt -> this.convertAttemptOptionToDTO(opt, showCorrectAnswer)).toList()
+                : List.of());
+        response.setItems(getAttemptQuestionItems(question).stream()
+                .map(item -> this.convertAttemptItemToDTO(item, showCorrectAnswer))
+                .toList());
+        return response;
+    }
+
+    private QuestionInteractionItemResponse convertAttemptItemToDTO(
+            QuizAttemptQuestionItem item,
+            boolean showCorrectAnswer
+    ) {
+        if (item == null) return null;
+        return new QuestionInteractionItemResponse(
+                item.getId(),
+                item.getContent(),
+                item.getItemKey(),
+                item.getRole(),
+                showCorrectAnswer ? item.getCorrectMatchKey() : null,
+                showCorrectAnswer ? item.getCorrectOrderIndex() : null,
+                item.getBlankIndex(),
+                showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getFileUrl(),
+                item.getEmbedUrl(),
+                item.getCloudinaryId(),
+                item.getOrderIndex()
+        );
+    }
+
+    private QuizAnswerResponse convertAttemptOptionToDTO(QuizAttemptQuestionOption option, boolean showCorrectAnswer) {
+        if (option == null) return null;
+        QuizAnswerResponse response = new QuizAnswerResponse();
+        response.setId(option.getId());
+        response.setContent(option.getContent());
+        response.setFileUrl(option.getFileUrl());
+        response.setEmbedUrl(option.getEmbedUrl());
+        response.setCloudinaryId(option.getCloudinaryId());
+        response.setIsCorrect(showCorrectAnswer ? option.getIsCorrect() : null);
         return response;
     }
 
@@ -1003,7 +1805,33 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                             .toList()
             );
         }
+        response.setItems(question.getInteractionItems() != null
+                ? question.getInteractionItems().stream()
+                .map(item -> this.convertQuestionItemToDTO(item, showCorrectAnswer))
+                .toList()
+                : List.of());
         return response;
+    }
+
+    private QuestionInteractionItemResponse convertQuestionItemToDTO(
+            QuestionInteractionItem item,
+            boolean showCorrectAnswer
+    ) {
+        if (item == null) return null;
+        return new QuestionInteractionItemResponse(
+                item.getId(),
+                item.getContent(),
+                item.getItemKey(),
+                item.getRole(),
+                showCorrectAnswer ? item.getCorrectMatchKey() : null,
+                showCorrectAnswer ? item.getCorrectOrderIndex() : null,
+                item.getBlankIndex(),
+                showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getFileUrl(),
+                item.getEmbedUrl(),
+                item.getCloudinaryId(),
+                item.getOrderIndex()
+        );
     }
 
     private QuizAnswerResponse convertQuizAnswerToDTO(QuizAnswer quizAnswer, boolean showCorrectAnswer) {

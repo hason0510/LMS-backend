@@ -41,4 +41,8 @@ public class QuizQuestion extends BaseEntity {
 
     @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuizAnswer> answers;
+
+    @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuestionInteractionItem> interactionItems;
 }

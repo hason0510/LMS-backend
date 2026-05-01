@@ -18,4 +18,5 @@ public class QuizQuestionResponse {
     private String cloudinaryId;
     private Integer points;
     private List<QuizAnswerResponse> answers;
+    private List<QuestionInteractionItemResponse> items;
 }

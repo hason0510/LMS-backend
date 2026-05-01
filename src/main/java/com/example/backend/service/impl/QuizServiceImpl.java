@@ -1,7 +1,10 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.ContentItemType;
+import com.example.backend.constant.QuestionInteractionItemRole;
+import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.QuizSourceSelectionMode;
+import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.quiz.QuizAnswerRequest;
 import com.example.backend.dto.request.quiz.QuizBankSourceRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
@@ -9,6 +12,7 @@ import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizBankSourceResponse;
+import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
 import com.example.backend.dto.response.quiz.QuizQuestionResponse;
 import com.example.backend.dto.response.quiz.QuizResponse;
 import com.example.backend.entity.quiz.BankQuestion;
@@ -16,6 +20,7 @@ import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.quiz.QuestionBank;
+import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionTag;
 import com.example.backend.entity.quiz.Quiz;
 import com.example.backend.entity.quiz.QuizAnswer;
@@ -28,7 +33,6 @@ import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.QuestionTagRepository;
-import com.example.backend.repository.QuizAnswerRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
 import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
@@ -41,9 +45,13 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,7 +59,6 @@ public class QuizServiceImpl implements QuizService {
 
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
-    private final QuizAnswerRepository quizAnswerRepository;
     private final QuizBankSourceRepository quizBankSourceRepository;
     private final QuestionBankRepository questionBankRepository;
     private final BankQuestionRepository bankQuestionRepository;
@@ -62,7 +69,6 @@ public class QuizServiceImpl implements QuizService {
     public QuizServiceImpl(
             QuizRepository quizRepository,
             QuizQuestionRepository quizQuestionRepository,
-            QuizAnswerRepository quizAnswerRepository,
             QuizBankSourceRepository quizBankSourceRepository,
             QuestionBankRepository questionBankRepository,
             BankQuestionRepository bankQuestionRepository,
@@ -72,7 +78,6 @@ public class QuizServiceImpl implements QuizService {
     ) {
         this.quizRepository = quizRepository;
         this.quizQuestionRepository = quizQuestionRepository;
-        this.quizAnswerRepository = quizAnswerRepository;
         this.quizBankSourceRepository = quizBankSourceRepository;
         this.questionBankRepository = questionBankRepository;
         this.bankQuestionRepository = bankQuestionRepository;
@@ -95,6 +100,10 @@ public class QuizServiceImpl implements QuizService {
         response.setMaxAttempts(quiz.getMaxAttempts());
         response.setAvailableFrom(quiz.getAvailableFrom());
         response.setAvailableUntil(quiz.getAvailableUntil());
+        response.setGenerateQuestionsPerAttempt(quiz.isGenerateQuestionsPerAttempt());
+        response.setShuffleQuestions(quiz.isShuffleQuestions());
+        response.setShuffleAnswers(quiz.isShuffleAnswers());
+        response.setQuestionCount(resolveQuizQuestionCount(quiz, questions, bankSources));
         response.setClassSectionId(quiz.getClassSection() != null ? quiz.getClassSection().getId() : null);
         response.setClassContentItemId(
                 classContentItemRepository.findByQuiz_Id(quiz.getId())
@@ -199,6 +208,15 @@ public class QuizServiceImpl implements QuizService {
         if (isCreate || request.getAvailableUntil() != null) {
             quiz.setAvailableUntil(request.getAvailableUntil());
         }
+        if (isCreate || request.getGenerateQuestionsPerAttempt() != null) {
+            quiz.setGenerateQuestionsPerAttempt(Boolean.TRUE.equals(request.getGenerateQuestionsPerAttempt()));
+        }
+        if (isCreate || request.getShuffleQuestions() != null) {
+            quiz.setShuffleQuestions(Boolean.TRUE.equals(request.getShuffleQuestions()));
+        }
+        if (isCreate || request.getShuffleAnswers() != null) {
+            quiz.setShuffleAnswers(Boolean.TRUE.equals(request.getShuffleAnswers()));
+        }
         if (request.getClassSectionId() != null) {
             ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
                     .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
@@ -254,6 +272,9 @@ public class QuizServiceImpl implements QuizService {
 
         if (request.getBankSources() != null && !request.getBankSources().isEmpty()) {
             List<QuizBankSource> savedSources = saveBankSources(quiz, request.getBankSources());
+            if (quiz.isGenerateQuestionsPerAttempt()) {
+                return;
+            }
             generateQuestionsFromBankSources(quiz, savedSources);
             return;
         }
@@ -268,11 +289,10 @@ public class QuizServiceImpl implements QuizService {
 
         List<QuizQuestion> existingQuestions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
         for (QuizQuestion question : existingQuestions) {
-            if (question.getAnswers() != null) {
-                quizAnswerRepository.deleteAll(question.getAnswers());
-            }
-            quizQuestionRepository.delete(question);
+            // Keep historical attempts stable: detach questions instead of deleting them.
+            question.setQuiz(null);
         }
+        quizQuestionRepository.saveAll(existingQuestions);
     }
 
     private List<QuizBankSource> saveBankSources(Quiz quiz, List<QuizBankSourceRequest> sourceRequests) {
@@ -359,6 +379,7 @@ public class QuizServiceImpl implements QuizService {
                 }
             }
             question.setAnswers(answers);
+            question.setInteractionItems(copyBankInteractionItems(sourceQuestion, question));
             quizQuestionRepository.save(question);
         }
     }
@@ -410,6 +431,8 @@ public class QuizServiceImpl implements QuizService {
 
     private void createManualQuestions(Quiz quiz, List<QuizQuestionRequest> questionRequests) {
         for (QuizQuestionRequest questionRequest : questionRequests) {
+            validateInteractionItems(questionRequest.getType(), questionRequest.getItems());
+
             QuizQuestion question = new QuizQuestion();
             question.setContent(questionRequest.getContent());
             question.setType(questionRequest.getType());
@@ -420,7 +443,7 @@ public class QuizServiceImpl implements QuizService {
             question.setQuiz(quiz);
 
             List<QuizAnswer> answers = new ArrayList<>();
-            if (questionRequest.getAnswers() != null) {
+            if (!isInteractionQuestionType(questionRequest.getType()) && questionRequest.getAnswers() != null) {
                 for (QuizAnswerRequest answerRequest : questionRequest.getAnswers()) {
                     QuizAnswer answer = new QuizAnswer();
                     answer.setContent(answerRequest.getContent());
@@ -430,8 +453,187 @@ public class QuizServiceImpl implements QuizService {
                 }
             }
             question.setAnswers(answers);
+            question.setInteractionItems(buildQuizInteractionItems(question, questionRequest.getItems()));
             quizQuestionRepository.save(question);
         }
+    }
+
+    private List<QuestionInteractionItem> copyBankInteractionItems(BankQuestion sourceQuestion, QuizQuestion question) {
+        if (sourceQuestion.getInteractionItems() == null) {
+            return List.of();
+        }
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
+            QuestionInteractionItem item = new QuestionInteractionItem();
+            item.setQuizQuestion(question);
+            copyInteractionItemFields(sourceItem, item);
+            items.add(item);
+        }
+        return items;
+    }
+
+    private List<QuestionInteractionItem> buildQuizInteractionItems(
+            QuizQuestion question,
+            List<QuestionInteractionItemRequest> requests
+    ) {
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        int orderIndex = 1;
+        if (requests != null) {
+            for (QuestionInteractionItemRequest itemRequest : requests) {
+                QuestionInteractionItem item = new QuestionInteractionItem();
+                item.setQuizQuestion(question);
+                item.setContent(resolveItemContent(itemRequest, orderIndex));
+                item.setItemKey(resolveItemKey(itemRequest, orderIndex));
+                item.setRole(itemRequest.getRole());
+                item.setCorrectMatchKey(StringUtils.hasText(itemRequest.getCorrectMatchKey())
+                        ? itemRequest.getCorrectMatchKey().trim()
+                        : null);
+                item.setCorrectOrderIndex(itemRequest.getCorrectOrderIndex());
+                item.setBlankIndex(itemRequest.getBlankIndex());
+                item.setAcceptedAnswers(joinAcceptedAnswers(itemRequest.getAcceptedAnswers()));
+                item.setFileUrl(itemRequest.getFileUrl());
+                item.setEmbedUrl(itemRequest.getEmbedUrl());
+                item.setCloudinaryId(itemRequest.getCloudinaryId());
+                item.setOrderIndex(itemRequest.getOrderIndex() != null ? itemRequest.getOrderIndex() : orderIndex);
+                items.add(item);
+                orderIndex++;
+            }
+        }
+        return items;
+    }
+
+    private void copyInteractionItemFields(QuestionInteractionItem sourceItem, QuestionInteractionItem targetItem) {
+        targetItem.setContent(sourceItem.getContent());
+        targetItem.setItemKey(sourceItem.getItemKey());
+        targetItem.setRole(sourceItem.getRole());
+        targetItem.setCorrectMatchKey(sourceItem.getCorrectMatchKey());
+        targetItem.setCorrectOrderIndex(sourceItem.getCorrectOrderIndex());
+        targetItem.setBlankIndex(sourceItem.getBlankIndex());
+        targetItem.setAcceptedAnswers(sourceItem.getAcceptedAnswers());
+        targetItem.setFileUrl(sourceItem.getFileUrl());
+        targetItem.setEmbedUrl(sourceItem.getEmbedUrl());
+        targetItem.setCloudinaryId(sourceItem.getCloudinaryId());
+        targetItem.setOrderIndex(sourceItem.getOrderIndex());
+    }
+
+    private void validateInteractionItems(QuestionType type, List<QuestionInteractionItemRequest> items) {
+        if (!isInteractionQuestionType(type)) {
+            return;
+        }
+
+        List<QuestionInteractionItemRequest> safeItems = items != null ? items : List.of();
+        if (type == QuestionType.MATCHING) {
+            List<QuestionInteractionItemRequest> prompts = filterItemsByRole(safeItems, QuestionInteractionItemRole.PROMPT);
+            List<QuestionInteractionItemRequest> matches = filterItemsByRole(safeItems, QuestionInteractionItemRole.MATCH);
+            if (prompts.isEmpty() || matches.isEmpty()) {
+                throw new BusinessException("MATCHING requires prompt and match items");
+            }
+
+            Set<String> matchKeys = new HashSet<>();
+            for (QuestionInteractionItemRequest match : matches) {
+                if (!StringUtils.hasText(match.getContent()) || !StringUtils.hasText(match.getItemKey())) {
+                    throw new BusinessException("MATCHING match items require content and itemKey");
+                }
+                matchKeys.add(match.getItemKey().trim());
+            }
+            for (QuestionInteractionItemRequest prompt : prompts) {
+                if (!StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
+                    throw new BusinessException("MATCHING prompt items require content and correctMatchKey");
+                }
+                if (!matchKeys.contains(prompt.getCorrectMatchKey().trim())) {
+                    throw new BusinessException("MATCHING correctMatchKey must reference a match itemKey");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.DRAG_ORDER) {
+            List<QuestionInteractionItemRequest> orderItems = filterItemsByRole(safeItems, QuestionInteractionItemRole.ORDER_ITEM);
+            if (orderItems.size() < 2) {
+                throw new BusinessException("DRAG_ORDER requires at least two order items");
+            }
+
+            Set<Integer> orderIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest item : orderItems) {
+                if (!StringUtils.hasText(item.getContent()) || item.getCorrectOrderIndex() == null) {
+                    throw new BusinessException("DRAG_ORDER items require content and correctOrderIndex");
+                }
+                if (!orderIndexes.add(item.getCorrectOrderIndex())) {
+                    throw new BusinessException("DRAG_ORDER correctOrderIndex values must be unique");
+                }
+            }
+            return;
+        }
+
+        if (type == QuestionType.CLOZE) {
+            List<QuestionInteractionItemRequest> blanks = filterItemsByRole(safeItems, QuestionInteractionItemRole.BLANK);
+            if (blanks.isEmpty()) {
+                throw new BusinessException("CLOZE requires at least one blank item");
+            }
+
+            Set<Integer> blankIndexes = new HashSet<>();
+            for (QuestionInteractionItemRequest blank : blanks) {
+                if (blank.getBlankIndex() == null) {
+                    throw new BusinessException("CLOZE blank items require blankIndex");
+                }
+                if (!blankIndexes.add(blank.getBlankIndex())) {
+                    throw new BusinessException("CLOZE blankIndex values must be unique");
+                }
+                if (normalizeAcceptedAnswers(blank.getAcceptedAnswers()).isEmpty()) {
+                    throw new BusinessException("CLOZE blank items require acceptedAnswers");
+                }
+            }
+        }
+    }
+
+    private List<QuestionInteractionItemRequest> filterItemsByRole(
+            List<QuestionInteractionItemRequest> items,
+            QuestionInteractionItemRole role
+    ) {
+        return items.stream()
+                .filter(item -> item != null && item.getRole() == role)
+                .toList();
+    }
+
+    private boolean isInteractionQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.DRAG_ORDER
+                || type == QuestionType.CLOZE;
+    }
+
+    private String resolveItemContent(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getContent())) {
+            return itemRequest.getContent().trim();
+        }
+        return itemRequest != null && itemRequest.getRole() == QuestionInteractionItemRole.BLANK
+                ? "Blank " + orderIndex
+                : "Item " + orderIndex;
+    }
+
+    private String resolveItemKey(QuestionInteractionItemRequest itemRequest, int orderIndex) {
+        if (itemRequest != null && StringUtils.hasText(itemRequest.getItemKey())) {
+            return itemRequest.getItemKey().trim();
+        }
+        String prefix = itemRequest != null && itemRequest.getRole() != null
+                ? itemRequest.getRole().name().toLowerCase(Locale.ROOT)
+                : "item";
+        return prefix + "-" + orderIndex;
+    }
+
+    private String joinAcceptedAnswers(List<String> acceptedAnswers) {
+        List<String> normalized = normalizeAcceptedAnswers(acceptedAnswers);
+        return normalized.isEmpty() ? null : String.join("\n", normalized);
+    }
+
+    private List<String> normalizeAcceptedAnswers(List<String> acceptedAnswers) {
+        if (acceptedAnswers == null) {
+            return List.of();
+        }
+        return acceptedAnswers.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private void validateQuizStructureRequest(QuizRequest request) {
@@ -440,6 +642,55 @@ public class QuizServiceImpl implements QuizService {
         if (hasBankSources && hasManualQuestions) {
             throw new BusinessException("Quiz can be configured either by manual questions or by question bank sources, not both");
         }
+        if (Boolean.TRUE.equals(request.getGenerateQuestionsPerAttempt())
+                && request.getBankSources() != null
+                && request.getBankSources().isEmpty()) {
+            throw new BusinessException("bankSources is required when generateQuestionsPerAttempt is enabled");
+        }
+    }
+
+    private Integer resolveQuizQuestionCount(Quiz quiz, List<QuizQuestion> questions, List<QuizBankSource> bankSources) {
+        if (!quiz.isGenerateQuestionsPerAttempt()) {
+            return questions != null ? questions.size() : 0;
+        }
+
+        if (bankSources == null || bankSources.isEmpty()) {
+            return questions != null ? questions.size() : 0;
+        }
+
+        int total = 0;
+        java.util.HashSet<Integer> fixedQuestionIds = new java.util.HashSet<>();
+
+        for (QuizBankSource source : bankSources) {
+            if (source.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
+                total += source.getQuestionCount() != null ? source.getQuestionCount() : 0;
+                continue;
+            }
+
+            if (source.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
+                for (Integer id : parseIds(source.getManualQuestionIds())) {
+                    if (fixedQuestionIds.add(id)) {
+                        total++;
+                    }
+                }
+                continue;
+            }
+
+            if (source.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+                List<BankQuestion> matched = bankQuestionRepository.findSelectableQuestions(
+                        source.getQuestionBank().getId(),
+                        source.getDifficultyLevel(),
+                        source.getTag() != null ? source.getTag().getId() : null
+                );
+                for (BankQuestion question : matched) {
+                    if (fixedQuestionIds.add(question.getId())) {
+                        total++;
+                    }
+                }
+            }
+        }
+
+        return total;
     }
 
     private QuizQuestionResponse convertQuestionToDTO(QuizQuestion question) {
@@ -455,7 +706,41 @@ public class QuizServiceImpl implements QuizService {
         response.setAnswers(question.getAnswers() != null
                 ? question.getAnswers().stream().map(this::convertAnswerToDTO).collect(Collectors.toList())
                 : List.of());
+        response.setItems(question.getInteractionItems() != null
+                ? question.getInteractionItems().stream().map(item -> convertInteractionItemToDTO(item, true)).toList()
+                : List.of());
         return response;
+    }
+
+    private QuestionInteractionItemResponse convertInteractionItemToDTO(
+            QuestionInteractionItem item,
+            boolean showCorrectAnswer
+    ) {
+        return new QuestionInteractionItemResponse(
+                item.getId(),
+                item.getContent(),
+                item.getItemKey(),
+                item.getRole(),
+                showCorrectAnswer ? item.getCorrectMatchKey() : null,
+                showCorrectAnswer ? item.getCorrectOrderIndex() : null,
+                item.getBlankIndex(),
+                showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getFileUrl(),
+                item.getEmbedUrl(),
+                item.getCloudinaryId(),
+                item.getOrderIndex()
+        );
+    }
+
+    private List<String> parseAcceptedAnswers(String acceptedAnswers) {
+        if (!StringUtils.hasText(acceptedAnswers)) {
+            return List.of();
+        }
+        return Pattern.compile("\\R")
+                .splitAsStream(acceptedAnswers)
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
     }
 
     private QuizAnswerResponse convertAnswerToDTO(QuizAnswer answer) {
