@@ -24,7 +24,7 @@ public interface QuestionBankService {
 
     QuestionBankResponse getQuestionBankById(Integer id);
 
-    List<QuestionBankResponse> getQuestionBanks(Integer subjectId, boolean includeQuestions);
+    List<QuestionBankResponse> getQuestionBanks(Integer subjectId, String subjectKeyword, boolean includeQuestions);
 
     BankQuestionResponse createQuestion(Integer questionBankId, BankQuestionRequest request);
 

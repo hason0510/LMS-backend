@@ -31,13 +31,40 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void createNotification(User recipient, String title, String message, String type, String description, String actionUrl) {
+        createNotification(recipient, title, message, type, description, actionUrl, null, null, null, null, null, null);
+    }
+
+    @Override
+    public void createNotification(
+            User recipient,
+            String title,
+            String message,
+            String type,
+            String description,
+            String actionUrl,
+            String summary,
+            Integer classSectionId,
+            String classSectionTitle,
+            String referenceType,
+            Integer referenceId,
+            String dedupeKey
+    ) {
+        if (dedupeKey != null && notificationRepository.existsByDedupeKey(dedupeKey)) {
+            return;
+        }
         Notification notification = Notification.builder()
                 .recipient(recipient)
                 .title(title)
                 .message(message)
                 .description(description)
+                .summary(summary)
                 .type(type)
                 .actionUrl(actionUrl)
+                .classSectionId(classSectionId)
+                .classSectionTitle(classSectionTitle)
+                .referenceType(referenceType)
+                .referenceId(referenceId)
+                .dedupeKey(dedupeKey)
                 .readStatus(false)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -108,8 +135,13 @@ public class NotificationServiceImpl implements NotificationService {
         response.setTitle(notification.getTitle());
         response.setMessage(notification.getMessage());
         response.setDescription(notification.getDescription());
+        response.setSummary(notification.getSummary());
         response.setType(notification.getType());
         response.setActionUrl(notification.getActionUrl());
+        response.setClassSectionId(notification.getClassSectionId());
+        response.setClassSectionTitle(notification.getClassSectionTitle());
+        response.setReferenceType(notification.getReferenceType());
+        response.setReferenceId(notification.getReferenceId());
         response.setReadStatus(notification.isReadStatus());
         response.setCreatedAt(notification.getCreatedAt());
         return response;

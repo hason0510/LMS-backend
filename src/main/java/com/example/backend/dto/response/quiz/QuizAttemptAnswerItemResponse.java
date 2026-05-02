@@ -17,6 +17,7 @@ public class QuizAttemptAnswerItemResponse {
     private String answerText;
     private Integer submittedOrderIndex;
     private Integer blankIndex;
+    private String blankKey;
     @JsonProperty("isCorrect")
     private Boolean isCorrect;
 }

@@ -50,8 +50,10 @@ import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
 import com.example.backend.service.UserService;
+import com.example.backend.specification.QuestionBankSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -134,11 +136,16 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<QuestionBankResponse> getQuestionBanks(Integer subjectId, boolean includeQuestions) {
+    public List<QuestionBankResponse> getQuestionBanks(Integer subjectId, String subjectKeyword, boolean includeQuestions) {
         User currentUser = requireCurrentUser();
-        List<QuestionBank> questionBanks = subjectId != null
-                ? questionBankRepository.findBySubject_Id(subjectId)
-                : questionBankRepository.findAll();
+        Specification<QuestionBank> spec = Specification.where(null);
+        if (subjectId != null) {
+            spec = spec.and(QuestionBankSpecification.hasSubjectId(subjectId));
+        }
+        if (StringUtils.hasText(subjectKeyword)) {
+            spec = spec.and(QuestionBankSpecification.subjectTitleOrCodeContains(subjectKeyword));
+        }
+        List<QuestionBank> questionBanks = questionBankRepository.findAll(spec);
 
         return questionBanks.stream()
                 .filter(questionBank -> canView(questionBank, currentUser))
@@ -1475,6 +1482,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         response.setName(questionBank.getName());
         response.setDescription(questionBank.getDescription());
         response.setSubjectId(questionBank.getSubject() != null ? questionBank.getSubject().getId() : null);
+        response.setSubjectCode(questionBank.getSubject() != null ? questionBank.getSubject().getCode() : null);
+        response.setSubjectTitle(questionBank.getSubject() != null ? questionBank.getSubject().getTitle() : null);
 
         QuestionBankMember owner = questionBankMemberRepository
                 .findByQuestionBank_IdAndRole(questionBank.getId(), QuestionBankMemberRole.OWNER)

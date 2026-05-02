@@ -43,6 +43,9 @@ public class Assignment extends BaseEntity {
     @Column(name = "due_at")
     private LocalDateTime dueAt;
 
+    @Column(name = "close_at")
+    private LocalDateTime closeAt;
+
     @Column(name = "allow_late_submission", nullable = false)
     private boolean allowLateSubmission = false;
 

@@ -16,8 +16,13 @@ public class NotificationResponse {
     private String title;
     private String message;
     private String description;
+    private String summary;
     private String type;
     private String actionUrl;
+    private Integer classSectionId;
+    private String classSectionTitle;
+    private String referenceType;
+    private Integer referenceId;
     @JsonProperty("isRead")
     private boolean readStatus;
     @JsonProperty("time")

@@ -17,6 +17,8 @@ public class QuestionBankResponse {
     private String name;
     private String description;
     private Integer subjectId;
+    private String subjectCode;
+    private String subjectTitle;
     private Integer ownerId;
     private String ownerName;
     private QuestionBankMemberRole myRole;

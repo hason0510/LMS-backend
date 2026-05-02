@@ -20,6 +20,7 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.service.AssignmentService;
 import com.example.backend.service.ClassMemberAuthorizationService;
+import com.example.backend.service.ClassNotificationService;
 import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ResourceService resourceService;
+    private final ClassNotificationService classNotificationService;
 
     @Override
     @Transactional
@@ -54,7 +56,19 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         Assignment assignment = new Assignment();
         applyRequest(assignment, request, classSection, true);
-        return convertToResponse(assignmentRepository.save(assignment));
+        Assignment saved = assignmentRepository.save(assignment);
+        classNotificationService.notifyApprovedStudents(
+                classSection,
+                "Bài tập mới: " + saved.getTitle(),
+                "Lớp " + classSection.getTitle() + " vừa có bài tập mới.",
+                "ASSIGNMENT_CREATED",
+                saved.getDescription(),
+                "/class-sections/" + classSection.getId() + "/assignments/" + saved.getId(),
+                "ASSIGNMENT",
+                saved.getId(),
+                "assignment-created"
+        );
+        return convertToResponse(saved);
     }
 
     @Override
@@ -142,11 +156,15 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     private void applyRequest(Assignment assignment, AssignmentRequest request, ClassSection classSection, boolean createMode) {
+        if (request.getDueAt() != null && request.getCloseAt() != null && request.getCloseAt().isBefore(request.getDueAt())) {
+            throw new BusinessException("closeAt must be after dueAt");
+        }
         assignment.setTitle(request.getTitle().trim());
         assignment.setDescription(request.getDescription());
         assignment.setInstruction(request.getInstruction());
         assignment.setMaxScore(request.getMaxScore());
         assignment.setDueAt(request.getDueAt());
+        assignment.setCloseAt(request.getCloseAt());
         assignment.setAllowLateSubmission(Boolean.TRUE.equals(request.getAllowLateSubmission()));
         assignment.setClassSection(classSection);
 
@@ -201,6 +219,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setInstruction(assignment.getInstruction());
         response.setMaxScore(assignment.getMaxScore());
         response.setDueAt(assignment.getDueAt());
+        response.setCloseAt(assignment.getCloseAt());
         response.setAllowLateSubmission(assignment.isAllowLateSubmission());
         response.setClassSectionId(assignment.getClassSection() != null ? assignment.getClassSection().getId() : null);
         response.setResources(

@@ -11,12 +11,12 @@ import org.springframework.data.jpa.domain.Specification;
 public class UserSpecification {
     public static Specification<User> likeUserName(String userName) {
         return (root, query, cb)
-                -> cb.like(root.get("userName"), "%" + userName.toLowerCase() + "%");
+                -> cb.like(cb.lower(root.get("userName")), "%" + userName.toLowerCase() + "%");
     }
 
     public static Specification<User> likeFullName(String fullName){
         return (root, query, cb)
-                -> cb.like(root.get("fullName"), "%" + fullName.toLowerCase() + "%");
+                -> cb.like(cb.lower(root.get("fullName")), "%" + fullName.toLowerCase() + "%");
     }
 
     public static Specification<User> hasStudentNumber(String studentNumber){
@@ -26,7 +26,7 @@ public class UserSpecification {
 
     public static Specification<User> likeGmail(String gmail){
         return (root, query, cb)
-                -> cb.like(root.get("gmail"), "%" + gmail.toLowerCase() + "%");
+                -> cb.like(cb.lower(root.get("gmail")), "%" + gmail.toLowerCase() + "%");
     }
 
     public static Specification<User> hasRole(RoleType roleType){

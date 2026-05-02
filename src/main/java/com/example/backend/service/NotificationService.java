@@ -13,6 +13,21 @@ public interface NotificationService {
 
     void createNotification(User recipient, String title, String message, String type, String description, String actionUrl);
 
+    void createNotification(
+            User recipient,
+            String title,
+            String message,
+            String type,
+            String description,
+            String actionUrl,
+            String summary,
+            Integer classSectionId,
+            String classSectionTitle,
+            String referenceType,
+            Integer referenceId,
+            String dedupeKey
+    );
+
     int countUnread();
 
     List<NotificationResponse> getMyNotifications();

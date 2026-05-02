@@ -1,9 +1,13 @@
 package com.example.backend.config;
 
 import com.example.backend.constant.RoleType;
+import com.example.backend.entity.Category;
 import com.example.backend.entity.Role;
+import com.example.backend.entity.Subject;
 import com.example.backend.entity.User;
+import com.example.backend.repository.CategoryRepository;
 import com.example.backend.repository.RoleRepository;
+import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.BenchmarkUserService;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +23,8 @@ import java.util.List;
 public class DatabaseInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final SubjectRepository subjectRepository;
+    private final CategoryRepository categoryRepository;
     private final BenchmarkUserService benchmarkUserService;
 
     @Value("${benchmark.seed-users-on-startup:false}")
@@ -32,11 +38,13 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     public DatabaseInitializer(
             UserRepository userRepository,
-            RoleRepository roleRepository,
+            RoleRepository roleRepository, SubjectRepository subjectRepository, CategoryRepository categoryRepository,
             BenchmarkUserService benchmarkUserService
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.subjectRepository = subjectRepository;
+        this.categoryRepository = categoryRepository;
         this.benchmarkUserService = benchmarkUserService;
     }
 
@@ -127,7 +135,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             student3.setVerified(true);
             userRepository.saveAll(List.of(admin, teacher1, teacher2, student0, student1, student2, student3));
         }
-
+        seedCategoriesAndSubjects();
        /* if (seedUsersOnStartup) {
             long existingBenchUsers = userRepository.countByUserNameStartingWith("bench_user_");
             if (existingBenchUsers >= startupUsersCount) {
@@ -145,5 +153,74 @@ public class DatabaseInitializer implements CommandLineRunner {
             benchmarkUserService.seedUsers(remaining, startupBatchSize);
             log.info("Startup benchmark user seeding completed.");
         }*/
+    }
+
+    private void seedCategoriesAndSubjects() {
+        List<String> categoryTitles = List.of(
+                "Khoa Giáo dục Quốc phòng và An ninh",
+                "Khoa Giáo dục Thể chất",
+                "Khoa Lý luận Chính trị",
+                "Trường Cơ khí",
+                "Trường Công nghệ Thông tin và Truyền thông",
+                "Trường Điện - Điện tử",
+                "Trường Hoá và Khoa học Sự sống",
+                "Trường Kinh tế",
+                "Trường Vật liệu",
+                "Khoa Toán - Tin",
+                "Khoa Vật lý Kỹ thuật",
+                "Khoa Ngoại ngữ",
+                "Khoa Khoa học và Công nghệ Giáo dục"
+        );
+
+        for (String title : categoryTitles) {
+            categoryRepository.findByTitle(title).orElseGet(() -> {
+                Category category = new Category();
+                category.setTitle(title);
+                return categoryRepository.save(category);
+            });
+        }
+
+        Category ictCategory = categoryRepository.findByTitle("Trường Công nghệ Thông tin và Truyền thông")
+                .orElseThrow(() -> new IllegalStateException("ICT category not found"));
+
+        List<Subject> subjects = List.of(
+                createSubject("IT3420", "Điện tử cho CNTT", ictCategory),
+                createSubject("IT4785", "Phát triển ứng dụng cho thiết bị di động", ictCategory),
+                createSubject("IT4735", "IoT và ứng dụng", ictCategory),
+                createSubject("IT4681", "Truyền thông đa phương tiện", ictCategory),
+                createSubject("IT4409", "Công nghệ Web và dịch vụ trực tuyến", ictCategory),
+                createSubject("IT4263", "An ninh mạng", ictCategory),
+                createSubject("IT3943", "Project III", ictCategory),
+                createSubject("IT4991", "Thực tập kỹ thuật", ictCategory),
+                createSubject("IT4651", "Thiết kế và triển khai mạng IP", ictCategory),
+                createSubject("IT4611", "Các hệ thống phân tán và ứng dụng", ictCategory),
+                createSubject("IT4060", "Lập trình mạng", ictCategory),
+                createSubject("IT4015", "Nhập môn an toàn thông tin", ictCategory),
+                createSubject("IT3931", "Project II", ictCategory),
+                createSubject("IT3170", "Thuật toán ứng dụng", ictCategory),
+                createSubject("IT3120", "Phân tích và thiết kế hệ thống", ictCategory),
+                createSubject("IT3020", "Toán rời rạc", ictCategory),
+                createSubject("IT4593", "Nhập môn kỹ thuật truyền thông", ictCategory),
+                createSubject("IT4172", "Xử lý tín hiệu", ictCategory),
+                createSubject("IT3180", "Nhập môn công nghệ phần mềm", ictCategory),
+                createSubject("IT3150", "Project I", ictCategory),
+                createSubject("IT3090", "Cơ sở dữ liệu", ictCategory),
+                createSubject("IT3080", "Mạng máy tính", ictCategory),
+                createSubject("IT3040", "Kỹ thuật lập trình", ictCategory)
+        );
+
+        for (Subject subject : subjects) {
+            if (!subjectRepository.existsByCode(subject.getCode())) {
+                subjectRepository.save(subject);
+            }
+        }
+    }
+
+    private Subject createSubject(String code, String title, Category category) {
+        Subject subject = new Subject();
+        subject.setCode(code);
+        subject.setTitle(title);
+        subject.setCategory(category);
+        return subject;
     }
 }

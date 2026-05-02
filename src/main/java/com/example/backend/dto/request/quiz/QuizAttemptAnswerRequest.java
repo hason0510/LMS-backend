@@ -14,4 +14,5 @@ public class QuizAttemptAnswerRequest {
     //private Integer selectedAnswerId;
     private String textAnswer;
     private List<QuizAttemptAnswerItemRequest> answerItems;
+    private List<QuizAttemptAnswerItemRequest> contentBlockAnswers;
 }

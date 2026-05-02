@@ -19,4 +19,6 @@ public interface NotificationRepository extends JpaRepository<Notification,Integ
 
     Optional<Notification> findByIdAndRecipient_Id(Integer id, Integer recipientId);
 
+    boolean existsByDedupeKey(String dedupeKey);
+
 }

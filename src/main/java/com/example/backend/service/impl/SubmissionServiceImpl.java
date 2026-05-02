@@ -378,6 +378,9 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     private boolean canResubmit(Assignment assignment) {
         LocalDateTime now = LocalDateTime.now();
+        if (assignment.getCloseAt() != null && now.isAfter(assignment.getCloseAt())) {
+            return false;
+        }
         if (assignment.getDueAt() == null) {
             return true;
         }
@@ -403,6 +406,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setFeedback(submission.getFeedback());
         response.setGradedAt(submission.getGradedAt());
         response.setDueAt(submission.getAssignment() != null ? submission.getAssignment().getDueAt() : null);
+        response.setCloseAt(submission.getAssignment() != null ? submission.getAssignment().getCloseAt() : null);
         response.setLate(submission.getStatus() == SubmissionStatus.LATE_SUBMITTED);
         response.setCanResubmit(submission.getAssignment() != null && canResubmit(submission.getAssignment()));
         response.setResources(
@@ -423,6 +427,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setStatus(SubmissionStatus.NOT_SUBMITTED);
         response.setSubmissionCount(0);
         response.setDueAt(assignment.getDueAt());
+        response.setCloseAt(assignment.getCloseAt());
         response.setLate(false);
         response.setCanResubmit(canResubmit(assignment));
         response.setResources(List.of());

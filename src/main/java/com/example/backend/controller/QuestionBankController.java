@@ -64,9 +64,10 @@ public class QuestionBankController {
     @GetMapping
     public ResponseEntity<List<QuestionBankResponse>> getQuestionBanks(
             @RequestParam(required = false) Integer subjectId,
+            @RequestParam(required = false) String subjectKeyword,
             @RequestParam(defaultValue = "false") boolean includeQuestions
     ) {
-        return ResponseEntity.ok(questionBankService.getQuestionBanks(subjectId, includeQuestions));
+        return ResponseEntity.ok(questionBankService.getQuestionBanks(subjectId, subjectKeyword, includeQuestions));
     }
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")

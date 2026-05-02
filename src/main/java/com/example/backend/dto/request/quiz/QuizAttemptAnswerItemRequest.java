@@ -15,4 +15,5 @@ public class QuizAttemptAnswerItemRequest {
     private String answerText;
     private Integer submittedOrderIndex;
     private Integer blankIndex;
+    private String blankKey;
 }

@@ -28,6 +28,8 @@ public class AssignmentRequest {
 
     private LocalDateTime dueAt;
 
+    private LocalDateTime closeAt;
+
     private Boolean allowLateSubmission;
 
     private List<ResourceRequest> resources;

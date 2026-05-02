@@ -43,6 +43,9 @@ public class QuizAttemptAnswerItem extends BaseEntity {
     @Column(name = "blank_index")
     private Integer blankIndex;
 
+    @Column(name = "blank_key", length = 100)
+    private String blankKey;
+
     @Column(name = "is_correct")
     private Boolean isCorrect;
 }

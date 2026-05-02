@@ -4,6 +4,7 @@ import com.example.backend.constant.*;
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerItemRequest;
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
 import com.example.backend.dto.response.PageResponse;
+import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.dto.response.quiz.*;
 import com.example.backend.entity.*;
 import com.example.backend.entity.old.ChapterItem;
@@ -46,6 +47,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final QuizAttemptQuestionOptionRepository quizAttemptQuestionOptionRepository;
     private final QuizAttemptQuestionItemRepository quizAttemptQuestionItemRepository;
     private final QuizAttemptAnswerItemRepository quizAttemptAnswerItemRepository;
+    private final QuestionContentBlockRepository questionContentBlockRepository;
     private final QuizBankSourceRepository quizBankSourceRepository;
     private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
@@ -566,8 +568,10 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizQuestion question = attemptAnswer.getQuestion();
         QuestionType questionType = attemptQuestion != null ? attemptQuestion.getType() : question.getType();
 
+        boolean hasPrimaryAnswerPayload = hasPrimaryAnswerPayload(request);
+
         // Xử lý Single Choice
-        if (questionType == QuestionType.SINGLE_CHOICE) {
+        if (hasPrimaryAnswerPayload && questionType == QuestionType.SINGLE_CHOICE) {
             List<Integer> selectedIds = request.getSelectedAnswerIds() != null ? request.getSelectedAnswerIds() : List.of();
             if (attemptQuestion != null) {
                 List<QuizAttemptQuestionOption> selectedOptions = quizAttemptQuestionOptionRepository.findAllById(selectedIds);
@@ -599,7 +603,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             }
         }
         // Xử lý Multiple Choice
-        else if (questionType == QuestionType.MULTIPLE_CHOICE) {
+        else if (hasPrimaryAnswerPayload && questionType == QuestionType.MULTIPLE_CHOICE) {
             List<Integer> selectedIds = request.getSelectedAnswerIds() != null ? request.getSelectedAnswerIds() : List.of();
             if (attemptQuestion != null) {
                 List<QuizAttemptQuestionOption> selectedOptions = quizAttemptQuestionOptionRepository.findAllById(selectedIds);
@@ -631,19 +635,27 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             }
         }
         // Xử lý Short answer
-        else if (questionType == QuestionType.SHORT_ANSWER) {
+        else if (hasPrimaryAnswerPayload && questionType == QuestionType.SHORT_ANSWER) {
             String userAnswer = request.getTextAnswer() != null ? request.getTextAnswer().trim() : "";
             attemptAnswer.setTextAnswer(userAnswer);
             attemptAnswer.setSelectedAnswers(null);
             attemptAnswer.setSelectedOptions(null);
         }
         // Xử lý câu hỏi tương tác
-        else if (isInteractionQuestionType(questionType)) {
+        else if (hasPrimaryAnswerPayload && isInteractionQuestionType(questionType)) {
             saveInteractionAnswerItems(attemptAnswer, attemptQuestion, questionType, request);
         }
 
+        saveContentBlockAnswers(attemptAnswer, request.getContentBlockAnswers());
+
         attemptAnswer.setCompletedAt(LocalDateTime.now());
         quizAttemptAnswerRepository.save(attemptAnswer);
+    }
+
+    private boolean hasPrimaryAnswerPayload(QuizAttemptAnswerRequest request) {
+        return request.getSelectedAnswerIds() != null
+                || request.getTextAnswer() != null
+                || request.getAnswerItems() != null;
     }
 
     private void saveInteractionAnswerItems(
@@ -703,15 +715,110 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             incomingAnswerItems.add(answerItem);
         }
 
+        List<QuizAttemptAnswerItem> preservedContentBlockAnswers = getContentBlockAnswerItems(attemptAnswer);
         if (attemptAnswer.getAnswerItems() == null) {
-            attemptAnswer.setAnswerItems(new ArrayList<>());
+            attemptAnswer.setAnswerItems(new ArrayList<>(preservedContentBlockAnswers));
         } else {
-            attemptAnswer.getAnswerItems().clear();
+            attemptAnswer.getAnswerItems().removeIf(item -> !isContentBlockAnswerItem(item));
         }
         attemptAnswer.getAnswerItems().addAll(incomingAnswerItems);
         attemptAnswer.setSelectedAnswers(null);
         attemptAnswer.setSelectedOptions(null);
         attemptAnswer.setTextAnswer(null);
+    }
+
+    private void saveContentBlockAnswers(
+            QuizAttemptAnswer attemptAnswer,
+            List<QuizAttemptAnswerItemRequest> requestItems
+    ) {
+        if (requestItems == null) {
+            return;
+        }
+
+        List<QuizAttemptAnswerItem> incomingContentBlockAnswers = new ArrayList<>();
+        Set<String> validBlankKeys = resolveContentBlockBlankKeys(attemptAnswer);
+        for (QuizAttemptAnswerItemRequest itemRequest : requestItems) {
+            if (!StringUtils.hasText(itemRequest.getBlankKey())) {
+                throw new BusinessException("Content block answer requires blankKey");
+            }
+            String blankKey = itemRequest.getBlankKey().trim();
+            if (!validBlankKeys.contains(blankKey)) {
+                throw new BusinessException("Content block answer blankKey does not belong to this question");
+            }
+
+            QuizAttemptAnswerItem answerItem = new QuizAttemptAnswerItem();
+            answerItem.setAttemptAnswer(attemptAnswer);
+            answerItem.setBlankKey(blankKey);
+            answerItem.setAnswerText(itemRequest.getAnswerText() != null ? itemRequest.getAnswerText().trim() : "");
+            answerItem.setAttemptQuestionItem(null);
+            answerItem.setSelectedItem(null);
+            answerItem.setSubmittedOrderIndex(null);
+            answerItem.setBlankIndex(null);
+            answerItem.setIsCorrect(null);
+            incomingContentBlockAnswers.add(answerItem);
+        }
+
+        List<QuizAttemptAnswerItem> preservedInteractionAnswers = getInteractionAnswerItems(attemptAnswer);
+        if (attemptAnswer.getAnswerItems() == null) {
+            attemptAnswer.setAnswerItems(new ArrayList<>(preservedInteractionAnswers));
+        } else {
+            attemptAnswer.getAnswerItems().removeIf(this::isContentBlockAnswerItem);
+        }
+        attemptAnswer.getAnswerItems().addAll(incomingContentBlockAnswers);
+    }
+
+    private List<QuizAttemptAnswerItem> getContentBlockAnswerItems(QuizAttemptAnswer attemptAnswer) {
+        List<QuizAttemptAnswerItem> answerItems = attemptAnswer.getAnswerItems() != null
+                ? attemptAnswer.getAnswerItems()
+                : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(attemptAnswer.getId());
+        return answerItems.stream()
+                .filter(this::isContentBlockAnswerItem)
+                .toList();
+    }
+
+    private List<QuizAttemptAnswerItem> getInteractionAnswerItems(QuizAttemptAnswer attemptAnswer) {
+        List<QuizAttemptAnswerItem> answerItems = attemptAnswer.getAnswerItems() != null
+                ? attemptAnswer.getAnswerItems()
+                : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(attemptAnswer.getId());
+        return answerItems.stream()
+                .filter(item -> !isContentBlockAnswerItem(item))
+                .toList();
+    }
+
+    private boolean isContentBlockAnswerItem(QuizAttemptAnswerItem item) {
+        return item != null
+                && StringUtils.hasText(item.getBlankKey())
+                && item.getAttemptQuestionItem() == null
+                && item.getSelectedItem() == null
+                && item.getSubmittedOrderIndex() == null
+                && item.getBlankIndex() == null;
+    }
+
+    private Set<String> resolveContentBlockBlankKeys(QuizAttemptAnswer attemptAnswer) {
+        List<QuestionContentBlock> blocks = List.of();
+        QuizAttemptQuestion attemptQuestion = attemptAnswer.getAttemptQuestion();
+        if (attemptQuestion != null) {
+            if (attemptQuestion.getSourceBankQuestion() != null) {
+                blocks = questionContentBlockRepository.findByBankQuestion_IdOrderByOrderIndexAsc(
+                        attemptQuestion.getSourceBankQuestion().getId()
+                );
+            } else if (attemptQuestion.getSourceQuizQuestion() != null) {
+                blocks = questionContentBlockRepository.findByQuizQuestion_IdOrderByOrderIndexAsc(
+                        attemptQuestion.getSourceQuizQuestion().getId()
+                );
+            }
+        } else if (attemptAnswer.getQuestion() != null) {
+            blocks = questionContentBlockRepository.findByQuizQuestion_IdOrderByOrderIndexAsc(
+                    attemptAnswer.getQuestion().getId()
+            );
+        }
+
+        return blocks.stream()
+                .filter(block -> block.getBlockType() == QuestionContentBlockType.BLANK_REF)
+                .map(QuestionContentBlock::getBlankKey)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     private void validateInteractionAnswerItem(
@@ -1117,6 +1224,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         List<QuizAttemptAnswerItem> answerItems = submitAnswer.getAnswerItems() != null
                 ? submitAnswer.getAnswerItems()
                 : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(submitAnswer.getId());
+        answerItems = answerItems.stream()
+                .filter(item -> !isContentBlockAnswerItem(item))
+                .toList();
         boolean answered = answerItems.stream().anyMatch(item -> hasMeaningfulInteractionAnswer(item, questionType));
         if (!answered) {
             return new InteractionGrade(false, false, 0.0);
@@ -1696,6 +1806,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             response.setTextAnswer(null);
             response.setAnswerItems(List.of());
         }
+        response.setContentBlockAnswers(convertContentBlockAnswerItems(entity));
         return response;
     }
 
@@ -1707,6 +1818,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 ? entity.getAnswerItems()
                 : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(entity.getId());
         return answerItems.stream()
+                .filter(item -> !isContentBlockAnswerItem(item))
                 .map(item -> new QuizAttemptAnswerItemResponse(
                         item.getId(),
                         item.getAttemptQuestionItem() != null ? item.getAttemptQuestionItem().getId() : null,
@@ -1714,7 +1826,27 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                         item.getAnswerText(),
                         item.getSubmittedOrderIndex(),
                         item.getBlankIndex(),
+                        item.getBlankKey(),
                         showCorrectAnswer ? item.getIsCorrect() : null
+                ))
+                .toList();
+    }
+
+    private List<QuizAttemptAnswerItemResponse> convertContentBlockAnswerItems(QuizAttemptAnswer entity) {
+        List<QuizAttemptAnswerItem> answerItems = entity.getAnswerItems() != null
+                ? entity.getAnswerItems()
+                : quizAttemptAnswerItemRepository.findByAttemptAnswer_IdOrderByIdAsc(entity.getId());
+        return answerItems.stream()
+                .filter(this::isContentBlockAnswerItem)
+                .map(item -> new QuizAttemptAnswerItemResponse(
+                        item.getId(),
+                        null,
+                        null,
+                        item.getAnswerText(),
+                        null,
+                        null,
+                        item.getBlankKey(),
+                        null
                 ))
                 .toList();
     }
@@ -1731,12 +1863,40 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         response.setContent(question.getContent());
         response.setType(question.getType());
         response.setPoints(question.getPoints());
+        response.setResource(convertResourceToDTO(question.getResource()));
         response.setAnswers(question.getOptions() != null
                 ? question.getOptions().stream().map(opt -> this.convertAttemptOptionToDTO(opt, showCorrectAnswer)).toList()
                 : List.of());
         response.setItems(getAttemptQuestionItems(question).stream()
                 .map(item -> this.convertAttemptItemToDTO(item, showCorrectAnswer))
                 .toList());
+        response.setBlocks(convertAttemptQuestionContentBlocksToDTOs(question));
+        return response;
+    }
+
+    private QuizQuestionResponse convertQuizQuestionToDTO(QuizQuestion question, boolean showCorrectAnswer) {
+        if (question == null) return null;
+        QuizQuestionResponse response = new QuizQuestionResponse();
+        response.setId(question.getId());
+        response.setSourceBankQuestionId(question.getSourceBankQuestion() != null ? question.getSourceBankQuestion().getId() : null);
+        response.setContent(question.getContent());
+        response.setType(question.getType());
+        response.setResource(convertResourceToDTO(question.getResource()));
+        response.setPoints(question.getPoints());
+
+        if (question.getAnswers() != null) {
+            response.setAnswers(
+                    question.getAnswers().stream()
+                            .map(ans -> this.convertQuizAnswerToDTO(ans, showCorrectAnswer))
+                            .toList()
+            );
+        }
+        response.setItems(question.getInteractionItems() != null
+                ? question.getInteractionItems().stream()
+                .map(item -> this.convertQuestionItemToDTO(item, showCorrectAnswer))
+                .toList()
+                : List.of());
+        response.setBlocks(convertQuizQuestionContentBlocksToDTOs(question));
         return response;
     }
 
@@ -1769,27 +1929,60 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         return response;
     }
 
-    private QuizQuestionResponse convertQuizQuestionToDTO(QuizQuestion question, boolean showCorrectAnswer) {
-        if (question == null) return null;
-        QuizQuestionResponse response = new QuizQuestionResponse();
-        response.setId(question.getId());
-        response.setSourceBankQuestionId(question.getSourceBankQuestion() != null ? question.getSourceBankQuestion().getId() : null);
-        response.setContent(question.getContent());
-        response.setType(question.getType());
-        response.setPoints(question.getPoints());
-
-        if (question.getAnswers() != null) {
-            response.setAnswers(
-                    question.getAnswers().stream()
-                            .map(ans -> this.convertQuizAnswerToDTO(ans, showCorrectAnswer))
-                            .toList()
+    private List<QuestionContentBlockResponse> convertAttemptQuestionContentBlocksToDTOs(QuizAttemptQuestion question) {
+        if (question == null) return List.of();
+        if (question.getSourceBankQuestion() != null) {
+            return convertQuestionContentBlocksToDTOs(
+                    questionContentBlockRepository.findByBankQuestion_IdOrderByOrderIndexAsc(question.getSourceBankQuestion().getId())
             );
         }
-        response.setItems(question.getInteractionItems() != null
-                ? question.getInteractionItems().stream()
-                .map(item -> this.convertQuestionItemToDTO(item, showCorrectAnswer))
-                .toList()
-                : List.of());
+        if (question.getSourceQuizQuestion() != null) {
+            return convertQuestionContentBlocksToDTOs(
+                    questionContentBlockRepository.findByQuizQuestion_IdOrderByOrderIndexAsc(question.getSourceQuizQuestion().getId())
+            );
+        }
+        return List.of();
+    }
+
+    private List<QuestionContentBlockResponse> convertQuizQuestionContentBlocksToDTOs(QuizQuestion question) {
+        if (question == null) return List.of();
+        return convertQuestionContentBlocksToDTOs(
+                questionContentBlockRepository.findByQuizQuestion_IdOrderByOrderIndexAsc(question.getId())
+        );
+    }
+
+    private List<QuestionContentBlockResponse> convertQuestionContentBlocksToDTOs(List<QuestionContentBlock> blocks) {
+        if (blocks == null || blocks.isEmpty()) return List.of();
+        return blocks.stream().map(this::convertContentBlockToDTO).toList();
+    }
+
+    private QuestionContentBlockResponse convertContentBlockToDTO(QuestionContentBlock block) {
+        if (block == null) return null;
+        QuestionContentBlockResponse dto = new QuestionContentBlockResponse();
+        dto.setId(block.getId());
+        dto.setBlockType(block.getBlockType());
+        dto.setOrderIndex(block.getOrderIndex());
+        dto.setContent(block.getContent());
+        dto.setLanguage(block.getLanguage());
+        dto.setBlankKey(block.getBlankKey());
+        dto.setResource(convertResourceToDTO(block.getResource()));
+        return dto;
+    }
+
+    private ResourceResponse convertResourceToDTO(Resource resource) {
+        if (resource == null) return null;
+        ResourceResponse response = new ResourceResponse();
+        response.setId(resource.getId());
+        response.setTitle(resource.getTitle());
+        response.setFileUrl(resource.getFileUrl());
+        response.setEmbedUrl(resource.getEmbedUrl());
+        response.setCloudinaryId(resource.getCloudinaryId());
+        response.setHlsUrl(resource.getHlsUrl());
+        response.setDescription(resource.getDescription());
+        response.setMimeType(resource.getMimeType());
+        response.setFileSize(resource.getFileSize());
+        response.setType(resource.getType());
+        response.setSource(resource.getSource());
         return response;
     }
 

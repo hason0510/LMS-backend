@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface SubjectRepository extends JpaRepository<Subject, Integer> {
     List<Subject> findByCategoryId(Integer categoryId);
+
+    boolean existsByCode(String code);
 }

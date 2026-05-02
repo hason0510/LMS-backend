@@ -719,6 +719,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         assignment.setInstruction(template.getInstruction());
         assignment.setMaxScore(template.getMaxScore());
         assignment.setDueAt(template.getDueAt());
+        assignment.setCloseAt(template.getCloseAt());
         assignment.setAllowLateSubmission(template.isAllowLateSubmission());
         assignment.setClassSection(classSection);
         return assignmentRepository.save(assignment);

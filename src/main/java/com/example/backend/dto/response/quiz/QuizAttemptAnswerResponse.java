@@ -18,5 +18,6 @@ public class QuizAttemptAnswerResponse {
     private List<QuizAnswerResponse> selectedAnswers;
     private String textAnswer;
     private List<QuizAttemptAnswerItemResponse> answerItems;
+    private List<QuizAttemptAnswerItemResponse> contentBlockAnswers;
 
 }

@@ -44,6 +44,7 @@ import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.service.QuizService;
+import com.example.backend.service.ClassNotificationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,7 @@ public class QuizServiceImpl implements QuizService {
     private final ClassContentItemRepository classContentItemRepository;
     private final ResourceRepository resourceRepository;
     private final QuestionContentBlockRepository questionContentBlockRepository;
+    private final ClassNotificationService classNotificationService;
 
     public QuizServiceImpl(
             QuizRepository quizRepository,
@@ -85,7 +87,8 @@ public class QuizServiceImpl implements QuizService {
             ClassSectionRepository classSectionRepository,
             ClassContentItemRepository classContentItemRepository,
             ResourceRepository resourceRepository,
-            QuestionContentBlockRepository questionContentBlockRepository
+            QuestionContentBlockRepository questionContentBlockRepository,
+            ClassNotificationService classNotificationService
     ) {
         this.quizRepository = quizRepository;
         this.quizQuestionRepository = quizQuestionRepository;
@@ -97,6 +100,7 @@ public class QuizServiceImpl implements QuizService {
         this.classContentItemRepository = classContentItemRepository;
         this.resourceRepository = resourceRepository;
         this.questionContentBlockRepository = questionContentBlockRepository;
+        this.classNotificationService = classNotificationService;
     }
 
     @Override
@@ -167,6 +171,7 @@ public class QuizServiceImpl implements QuizService {
         Quiz savedQuiz = quizRepository.save(quiz);
         syncQuizPlacement(savedQuiz, request);
         syncQuizContent(savedQuiz, request);
+        notifyStudentsAboutNewQuiz(savedQuiz);
         return convertQuizToDTO(savedQuiz);
     }
 
@@ -235,6 +240,23 @@ public class QuizServiceImpl implements QuizService {
                     .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
             quiz.setClassSection(classSection);
         }
+    }
+
+    private void notifyStudentsAboutNewQuiz(Quiz quiz) {
+        if (quiz.getClassSection() == null) {
+            return;
+        }
+        classNotificationService.notifyApprovedStudents(
+                quiz.getClassSection(),
+                "Quiz mới: " + quiz.getTitle(),
+                "Lớp " + quiz.getClassSection().getTitle() + " vừa có quiz mới.",
+                "QUIZ_CREATED",
+                quiz.getDescription(),
+                "/class-sections/" + quiz.getClassSection().getId() + "/quizzes/" + quiz.getId() + "/detail",
+                "QUIZ",
+                quiz.getId(),
+                "quiz-created"
+        );
     }
 
     private void syncQuizPlacement(Quiz quiz, QuizRequest request) {

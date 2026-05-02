@@ -31,11 +31,29 @@ public class Notification extends BaseEntity{
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "summary", columnDefinition = "TEXT")
+    private String summary;
+
     @Column(name = "type", length = 50)
     private String type;
 
     @Column(name = "action_url", length = 500)
     private String actionUrl;
+
+    @Column(name = "class_section_id")
+    private Integer classSectionId;
+
+    @Column(name = "class_section_title", length = 255)
+    private String classSectionTitle;
+
+    @Column(name = "reference_type", length = 50)
+    private String referenceType;
+
+    @Column(name = "reference_id")
+    private Integer referenceId;
+
+    @Column(name = "dedupe_key", length = 255, unique = true)
+    private String dedupeKey;
 
     @Column(name = "read_status")
     private boolean readStatus;

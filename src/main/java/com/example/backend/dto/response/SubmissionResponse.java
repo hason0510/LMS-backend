@@ -31,6 +31,7 @@ public class SubmissionResponse {
     private String feedback;
     private LocalDateTime gradedAt;
     private LocalDateTime dueAt;
+    private LocalDateTime closeAt;
     private boolean late;
     private boolean canResubmit;
     private List<ResourceResponse> resources;
