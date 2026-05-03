@@ -7,6 +7,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -22,7 +24,8 @@ public class QuizQuestion extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
     private String content;
-    private Integer points;
+    @Column(precision = 10, scale = 2)
+    private BigDecimal points;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_id")
@@ -47,7 +50,4 @@ public class QuizQuestion extends BaseEntity {
     @OrderBy("orderIndex ASC")
     private List<QuestionInteractionItem> interactionItems;
 
-    @OneToMany(mappedBy = "quizQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("orderIndex ASC")
-    private List<QuestionContentBlock> contentBlocks;
 }

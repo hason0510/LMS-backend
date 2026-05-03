@@ -4,14 +4,12 @@ import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.QuizSourceSelectionMode;
-import com.example.backend.dto.request.quiz.QuestionContentBlockRequest;
 import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.quiz.QuizAnswerRequest;
 import com.example.backend.dto.request.quiz.QuizBankSourceRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.PageResponse;
-import com.example.backend.dto.response.quiz.QuestionContentBlockResponse;
 import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizBankSourceResponse;
 import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
@@ -23,7 +21,6 @@ import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.quiz.QuestionBank;
-import com.example.backend.entity.quiz.QuestionContentBlock;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionTag;
 import com.example.backend.entity.quiz.Quiz;
@@ -37,7 +34,6 @@ import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.QuestionBankRepository;
-import com.example.backend.repository.QuestionContentBlockRepository;
 import com.example.backend.repository.QuestionTagRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
 import com.example.backend.repository.QuizQuestionRepository;
@@ -51,6 +47,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -74,7 +71,6 @@ public class QuizServiceImpl implements QuizService {
     private final ClassSectionRepository classSectionRepository;
     private final ClassContentItemRepository classContentItemRepository;
     private final ResourceRepository resourceRepository;
-    private final QuestionContentBlockRepository questionContentBlockRepository;
     private final ClassNotificationService classNotificationService;
 
     public QuizServiceImpl(
@@ -87,7 +83,6 @@ public class QuizServiceImpl implements QuizService {
             ClassSectionRepository classSectionRepository,
             ClassContentItemRepository classContentItemRepository,
             ResourceRepository resourceRepository,
-            QuestionContentBlockRepository questionContentBlockRepository,
             ClassNotificationService classNotificationService
     ) {
         this.quizRepository = quizRepository;
@@ -99,7 +94,6 @@ public class QuizServiceImpl implements QuizService {
         this.classSectionRepository = classSectionRepository;
         this.classContentItemRepository = classContentItemRepository;
         this.resourceRepository = resourceRepository;
-        this.questionContentBlockRepository = questionContentBlockRepository;
         this.classNotificationService = classNotificationService;
     }
 
@@ -120,6 +114,8 @@ public class QuizServiceImpl implements QuizService {
         response.setGenerateQuestionsPerAttempt(quiz.isGenerateQuestionsPerAttempt());
         response.setShuffleQuestions(quiz.isShuffleQuestions());
         response.setShuffleAnswers(quiz.isShuffleAnswers());
+        response.setDisplayMode(quiz.getDisplayMode());
+        response.setShowCorrectAnswer(quiz.isShowCorrectAnswer());
         response.setQuestionCount(resolveQuizQuestionCount(quiz, questions, bankSources));
         response.setClassSectionId(quiz.getClassSection() != null ? quiz.getClassSection().getId() : null);
         response.setClassContentItemId(
@@ -235,6 +231,12 @@ public class QuizServiceImpl implements QuizService {
         if (isCreate || request.getShuffleAnswers() != null) {
             quiz.setShuffleAnswers(Boolean.TRUE.equals(request.getShuffleAnswers()));
         }
+        if (isCreate || request.getDisplayMode() != null) {
+            quiz.setDisplayMode(StringUtils.hasText(request.getDisplayMode()) ? request.getDisplayMode() : "PAGINATION");
+        }
+        if (isCreate || request.getShowCorrectAnswer() != null) {
+            quiz.setShowCorrectAnswer(Boolean.TRUE.equals(request.getShowCorrectAnswer()));
+        }
         if (request.getClassSectionId() != null) {
             ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
                     .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
@@ -248,8 +250,8 @@ public class QuizServiceImpl implements QuizService {
         }
         classNotificationService.notifyApprovedStudents(
                 quiz.getClassSection(),
-                "Quiz mới: " + quiz.getTitle(),
-                "Lớp " + quiz.getClassSection().getTitle() + " vừa có quiz mới.",
+                "Quiz má»›i: " + quiz.getTitle(),
+                "Lá»›p " + quiz.getClassSection().getTitle() + " vá»«a cÃ³ quiz má»›i.",
                 "QUIZ_CREATED",
                 quiz.getDescription(),
                 "/class-sections/" + quiz.getClassSection().getId() + "/quizzes/" + quiz.getId() + "/detail",
@@ -396,7 +398,7 @@ public class QuizServiceImpl implements QuizService {
             question.setContent(sourceQuestion.getContent());
             question.setType(sourceQuestion.getType());
             question.setResource(sourceQuestion.getResource());
-            question.setPoints(sourceQuestion.getDefaultPoints() != null ? sourceQuestion.getDefaultPoints() : 1);
+            question.setPoints(sourceQuestion.getDefaultPoints() != null ? sourceQuestion.getDefaultPoints() : BigDecimal.ONE);
 
             List<QuizAnswer> answers = new ArrayList<>();
             if (sourceQuestion.getOptions() != null) {
@@ -412,7 +414,6 @@ public class QuizServiceImpl implements QuizService {
             question.setAnswers(answers);
             question.setInteractionItems(copyBankInteractionItems(sourceQuestion, question));
             quizQuestionRepository.save(question);
-            copyContentBlocksFromBankQuestion(sourceQuestion, question);
         }
     }
 
@@ -468,7 +469,7 @@ public class QuizServiceImpl implements QuizService {
             QuizQuestion question = new QuizQuestion();
             question.setContent(questionRequest.getContent());
             question.setType(questionRequest.getType());
-            question.setPoints(questionRequest.getPoints() != null ? questionRequest.getPoints() : 1);
+            question.setPoints(questionRequest.getPoints() != null ? questionRequest.getPoints() : BigDecimal.ONE);
             if (questionRequest.getResourceId() != null) {
                 question.setResource(resourceRepository.findById(questionRequest.getResourceId()).orElse(null));
             }
@@ -480,6 +481,9 @@ public class QuizServiceImpl implements QuizService {
                     QuizAnswer answer = new QuizAnswer();
                     answer.setContent(answerRequest.getContent());
                     answer.setIsCorrect(answerRequest.getIsCorrect() != null ? answerRequest.getIsCorrect() : false);
+                    if (answerRequest.getResourceId() != null) {
+                        answer.setResource(resourceRepository.findById(answerRequest.getResourceId()).orElse(null));
+                    }
                     answer.setQuizQuestion(question);
                     answers.add(answer);
                 }
@@ -487,7 +491,6 @@ public class QuizServiceImpl implements QuizService {
             question.setAnswers(answers);
             question.setInteractionItems(buildQuizInteractionItems(question, questionRequest.getItems()));
             quizQuestionRepository.save(question);
-            saveQuizQuestionBlocks(question, questionRequest.getBlocks());
         }
     }
 
@@ -553,7 +556,7 @@ public class QuizServiceImpl implements QuizService {
         }
 
         List<QuestionInteractionItemRequest> safeItems = items != null ? items : List.of();
-        if (type == QuestionType.MATCHING) {
+        if (isMatchingQuestionType(type)) {
             List<QuestionInteractionItemRequest> prompts = filterItemsByRole(safeItems, QuestionInteractionItemRole.PROMPT);
             List<QuestionInteractionItemRequest> matches = filterItemsByRole(safeItems, QuestionInteractionItemRole.MATCH);
             if (prompts.isEmpty() || matches.isEmpty()) {
@@ -562,13 +565,13 @@ public class QuizServiceImpl implements QuizService {
 
             Set<String> matchKeys = new HashSet<>();
             for (QuestionInteractionItemRequest match : matches) {
-                if (!StringUtils.hasText(match.getContent()) || !StringUtils.hasText(match.getItemKey())) {
+                if (!hasContentOrResource(match) || !StringUtils.hasText(match.getItemKey())) {
                     throw new BusinessException("MATCHING match items require content and itemKey");
                 }
                 matchKeys.add(match.getItemKey().trim());
             }
             for (QuestionInteractionItemRequest prompt : prompts) {
-                if (!StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
+                if (!hasContentOrResource(prompt) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
                     throw new BusinessException("MATCHING prompt items require content and correctMatchKey");
                 }
                 if (!matchKeys.contains(prompt.getCorrectMatchKey().trim())) {
@@ -627,9 +630,19 @@ public class QuizServiceImpl implements QuizService {
     }
 
     private boolean isInteractionQuestionType(QuestionType type) {
-        return type == QuestionType.MATCHING
+        return isMatchingQuestionType(type)
                 || type == QuestionType.DRAG_ORDER
                 || type == QuestionType.CLOZE;
+    }
+
+    private boolean isMatchingQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.IMAGE_MATCHING;
+    }
+
+    private boolean hasContentOrResource(QuestionInteractionItemRequest item) {
+        return item != null
+                && (StringUtils.hasText(item.getContent()) || item.getResourceId() != null);
     }
 
     private String resolveItemContent(QuestionInteractionItemRequest itemRequest, int orderIndex) {
@@ -738,7 +751,6 @@ public class QuizServiceImpl implements QuizService {
         response.setItems(question.getInteractionItems() != null
                 ? question.getInteractionItems().stream().map(item -> convertInteractionItemToDTO(item, true)).toList()
                 : List.of());
-        response.setBlocks(convertBlocksToDTOs(question.getContentBlocks()));
         return response;
     }
 
@@ -755,6 +767,8 @@ public class QuizServiceImpl implements QuizService {
                 showCorrectAnswer ? item.getCorrectOrderIndex() : null,
                 item.getBlankIndex(),
                 showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getBlankType(),
+                item.getBlankOptions(),
                 item.getResource() != null ? item.getResource().getId() : null,
                 item.getOrderIndex()
         );
@@ -777,6 +791,7 @@ public class QuizServiceImpl implements QuizService {
         response.setContent(answer.getContent());
         response.setIsCorrect(answer.getIsCorrect());
         response.setResourceId(answer.getResource() != null ? answer.getResource().getId() : null);
+        response.setResource(convertResourceToDTO(answer.getResource()));
         return response;
     }
 
@@ -833,56 +848,6 @@ public class QuizServiceImpl implements QuizService {
         return r;
     }
 
-    private List<QuestionContentBlockResponse> convertBlocksToDTOs(List<QuestionContentBlock> blocks) {
-        if (blocks == null) return List.of();
-        return blocks.stream().map(block -> {
-            QuestionContentBlockResponse dto = new QuestionContentBlockResponse();
-            dto.setId(block.getId());
-            dto.setBlockType(block.getBlockType());
-            dto.setOrderIndex(block.getOrderIndex());
-            dto.setContent(block.getContent());
-            dto.setLanguage(block.getLanguage());
-            dto.setBlankKey(block.getBlankKey());
-            dto.setResource(convertResourceToDTO(block.getResource()));
-            return dto;
-        }).toList();
-    }
 
-    private void saveQuizQuestionBlocks(QuizQuestion question, List<QuestionContentBlockRequest> requests) {
-        questionContentBlockRepository.deleteByQuizQuestion_Id(question.getId());
-        if (requests == null || requests.isEmpty()) return;
-        List<QuestionContentBlock> blocks = new ArrayList<>();
-        for (int i = 0; i < requests.size(); i++) {
-            QuestionContentBlockRequest req = requests.get(i);
-            QuestionContentBlock block = new QuestionContentBlock();
-            block.setQuizQuestion(question);
-            block.setBlockType(req.getBlockType());
-            block.setOrderIndex(req.getOrderIndex() != null ? req.getOrderIndex() : i + 1);
-            block.setContent(req.getContent());
-            block.setLanguage(req.getLanguage());
-            block.setBlankKey(req.getBlankKey());
-            if (req.getResourceId() != null) {
-                block.setResource(resourceRepository.findById(req.getResourceId()).orElse(null));
-            }
-            blocks.add(block);
-        }
-        questionContentBlockRepository.saveAll(blocks);
-    }
 
-    private void copyContentBlocksFromBankQuestion(BankQuestion source, QuizQuestion target) {
-        if (source.getContentBlocks() == null || source.getContentBlocks().isEmpty()) return;
-        List<QuestionContentBlock> blocks = new ArrayList<>();
-        for (QuestionContentBlock srcBlock : source.getContentBlocks()) {
-            QuestionContentBlock block = new QuestionContentBlock();
-            block.setQuizQuestion(target);
-            block.setBlockType(srcBlock.getBlockType());
-            block.setOrderIndex(srcBlock.getOrderIndex());
-            block.setContent(srcBlock.getContent());
-            block.setLanguage(srcBlock.getLanguage());
-            block.setBlankKey(srcBlock.getBlankKey());
-            block.setResource(srcBlock.getResource());
-            blocks.add(block);
-        }
-        questionContentBlockRepository.saveAll(blocks);
-    }
 }

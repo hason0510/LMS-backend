@@ -36,6 +36,9 @@ public class BankQuestionOption extends BaseEntity {
     @Column(name = "order_index")
     private Integer orderIndex;
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String explanation;
+
     @ManyToOne
     @JoinColumn(name = "bank_question_id", nullable = false)
     private BankQuestion bankQuestion;

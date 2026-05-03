@@ -395,6 +395,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setClassSectionId(submission.getClassSection() != null ? submission.getClassSection().getId() : null);
         response.setStudentId(submission.getStudent() != null ? submission.getStudent().getId() : null);
         response.setStudentName(submission.getStudent() != null ? submission.getStudent().getFullName() : null);
+        response.setStudentNumber(submission.getStudent() != null ? submission.getStudent().getStudentNumber() : null);
         response.setDescription(submission.getDescription());
         response.setFileUrl(submission.getFileUrl());
         response.setEmbedUrl(submission.getEmbedUrl());
@@ -424,6 +425,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setClassSectionId(classSection.getId());
         response.setStudentId(student.getId());
         response.setStudentName(student.getFullName());
+        response.setStudentNumber(student.getStudentNumber());
         response.setStatus(SubmissionStatus.NOT_SUBMITTED);
         response.setSubmissionCount(0);
         response.setDueAt(assignment.getDueAt());

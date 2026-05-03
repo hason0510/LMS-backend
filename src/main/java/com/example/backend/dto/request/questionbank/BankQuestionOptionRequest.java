@@ -12,6 +12,7 @@ import lombok.Setter;
 public class BankQuestionOptionRequest {
     private String content;
     private Boolean isCorrect;
+    private String explanation;
     private Integer resourceId;
     private Integer orderIndex;
 }

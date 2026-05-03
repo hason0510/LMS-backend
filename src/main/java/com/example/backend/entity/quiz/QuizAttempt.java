@@ -1,6 +1,7 @@
 package com.example.backend.entity.quiz;
 
 import com.example.backend.constant.AttemptStatus;
+import com.example.backend.constant.GradingStatus;
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.User;
@@ -11,6 +12,7 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -37,6 +39,15 @@ public class QuizAttempt extends BaseEntity {
     private Integer incorrectAnswers;
     private Integer unansweredQuestions;
     private Integer attemptNumber;
+    @Column(name = "earned_points", precision = 10, scale = 2)
+    private BigDecimal earnedPoints;
+    @Column(name = "total_points", precision = 10, scale = 2)
+    private BigDecimal totalPoints;
+    @Column(name = "instructor_feedback", columnDefinition = "LONGTEXT")
+    private String instructorFeedback;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "grading_status", length = 20)
+    private GradingStatus gradingStatus;
     @Enumerated(EnumType.STRING)
     private AttemptStatus status;
     @ManyToOne(fetch = FetchType.EAGER)

@@ -1,6 +1,7 @@
 package com.example.backend.service;
 
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
+import com.example.backend.dto.request.quiz.QuizAttemptReviewRequest;
 import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
 import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
 import com.example.backend.dto.response.PageResponse;
@@ -32,6 +33,15 @@ public interface QuizAttemptService {
     QuizAttemptDetailResponse getCurrentAttemptForClassContentItem(Integer classContentItemId);
 
     QuizAttemptDetailResponse getAttemptDetail(Integer attemptId);
+
+    PageResponse<QuizAttemptResponse> getManagedQuizAttempts(
+            Integer classSectionId,
+            String result,
+            String search,
+            Pageable pageable
+    );
+
+    QuizAttemptDetailResponse reviewAttempt(Integer attemptId, QuizAttemptReviewRequest request);
 
     List<QuizAttemptResponse> getStudentAttemptsHistory(Integer chapterItemId);
 

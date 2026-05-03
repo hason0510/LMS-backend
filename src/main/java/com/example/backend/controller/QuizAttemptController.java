@@ -1,6 +1,7 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
+import com.example.backend.dto.request.quiz.QuizAttemptReviewRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
 import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
@@ -54,6 +55,30 @@ public class QuizAttemptController {
         return ResponseEntity.ok(
                 quizAttemptService.getAttemptDetail(attemptId)
         );
+    }
+
+    @Operation(summary = "Danh sách quiz attempts cho teacher/admin dashboard")
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @GetMapping("/quiz-attempts/manage")
+    public ResponseEntity<PageResponse<QuizAttemptResponse>> getManagedQuizAttempts(
+            @RequestParam(required = false) Integer classSectionId,
+            @RequestParam(required = false) String result,
+            @RequestParam(required = false) String search,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(
+                quizAttemptService.getManagedQuizAttempts(classSectionId, result, search, pageable)
+        );
+    }
+
+    @Operation(summary = "Chấm tay quiz attempt")
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PutMapping("/quiz-attempts/{attemptId}/review")
+    public ResponseEntity<QuizAttemptDetailResponse> reviewAttempt(
+            @PathVariable Integer attemptId,
+            @RequestBody QuizAttemptReviewRequest request
+    ) {
+        return ResponseEntity.ok(quizAttemptService.reviewAttempt(attemptId, request));
     }
 
     @Operation(

@@ -12,6 +12,7 @@ import lombok.Setter;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Entity
@@ -45,8 +46,8 @@ public class BankQuestion extends BaseEntity {
     @Column(name = "difficulty_level", length = 20)
     private DifficultyLevel difficultyLevel;
 
-    @Column(name = "default_points")
-    private Integer defaultPoints;
+    @Column(name = "default_points", precision = 10, scale = 2)
+    private BigDecimal defaultPoints;
 
     @ManyToOne
     @JoinColumn(name = "question_bank_id", nullable = false)
@@ -63,10 +64,6 @@ public class BankQuestion extends BaseEntity {
     @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<QuestionInteractionItem> interactionItems;
-
-    @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("orderIndex ASC")
-    private List<QuestionContentBlock> contentBlocks;
 
     @OneToMany(mappedBy = "bankQuestion")
     private List<BankQuestionTag> tagMappings;

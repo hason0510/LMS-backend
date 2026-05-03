@@ -1,7 +1,10 @@
 package com.example.backend.controller;
 
 import com.example.backend.constant.ResourceType;
+import com.example.backend.constant.ResourceSource;
 import com.example.backend.dto.response.CloudinaryResponse;
+import com.example.backend.entity.Resource;
+import com.example.backend.repository.ResourceRepository;
 import com.example.backend.service.CloudinaryService;
 import com.example.backend.utils.FileUploadUtil;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UploadController {
 
     private final CloudinaryService cloudinaryService;
+    private final ResourceRepository resourceRepository;
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     @PostMapping("/upload/image")
@@ -39,7 +43,7 @@ public class UploadController {
         FileUploadUtil.assertAllowed(file, "resource");
         ResourceType inferredType = FileUploadUtil.resolveResourceType(file.getOriginalFilename());
         String uploadType = switch (inferredType) {
-            case VIDEO -> "video";
+            case VIDEO, AUDIO -> "video";
             case IMAGE, PDF -> "image";
             default -> "raw";
         };
@@ -51,6 +55,24 @@ public class UploadController {
             }
         }
         CloudinaryResponse response = cloudinaryService.uploadFile(file, fileName, uploadType);
+
+        Resource resource = new Resource();
+        resource.setTitle(file.getOriginalFilename());
+        resource.setFileUrl(response.getUrl());
+        resource.setCloudinaryId(response.getPublicId());
+        resource.setHlsUrl(response.getHlsUrl());
+        resource.setMimeType(file.getContentType());
+        resource.setFileSize(file.getSize());
+        resource.setType(inferredType);
+        resource.setSource(ResourceSource.UPLOAD);
+        Resource saved = resourceRepository.save(resource);
+
+        response.setId(saved.getId());
+        response.setResourceId(saved.getId());
+        response.setTitle(saved.getTitle());
+        response.setMimeType(saved.getMimeType());
+        response.setFileSize(saved.getFileSize());
+        response.setType(saved.getType() != null ? saved.getType().name() : response.getType());
         return ResponseEntity.ok(response);
     }
 

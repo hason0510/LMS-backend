@@ -21,6 +21,8 @@ public class QuestionInteractionItemResponse {
     private Integer correctOrderIndex;
     private Integer blankIndex;
     private List<String> acceptedAnswers;
+    private String blankType;
+    private String blankOptions;
     private Integer resourceId;
     private Integer orderIndex;
 }

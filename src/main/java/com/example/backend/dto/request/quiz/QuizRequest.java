@@ -19,6 +19,8 @@ public class QuizRequest {
     private Boolean generateQuestionsPerAttempt;
     private Boolean shuffleQuestions;
     private Boolean shuffleAnswers;
+    private String displayMode;
+    private Boolean showCorrectAnswer;
     private Integer classSectionId;
     private Integer classContentItemId;
     private List<QuizBankSourceRequest> bankSources;

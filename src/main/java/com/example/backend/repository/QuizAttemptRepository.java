@@ -1,6 +1,8 @@
 package com.example.backend.repository;
 
 import com.example.backend.constant.AttemptStatus;
+import com.example.backend.constant.ClassMemberRole;
+import com.example.backend.constant.GradingStatus;
 import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
 import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
 import com.example.backend.dto.response.quiz.CourseQuizResultResponse;
@@ -46,6 +48,47 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
     Page<QuizAttempt> findByClassContentItem_IdAndStatusIn(
             Integer classContentItemId,
             List<AttemptStatus> statuses,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT qa
+            FROM QuizAttempt qa
+            LEFT JOIN qa.classContentItem cci
+            LEFT JOIN cci.classChapter cc
+            LEFT JOIN cc.classSection cs
+            LEFT JOIN qa.student s
+            LEFT JOIN qa.quiz q
+            WHERE qa.status IN :statuses
+              AND (:classSectionId IS NULL OR cs.id = :classSectionId)
+              AND (:teacherId IS NULL
+                   OR cs.teacher.id = :teacherId
+                   OR EXISTS (
+                        SELECT cm.id
+                        FROM ClassMember cm
+                        WHERE cm.classSection.id = cs.id
+                          AND cm.user.id = :teacherId
+                          AND cm.role = :teacherRole
+                   ))
+              AND (:keyword IS NULL
+                   OR LOWER(COALESCE(s.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(COALESCE(s.gmail, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(COALESCE(q.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+              AND (
+                   :resultFilter IS NULL
+                   OR (:resultFilter = 'PENDING' AND qa.gradingStatus = :pendingStatus)
+                   OR (:resultFilter = 'PASS' AND qa.isPassed = true AND (qa.gradingStatus IS NULL OR qa.gradingStatus <> :pendingStatus))
+                   OR (:resultFilter = 'FAIL' AND qa.isPassed = false AND (qa.gradingStatus IS NULL OR qa.gradingStatus <> :pendingStatus))
+              )
+            """)
+    Page<QuizAttempt> searchManagedAttempts(
+            @Param("statuses") List<AttemptStatus> statuses,
+            @Param("classSectionId") Integer classSectionId,
+            @Param("teacherId") Integer teacherId,
+            @Param("teacherRole") ClassMemberRole teacherRole,
+            @Param("keyword") String keyword,
+            @Param("resultFilter") String resultFilter,
+            @Param("pendingStatus") GradingStatus pendingStatus,
             Pageable pageable
     );
     /**

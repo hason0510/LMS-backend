@@ -8,8 +8,13 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CloudinaryResponse {
+    private Integer id;
+    private Integer resourceId;
     private String publicId;
     private String url;
     private String type;
     private String hlsUrl;
+    private String title;
+    private String mimeType;
+    private Long fileSize;
 }

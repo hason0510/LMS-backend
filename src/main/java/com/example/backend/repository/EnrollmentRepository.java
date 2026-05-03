@@ -46,6 +46,8 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     List<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus);
 
+    List<Enrollment> findByStudent_IdAndApprovalStatus(Integer studentId, EnrollmentStatus approvalStatus);
+
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED'")
     Long countApprovedEnrollmentsByClassSectionId(@Param("classSectionId") Integer classSectionId);
 

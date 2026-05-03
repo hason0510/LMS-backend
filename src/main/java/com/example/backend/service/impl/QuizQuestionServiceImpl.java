@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
@@ -78,7 +79,7 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
         QuizQuestion question = new QuizQuestion();
         question.setContent(request.getContent());
         question.setType(request.getType());
-        question.setPoints(request.getPoints());
+        question.setPoints(request.getPoints() != null ? request.getPoints() : BigDecimal.ONE);
         question.setQuiz(quiz);
 
         return convertQuizQuestionToDTO(quizQuestionRepository.save(question));

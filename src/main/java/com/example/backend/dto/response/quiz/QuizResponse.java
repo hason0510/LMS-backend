@@ -21,6 +21,8 @@ public class QuizResponse {
     private Boolean generateQuestionsPerAttempt;
     private Boolean shuffleQuestions;
     private Boolean shuffleAnswers;
+    private String displayMode;
+    private Boolean showCorrectAnswer;
     private Integer questionCount;
     private Integer classSectionId;
     private Integer classContentItemId;

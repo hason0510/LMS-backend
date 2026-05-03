@@ -21,7 +21,9 @@ public class QuizAnswer extends BaseEntity {
     private Integer id;
     @Column(name = "is_correct")
     private Boolean isCorrect;
-    private String content; // text answer
+    private String content;
+    @Column(columnDefinition = "LONGTEXT")
+    private String explanation;
 
     @ManyToOne
     @JoinColumn(name = "quiz_question_id")

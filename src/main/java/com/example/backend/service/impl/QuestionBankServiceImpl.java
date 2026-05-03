@@ -19,15 +19,12 @@ import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
-import com.example.backend.dto.request.quiz.QuestionContentBlockRequest;
 import com.example.backend.dto.response.ResourceResponse;
-import com.example.backend.dto.response.quiz.QuestionContentBlockResponse;
 import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
 import com.example.backend.entity.Resource;
 import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.BankQuestionTag;
-import com.example.backend.entity.quiz.QuestionContentBlock;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionBankMember;
@@ -41,7 +38,6 @@ import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.BankQuestionTagRepository;
 import com.example.backend.repository.QuestionBankMemberRepository;
 import com.example.backend.repository.QuestionBankRepository;
-import com.example.backend.repository.QuestionContentBlockRepository;
 import com.example.backend.repository.QuestionTagRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
 import com.example.backend.repository.ResourceRepository;
@@ -60,6 +56,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -93,7 +90,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final QuizBankSourceRepository quizBankSourceRepository;
     private final DifficultyTagResolver difficultyTagResolver;
     private final ResourceRepository resourceRepository;
-    private final QuestionContentBlockRepository questionContentBlockRepository;
 
     @Override
     @Transactional
@@ -246,7 +242,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 question.setQuestionBank(questionBank);
                 question.setContent(parsed.content());
                 question.setType(parsed.type());
-                question.setDefaultPoints(1);
+                question.setDefaultPoints(BigDecimal.ONE);
                 question.setDifficultyLevel(tagResolution.difficultyLevel());
                 question.setOptions(parsed.options());
 
@@ -1078,7 +1074,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         question.getOptions().addAll(incomingOptions);
 
         applyInteractionItems(question, request.getItems());
-        applyContentBlocks(question, request.getBlocks());
     }
 
     private void applyInteractionItems(BankQuestion question, List<QuestionInteractionItemRequest> requests) {
@@ -1120,7 +1115,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
 
         List<QuestionInteractionItemRequest> safeItems = items != null ? items : List.of();
-        if (type == QuestionType.MATCHING) {
+        if (isMatchingQuestionType(type)) {
             List<QuestionInteractionItemRequest> prompts = filterItemsByRole(safeItems, QuestionInteractionItemRole.PROMPT);
             List<QuestionInteractionItemRequest> matches = filterItemsByRole(safeItems, QuestionInteractionItemRole.MATCH);
             if (prompts.isEmpty() || matches.isEmpty()) {
@@ -1129,13 +1124,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
             Set<String> matchKeys = new HashSet<>();
             for (QuestionInteractionItemRequest match : matches) {
-                if (!StringUtils.hasText(match.getContent()) || !StringUtils.hasText(match.getItemKey())) {
+                if (!hasContentOrResource(match) || !StringUtils.hasText(match.getItemKey())) {
                     throw new BusinessException("MATCHING match items require content and itemKey");
                 }
                 matchKeys.add(match.getItemKey().trim());
             }
             for (QuestionInteractionItemRequest prompt : prompts) {
-                if (!StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
+                if (!hasContentOrResource(prompt) || !StringUtils.hasText(prompt.getCorrectMatchKey())) {
                     throw new BusinessException("MATCHING prompt items require content and correctMatchKey");
                 }
                 if (!matchKeys.contains(prompt.getCorrectMatchKey().trim())) {
@@ -1195,9 +1190,19 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private boolean isInteractionQuestionType(QuestionType type) {
-        return type == QuestionType.MATCHING
+        return isMatchingQuestionType(type)
                 || type == QuestionType.DRAG_ORDER
                 || type == QuestionType.CLOZE;
+    }
+
+    private boolean isMatchingQuestionType(QuestionType type) {
+        return type == QuestionType.MATCHING
+                || type == QuestionType.IMAGE_MATCHING;
+    }
+
+    private boolean hasContentOrResource(QuestionInteractionItemRequest item) {
+        return item != null
+                && (StringUtils.hasText(item.getContent()) || item.getResourceId() != null);
     }
 
     private String resolveItemContent(QuestionInteractionItemRequest itemRequest, int orderIndex) {
@@ -1543,7 +1548,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             response.setItems(question.getInteractionItems() != null
                     ? question.getInteractionItems().stream().map(item -> convertInteractionItem(item, true)).toList()
                     : List.of());
-            response.setBlocks(convertBlocksToDTOs(question.getContentBlocks()));
         }
         return response;
     }
@@ -1561,6 +1565,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 showCorrectAnswer ? item.getCorrectOrderIndex() : null,
                 item.getBlankIndex(),
                 showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
+                item.getBlankType(),
+                item.getBlankOptions(),
                 item.getResource() != null ? item.getResource().getId() : null,
                 item.getOrderIndex()
         );
@@ -1582,36 +1588,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 option.getId(),
                 option.getContent(),
                 option.getIsCorrect(),
+                option.getExplanation(),
                 option.getResource() != null ? option.getResource().getId() : null,
                 option.getOrderIndex()
         );
     }
 
-    private void applyContentBlocks(BankQuestion question, List<QuestionContentBlockRequest> requests) {
-        if (question.getId() != null) {
-            questionContentBlockRepository.deleteByBankQuestion_Id(question.getId());
-        }
-        if (requests == null || requests.isEmpty()) {
-            if (question.getContentBlocks() != null) question.getContentBlocks().clear();
-            return;
-        }
-        List<QuestionContentBlock> blocks = new ArrayList<>();
-        for (int i = 0; i < requests.size(); i++) {
-            QuestionContentBlockRequest req = requests.get(i);
-            QuestionContentBlock block = new QuestionContentBlock();
-            block.setBankQuestion(question);
-            block.setBlockType(req.getBlockType());
-            block.setOrderIndex(req.getOrderIndex() != null ? req.getOrderIndex() : i + 1);
-            block.setContent(req.getContent());
-            block.setLanguage(req.getLanguage());
-            block.setBlankKey(req.getBlankKey());
-            if (req.getResourceId() != null) {
-                block.setResource(resourceRepository.findById(req.getResourceId()).orElse(null));
-            }
-            blocks.add(block);
-        }
-        questionContentBlockRepository.saveAll(blocks);
-    }
 
     private ResourceResponse convertResourceToDTO(Resource resource) {
         if (resource == null) return null;
@@ -1630,20 +1612,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         return r;
     }
 
-    private List<QuestionContentBlockResponse> convertBlocksToDTOs(List<QuestionContentBlock> blocks) {
-        if (blocks == null) return List.of();
-        return blocks.stream().map(block -> {
-            QuestionContentBlockResponse dto = new QuestionContentBlockResponse();
-            dto.setId(block.getId());
-            dto.setBlockType(block.getBlockType());
-            dto.setOrderIndex(block.getOrderIndex());
-            dto.setContent(block.getContent());
-            dto.setLanguage(block.getLanguage());
-            dto.setBlankKey(block.getBlankKey());
-            dto.setResource(convertResourceToDTO(block.getResource()));
-            return dto;
-        }).toList();
-    }
 
     private QuestionTagResponse convertTag(QuestionTag tag) {
         long questionUsageCount = bankQuestionTagRepository.countByTag_Id(tag.getId());

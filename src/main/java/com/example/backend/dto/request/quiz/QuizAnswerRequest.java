@@ -9,4 +9,6 @@ public class QuizAnswerRequest {
     private Integer id;
     private String content;
     private Boolean isCorrect;
+    private String explanation;
+    private Integer resourceId;
 }

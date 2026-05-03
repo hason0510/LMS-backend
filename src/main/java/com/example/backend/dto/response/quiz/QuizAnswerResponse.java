@@ -1,5 +1,6 @@
 package com.example.backend.dto.response.quiz;
 
+import com.example.backend.dto.response.ResourceResponse;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
@@ -12,5 +13,7 @@ public class QuizAnswerResponse {
     @JsonProperty("isCorrect")
     private Boolean isCorrect;
     private String content;
+    private String explanation;
     private Integer resourceId;
+    private ResourceResponse resource;
 }

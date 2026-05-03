@@ -20,6 +20,7 @@ public class SubmissionResponse {
     private Integer classSectionId;
     private Integer studentId;
     private String studentName;
+    private String studentNumber;
     private String description;
     private String fileUrl;
     private String embedUrl;

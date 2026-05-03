@@ -39,6 +39,13 @@ public class Quiz extends BaseEntity {
 
     @Column(name = "shuffle_answers", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
     private boolean shuffleAnswers = false;
+
+    @Column(name = "display_mode", nullable = false, length = 20)
+    private String displayMode = "PAGINATION";
+
+    @Column(name = "show_correct_answer", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean showCorrectAnswer = false;
+
     @OneToMany(mappedBy = "quiz")
     private List<QuizQuestion> questions;
 

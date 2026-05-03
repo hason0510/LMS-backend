@@ -23,6 +23,9 @@ public class FileUploadUtil {
     public static final Set<String> VIDEO_EXTENSIONS =
             Set.of("mp4", "mov", "avi", "mkv");
 
+    public static final Set<String> AUDIO_EXTENSIONS =
+            Set.of("mp3", "wav", "m4a", "aac", "ogg");
+
     public static final Set<String> PDF_EXTENSIONS =
             Set.of("pdf");
 
@@ -30,6 +33,7 @@ public class FileUploadUtil {
             Set.of(
                     "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "csv",
                     "jpg", "jpeg", "png", "gif", "bmp", "webp",
+                    "mp3", "wav", "m4a", "aac", "ogg",
                     "mp4", "mov", "avi", "mkv",
                     "zip", "rar", "7z"
             );
@@ -89,6 +93,9 @@ public class FileUploadUtil {
 
         if (VIDEO_EXTENSIONS.contains(normalized)) {
             return ResourceType.VIDEO;
+        }
+        if (AUDIO_EXTENSIONS.contains(normalized)) {
+            return ResourceType.AUDIO;
         }
         if (IMAGE_EXTENSIONS.contains(normalized)) {
             return ResourceType.IMAGE;

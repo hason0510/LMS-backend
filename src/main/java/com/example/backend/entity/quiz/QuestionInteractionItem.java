@@ -46,6 +46,12 @@ public class QuestionInteractionItem extends BaseEntity {
     @Column(name = "accepted_answers", columnDefinition = "LONGTEXT")
     private String acceptedAnswers;
 
+    @Column(name = "blank_type", length = 20)
+    private String blankType = "TEXT_INPUT";
+
+    @Column(name = "blank_options", columnDefinition = "LONGTEXT")
+    private String blankOptions;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_id")
     private Resource resource;

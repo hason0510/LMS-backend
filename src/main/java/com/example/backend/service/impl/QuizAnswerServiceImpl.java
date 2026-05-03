@@ -8,6 +8,7 @@ import com.example.backend.entity.quiz.QuizAnswer;
 import com.example.backend.entity.quiz.QuizQuestion;
 import com.example.backend.repository.QuizAnswerRepository;
 import com.example.backend.repository.QuizQuestionRepository;
+import com.example.backend.repository.ResourceRepository;
 import com.example.backend.service.QuizAnswerService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,10 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class QuizAnswerServiceImpl implements QuizAnswerService{
     private final QuizAnswerRepository quizAnswerRepository;
     private final QuizQuestionRepository quizQuestionRepository;
+    private final ResourceRepository resourceRepository;
 
-    public QuizAnswerServiceImpl(QuizAnswerRepository quizAnswerRepository, QuizQuestionRepository quizQuestionRepository) {
+    public QuizAnswerServiceImpl(
+            QuizAnswerRepository quizAnswerRepository,
+            QuizQuestionRepository quizQuestionRepository,
+            ResourceRepository resourceRepository
+    ) {
         this.quizAnswerRepository = quizAnswerRepository;
         this.quizQuestionRepository = quizQuestionRepository;
+        this.resourceRepository = resourceRepository;
     }
 
     @Override
@@ -30,6 +37,7 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
         response.setId(quizAnswer.getId());
         response.setIsCorrect(quizAnswer.getIsCorrect());
         response.setContent(quizAnswer.getContent());
+        response.setResourceId(quizAnswer.getResource() != null ? quizAnswer.getResource().getId() : null);
         return response;
     }
 
@@ -65,6 +73,9 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
                 || question.getType().equals(QuestionType.MULTIPLE_CHOICE)){
             answer.setContent(request.getContent());
             answer.setIsCorrect(request.getIsCorrect());
+            if (request.getResourceId() != null) {
+                answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+            }
         }
         if(question.getType().equals(QuestionType.SHORT_ANSWER)){
             boolean exists = quizAnswerRepository.existsByQuizQuestion_Id(questionId);
@@ -73,6 +84,9 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
             }
             answer.setContent(request.getContent());
             answer.setIsCorrect(true);
+            if (request.getResourceId() != null) {
+                answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+            }
         }
 
         return convertQuizAnswerToDTO(quizAnswerRepository.save(answer));
@@ -92,12 +106,18 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
             if(request.getIsCorrect() != null){
                 answer.setIsCorrect(request.getIsCorrect());
             }
+            if(request.getResourceId() != null){
+                answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+            }
         }
         if(answer.getQuizQuestion().getType().equals(QuestionType.SHORT_ANSWER)){
             if(request.getContent() != null){
                 answer.setContent(request.getContent());
             }
             answer.setIsCorrect(true);
+            if(request.getResourceId() != null){
+                answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+            }
         }
 
         return convertQuizAnswerToDTO(quizAnswerRepository.save(answer));

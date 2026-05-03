@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface SubmissionRepository extends JpaRepository<Submission, Integer> {
@@ -27,4 +28,6 @@ public interface SubmissionRepository extends JpaRepository<Submission, Integer>
             Integer classSectionId,
             SubmissionStatus status
     );
+
+    List<Submission> findByStudent_IdAndAssignment_IdIn(Integer studentId, Collection<Integer> assignmentIds);
 }

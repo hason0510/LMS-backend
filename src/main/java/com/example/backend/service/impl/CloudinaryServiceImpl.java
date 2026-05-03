@@ -73,7 +73,7 @@ public class CloudinaryServiceImpl implements CloudinaryService {
         try {
             Map<String, Object> options = new HashMap<>();
 
-            if (type == ResourceType.VIDEO) {
+            if (type == ResourceType.VIDEO || type == ResourceType.AUDIO) {
                 options.put("resource_type", "video");
             } else if (type == ResourceType.IMAGE) {
                 options.put("resource_type", "image");

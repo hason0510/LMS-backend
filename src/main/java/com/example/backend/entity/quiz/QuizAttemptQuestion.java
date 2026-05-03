@@ -11,6 +11,7 @@ import lombok.Setter;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Entity
@@ -32,7 +33,8 @@ public class QuizAttemptQuestion extends BaseEntity {
     @Column(columnDefinition = "LONGTEXT", nullable = false)
     private String content;
 
-    private Integer points;
+    @Column(precision = 10, scale = 2)
+    private BigDecimal points;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "resource_id")
