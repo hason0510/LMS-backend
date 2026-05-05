@@ -144,7 +144,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         List<QuestionBank> questionBanks = questionBankRepository.findAll(spec);
 
         return questionBanks.stream()
-                .filter(questionBank -> canView(questionBank, currentUser))
+                .filter(questionBank -> canListView(questionBank, currentUser))
                 .map(questionBank -> convertQuestionBank(questionBank, includeQuestions, false))
                 .toList();
     }
@@ -1422,6 +1422,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (!canView(questionBank, currentUser)) {
             throw new UnauthorizedException("You do not have permission to view this question bank");
         }
+    }
+
+    private boolean canListView(QuestionBank questionBank, User currentUser) {
+        RoleType role = currentUser.getRole().getRoleName();
+        return role == RoleType.ADMIN || role == RoleType.TEACHER;
     }
 
     private boolean canView(QuestionBank questionBank, User currentUser) {

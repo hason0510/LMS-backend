@@ -26,13 +26,24 @@ import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.Lesson;
 import com.example.backend.entity.template.LessonTemplate;
 import com.example.backend.entity.quiz.Quiz;
+import com.example.backend.entity.quiz.BankQuestion;
+import com.example.backend.entity.quiz.BankQuestionOption;
+import com.example.backend.entity.quiz.QuestionInteractionItem;
+import com.example.backend.entity.quiz.QuizAnswer;
+import com.example.backend.entity.quiz.QuizBankSource;
+import com.example.backend.entity.quiz.QuizQuestion;
 import com.example.backend.entity.template.QuizTemplate;
+import com.example.backend.entity.template.QuizTemplateAnswer;
+import com.example.backend.entity.template.QuizTemplateBankSource;
+import com.example.backend.entity.template.QuizTemplateQuestion;
+import com.example.backend.entity.template.QuizTemplateQuestionItem;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.AssignmentRepository;
 import com.example.backend.repository.AssignmentTemplateRepository;
+import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ChapterTemplateRepository;
 import com.example.backend.repository.ClassChapterRepository;
 import com.example.backend.repository.ClassContentItemRepository;
@@ -44,7 +55,11 @@ import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.LessonTemplateRepository;
 import com.example.backend.repository.QuizRepository;
+import com.example.backend.repository.QuizBankSourceRepository;
+import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizTemplateRepository;
+import com.example.backend.repository.QuizTemplateBankSourceRepository;
+import com.example.backend.repository.QuizTemplateQuestionRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassSectionService;
@@ -54,6 +69,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.*;
 
@@ -73,9 +89,14 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final LessonRepository lessonRepository;
     private final LessonTemplateRepository lessonTemplateRepository;
     private final QuizRepository quizRepository;
+    private final QuizBankSourceRepository quizBankSourceRepository;
+    private final QuizQuestionRepository quizQuestionRepository;
     private final QuizTemplateRepository quizTemplateRepository;
+    private final QuizTemplateQuestionRepository quizTemplateQuestionRepository;
+    private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
     private final AssignmentRepository assignmentRepository;
     private final AssignmentTemplateRepository assignmentTemplateRepository;
+    private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
@@ -629,6 +650,10 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             if (quiz.getClassSection() != null && !quiz.getClassSection().getId().equals(classSection.getId())) {
                 throw new BusinessException("Quiz belongs to a different class section");
             }
+            if (quiz.getClassSection() == null) {
+                quiz.setClassSection(classSection);
+                quizRepository.save(quiz);
+            }
             classContentItem.setQuiz(quiz);
             if (!StringUtils.hasText(classContentItem.getTitle())) {
                 classContentItem.setTitle(quiz.getTitle());
@@ -708,8 +733,228 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         quiz.setMaxAttempts(template.getMaxAttempts());
         quiz.setAvailableFrom(template.getAvailableFrom());
         quiz.setAvailableUntil(template.getAvailableTo());
+        quiz.setGenerateQuestionsPerAttempt(template.isGenerateQuestionsPerAttempt());
+        quiz.setShuffleQuestions(template.isShuffleQuestions());
+        quiz.setShuffleAnswers(template.isShuffleAnswers());
+        quiz.setDisplayMode(StringUtils.hasText(template.getDisplayMode()) ? template.getDisplayMode() : "PAGINATION");
+        quiz.setShowCorrectAnswer(template.isShowCorrectAnswer());
         quiz.setClassSection(classSection);
-        return quizRepository.save(quiz);
+        Quiz savedQuiz = quizRepository.save(quiz);
+
+        List<QuizTemplateBankSource> templateSources =
+                quizTemplateBankSourceRepository.findByQuizTemplate_IdOrderByOrderIndexAsc(template.getId());
+        List<QuizTemplateQuestion> templateQuestions =
+                quizTemplateQuestionRepository.findByQuizTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
+
+        if (!templateSources.isEmpty()) {
+            List<QuizBankSource> savedSources = cloneBankSourcesFromTemplate(savedQuiz, templateSources);
+            if (!savedQuiz.isGenerateQuestionsPerAttempt()) {
+                generateQuestionsFromBankSources(savedQuiz, savedSources);
+            }
+            return savedQuiz;
+        }
+
+        if (!templateQuestions.isEmpty()) {
+            cloneManualQuestionsFromTemplate(savedQuiz, templateQuestions);
+        }
+        return savedQuiz;
+    }
+
+    private List<QuizBankSource> cloneBankSourcesFromTemplate(Quiz quiz, List<QuizTemplateBankSource> templateSources) {
+        List<QuizBankSource> savedSources = new ArrayList<>();
+        int orderIndex = 1;
+        for (QuizTemplateBankSource templateSource : templateSources) {
+            if (templateSource.getQuestionBank() == null) {
+                throw new BusinessException("Quiz template has an invalid question bank source");
+            }
+
+            QuizBankSource source = new QuizBankSource();
+            source.setQuiz(quiz);
+            source.setQuestionBank(templateSource.getQuestionBank());
+            source.setTag(templateSource.getTag());
+            source.setSelectionMode(templateSource.getSelectionMode());
+            source.setQuestionCount(templateSource.getQuestionCount());
+            source.setDifficultyLevel(templateSource.getDifficultyLevel());
+            source.setManualQuestionIds(templateSource.getManualQuestionIds());
+            source.setOrderIndex(
+                    templateSource.getOrderIndex() != null ? templateSource.getOrderIndex() : orderIndex
+            );
+            savedSources.add(quizBankSourceRepository.save(source));
+            orderIndex++;
+        }
+        return savedSources;
+    }
+
+    private void cloneManualQuestionsFromTemplate(Quiz quiz, List<QuizTemplateQuestion> templateQuestions) {
+        for (QuizTemplateQuestion templateQuestion : templateQuestions) {
+            QuizQuestion question = new QuizQuestion();
+            question.setQuiz(quiz);
+            question.setContent(templateQuestion.getContent());
+            question.setType(templateQuestion.getType());
+            question.setPoints(templateQuestion.getPoints() != null ? templateQuestion.getPoints() : BigDecimal.ONE);
+            question.setResource(templateQuestion.getResource());
+            question.setSourceBankQuestion(templateQuestion.getSourceBankQuestion());
+
+            List<QuizAnswer> answers = new ArrayList<>();
+            for (QuizTemplateAnswer templateAnswer : safeList(templateQuestion.getAnswers())) {
+                QuizAnswer answer = new QuizAnswer();
+                answer.setQuizQuestion(question);
+                answer.setContent(templateAnswer.getContent());
+                answer.setIsCorrect(templateAnswer.getIsCorrect() != null ? templateAnswer.getIsCorrect() : false);
+                answer.setExplanation(templateAnswer.getExplanation());
+                answer.setResource(templateAnswer.getResource());
+                answers.add(answer);
+            }
+            question.setAnswers(answers);
+            question.setInteractionItems(copyTemplateQuestionItems(templateQuestion, question));
+            quizQuestionRepository.save(question);
+        }
+    }
+
+    private List<QuestionInteractionItem> copyTemplateQuestionItems(
+            QuizTemplateQuestion templateQuestion,
+            QuizQuestion question
+    ) {
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        for (QuizTemplateQuestionItem templateItem : safeList(templateQuestion.getItems())) {
+            QuestionInteractionItem item = new QuestionInteractionItem();
+            item.setQuizQuestion(question);
+            item.setContent(templateItem.getContent());
+            item.setItemKey(templateItem.getItemKey());
+            item.setRole(templateItem.getRole());
+            item.setCorrectMatchKey(templateItem.getCorrectMatchKey());
+            item.setCorrectOrderIndex(templateItem.getCorrectOrderIndex());
+            item.setBlankIndex(templateItem.getBlankIndex());
+            item.setAcceptedAnswers(templateItem.getAcceptedAnswers());
+            item.setBlankType(templateItem.getBlankType());
+            item.setBlankOptions(templateItem.getBlankOptions());
+            item.setResource(templateItem.getResource());
+            item.setOrderIndex(templateItem.getOrderIndex());
+            items.add(item);
+        }
+        return items;
+    }
+
+    private void generateQuestionsFromBankSources(Quiz quiz, List<QuizBankSource> bankSources) {
+        LinkedHashMap<Integer, BankQuestion> selectedQuestions = new LinkedHashMap<>();
+        for (QuizBankSource source : bankSources) {
+            for (BankQuestion question : selectQuestions(source)) {
+                selectedQuestions.putIfAbsent(question.getId(), question);
+            }
+        }
+
+        if (selectedQuestions.isEmpty()) {
+            throw new BusinessException("No questions matched the configured question bank sources");
+        }
+
+        for (BankQuestion sourceQuestion : selectedQuestions.values()) {
+            QuizQuestion question = new QuizQuestion();
+            question.setQuiz(quiz);
+            question.setSourceBankQuestion(sourceQuestion);
+            question.setContent(sourceQuestion.getContent());
+            question.setType(sourceQuestion.getType());
+            question.setResource(sourceQuestion.getResource());
+            question.setPoints(sourceQuestion.getDefaultPoints() != null ? sourceQuestion.getDefaultPoints() : BigDecimal.ONE);
+
+            List<QuizAnswer> answers = new ArrayList<>();
+            if (sourceQuestion.getOptions() != null) {
+                for (BankQuestionOption sourceOption : sourceQuestion.getOptions()) {
+                    QuizAnswer answer = new QuizAnswer();
+                    answer.setQuizQuestion(question);
+                    answer.setContent(sourceOption.getContent());
+                    answer.setIsCorrect(sourceOption.getIsCorrect());
+                    answer.setResource(sourceOption.getResource());
+                    answers.add(answer);
+                }
+            }
+            question.setAnswers(answers);
+            question.setInteractionItems(copyBankInteractionItems(sourceQuestion, question));
+            quizQuestionRepository.save(question);
+        }
+    }
+
+    private List<BankQuestion> selectQuestions(QuizBankSource source) {
+        List<BankQuestion> matchedQuestions = bankQuestionRepository.findSelectableQuestions(
+                source.getQuestionBank().getId(),
+                source.getDifficultyLevel(),
+                source.getTag() != null ? source.getTag().getId() : null
+        );
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+            return matchedQuestions;
+        }
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
+            if (source.getQuestionCount() == null || source.getQuestionCount() <= 0) {
+                throw new BusinessException("questionCount is required for RANDOM question bank sources");
+            }
+            if (matchedQuestions.size() < source.getQuestionCount()) {
+                throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
+            }
+            List<BankQuestion> shuffled = new ArrayList<>(matchedQuestions);
+            Collections.shuffle(shuffled);
+            return shuffled.subList(0, source.getQuestionCount());
+        }
+
+        if (source.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
+            List<Integer> selectedIds = parseIds(source.getManualQuestionIds());
+            if (selectedIds.isEmpty()) {
+                throw new BusinessException("manualQuestionIds is required for MANUAL question bank sources");
+            }
+            List<BankQuestion> selectedQuestions = bankQuestionRepository.findAllById(selectedIds);
+            if (selectedQuestions.size() != selectedIds.size()) {
+                throw new BusinessException("Some manually selected bank questions do not exist");
+            }
+            for (BankQuestion question : selectedQuestions) {
+                if (!question.getQuestionBank().getId().equals(source.getQuestionBank().getId())) {
+                    throw new BusinessException("Manual question selection must belong to the configured question bank");
+                }
+            }
+            selectedQuestions.sort((left, right) ->
+                    Integer.compare(selectedIds.indexOf(left.getId()), selectedIds.indexOf(right.getId())));
+            return selectedQuestions;
+        }
+
+        throw new BusinessException("Unsupported question bank selection mode");
+    }
+
+    private List<QuestionInteractionItem> copyBankInteractionItems(BankQuestion sourceQuestion, QuizQuestion question) {
+        if (sourceQuestion.getInteractionItems() == null) {
+            return List.of();
+        }
+
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
+            QuestionInteractionItem item = new QuestionInteractionItem();
+            item.setQuizQuestion(question);
+            item.setContent(sourceItem.getContent());
+            item.setItemKey(sourceItem.getItemKey());
+            item.setRole(sourceItem.getRole());
+            item.setCorrectMatchKey(sourceItem.getCorrectMatchKey());
+            item.setCorrectOrderIndex(sourceItem.getCorrectOrderIndex());
+            item.setBlankIndex(sourceItem.getBlankIndex());
+            item.setAcceptedAnswers(sourceItem.getAcceptedAnswers());
+            item.setBlankType(sourceItem.getBlankType());
+            item.setBlankOptions(sourceItem.getBlankOptions());
+            item.setResource(sourceItem.getResource());
+            item.setOrderIndex(sourceItem.getOrderIndex());
+            items.add(item);
+        }
+        return items;
+    }
+
+    private List<Integer> parseIds(String csv) {
+        if (!StringUtils.hasText(csv)) {
+            return List.of();
+        }
+        List<Integer> ids = new ArrayList<>();
+        for (String value : csv.split(",")) {
+            String trimmed = value.trim();
+            if (StringUtils.hasText(trimmed)) {
+                ids.add(Integer.valueOf(trimmed));
+            }
+        }
+        return ids;
     }
 
     private Assignment cloneAssignmentTemplate(AssignmentTemplate template, ClassSection classSection) {

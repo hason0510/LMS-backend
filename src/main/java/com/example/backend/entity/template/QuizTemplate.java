@@ -44,6 +44,29 @@ public class QuizTemplate extends BaseEntity {
     @Column(name = "available_to")
     private LocalDateTime availableTo;
 
+    @Column(name = "generate_questions_per_attempt", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean generateQuestionsPerAttempt = false;
+
+    @Column(name = "shuffle_questions", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean shuffleQuestions = false;
+
+    @Column(name = "shuffle_answers", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean shuffleAnswers = false;
+
+    @Column(name = "display_mode", nullable = false, length = 20)
+    private String displayMode = "PAGINATION";
+
+    @Column(name = "show_correct_answer", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean showCorrectAnswer = false;
+
+    @OneToMany(mappedBy = "quizTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    private List<QuizTemplateQuestion> questions;
+
+    @OneToMany(mappedBy = "quizTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
+    private List<QuizTemplateBankSource> bankSources;
+
     @OneToMany(mappedBy = "quizTemplate")
     private List<ContentItemTemplate> contentItemTemplates;
 }

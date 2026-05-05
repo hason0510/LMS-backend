@@ -27,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -111,7 +112,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @CacheEvict(value = "user", key = "#id")
+    @Caching(evict = {
+            @CacheEvict(value = "user", key = "#id"),
+            @CacheEvict(value = "user_page", allEntries = true)
+    })
     public void deleteUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
@@ -123,6 +127,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @CacheEvict(value = "user_page", allEntries = true)
     public User createGoogleUser(String email, String username) {
         User googleUser = User.builder()
                 .userName(email)
@@ -136,7 +141,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @CachePut(value = "user", key = "#id")
+    @Caching(
+            put = @CachePut(value = "user", key = "#id"),
+            evict = @CacheEvict(value = "user_page", allEntries = true)
+    )
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
 
@@ -222,7 +230,12 @@ public class UserServiceImpl implements UserService {
         return convertUserInfoToDTO(user);
     }
 
+    @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "user", key = "#id"),
+            @CacheEvict(value = "user_page", allEntries = true)
+    })
     public CloudinaryResponse uploadImage(final Integer id, final MultipartFile file) {
         final User avatarUser = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -240,7 +253,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Cacheable(value = "user_page", key = "#pageable.pageNumber + '-' + #pageable.pageSize")
+    @Cacheable(value = "user_page", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     public PageResponse<UserInfoResponse> getUserPage(Pageable pageable) {
         Page<User> userPage = userRepository.findAll(pageable);
         Page<UserInfoResponse> userResponse = userPage.map(this::convertUserInfoToDTO);
@@ -253,6 +266,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Caching(
+            put = @CachePut(value = "user", key = "#result.id"),
+            evict = @CacheEvict(value = "user_page", allEntries = true)
+    )
     public UserInfoResponse registerUser(RegisterRequest request) {
         User user = new User();
         if (userRepository.existsByUserName(request.getUserName())) {
@@ -298,6 +315,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Caching(
+            put = @CachePut(value = "user", key = "#result.id"),
+            evict = @CacheEvict(value = "user_page", allEntries = true)
+    )
     public UserInfoResponse createUser(UserCreateRequest request) {
         User user = new User();
         if (userRepository.existsByUserName(request.getUserName())) {

@@ -1692,8 +1692,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         // 3. Há»c sinh: Chá»‰ xem Ä‘Æ°á»£c khi Ä‘Ã£ Ná»™p bÃ i hoáº·c Háº¿t giá»
         if (attempt.getStudent().getId().equals(currentUser.getId())) {
-            return attempt.getStatus() == AttemptStatus.COMPLETED
-                    || attempt.getStatus() == AttemptStatus.EXPIRED;
+            return attempt.getQuiz().isShowCorrectAnswer()
+                    && (attempt.getStatus() == AttemptStatus.COMPLETED
+                    || attempt.getStatus() == AttemptStatus.EXPIRED);
         }
 
         return false;
@@ -2099,15 +2100,15 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (item == null) return null;
         return new QuestionInteractionItemResponse(
                 item.getId(),
-                item.getContent(),
+                resolveInteractionItemContent(item.getRole(), item.getContent(), showCorrectAnswer),
                 item.getItemKey(),
                 item.getRole(),
                 showCorrectAnswer ? item.getCorrectMatchKey() : null,
                 showCorrectAnswer ? item.getCorrectOrderIndex() : null,
                 item.getBlankIndex(),
                 showCorrectAnswer ? parseAcceptedAnswers(item.getAcceptedAnswers()) : null,
-                null,
-                null,
+                item.getSourceItem() != null ? item.getSourceItem().getBlankType() : null,
+                item.getSourceItem() != null ? item.getSourceItem().getBlankOptions() : null,
                 item.getResource() != null ? item.getResource().getId() : null,
                 item.getOrderIndex()
         );
@@ -2148,7 +2149,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (item == null) return null;
         return new QuestionInteractionItemResponse(
                 item.getId(),
-                item.getContent(),
+                resolveInteractionItemContent(item.getRole(), item.getContent(), showCorrectAnswer),
                 item.getItemKey(),
                 item.getRole(),
                 showCorrectAnswer ? item.getCorrectMatchKey() : null,
@@ -2160,6 +2161,17 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 item.getResource() != null ? item.getResource().getId() : null,
                 item.getOrderIndex()
         );
+    }
+
+    private String resolveInteractionItemContent(
+            QuestionInteractionItemRole role,
+            String content,
+            boolean showCorrectAnswer
+    ) {
+        if (role == QuestionInteractionItemRole.BLANK && !showCorrectAnswer) {
+            return null;
+        }
+        return content;
     }
 
     private QuizAnswerResponse convertQuizAnswerToDTO(QuizAnswer quizAnswer, boolean showCorrectAnswer) {
