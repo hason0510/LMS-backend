@@ -22,6 +22,8 @@ public interface ResourceService {
 
     @Transactional
     ResourceResponse createSubmissionResource(Integer submissionId, ResourceRequest request);
+    @Transactional
+    ResourceResponse createStandaloneResource(ResourceRequest request);
 
     ResourceResponse updateResource(Integer id, ResourceRequest request);
     void deleteResource(Integer id);

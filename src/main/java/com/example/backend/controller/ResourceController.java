@@ -68,6 +68,16 @@ public class ResourceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Operation(summary = "Create standalone resource")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/resources/standalone")
+    public ResponseEntity<ResourceResponse> createStandaloneResource(
+            @RequestBody ResourceRequest request
+    ) {
+        ResourceResponse response = resourceService.createStandaloneResource(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @Operation(summary = "Update resource")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PutMapping("/resources/{id}")

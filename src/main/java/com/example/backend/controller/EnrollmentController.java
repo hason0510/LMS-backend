@@ -162,10 +162,11 @@ public class EnrollmentController {
     @GetMapping("/enrollments")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getEnrollmentPage(
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize,
+            @RequestParam(value = "approvalStatus", required = false) String approvalStatus
     ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
-        PageResponse<EnrollmentResponse> response = enrollmentService.getEnrollmentPage(pageable);
+        PageResponse<EnrollmentResponse> response = enrollmentService.getEnrollmentPage(approvalStatus, pageable);
         return ResponseEntity.ok(response);
     }
 

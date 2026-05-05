@@ -1,5 +1,6 @@
 package com.example.backend.dto.response.questionbank;
 
+import com.example.backend.dto.response.ResourceResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,5 +16,6 @@ public class BankQuestionOptionResponse {
     private Boolean isCorrect;
     private String explanation;
     private Integer resourceId;
+    private ResourceResponse resource;
     private Integer orderIndex;
 }

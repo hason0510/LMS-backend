@@ -504,6 +504,22 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     @Override
+    public PageResponse<EnrollmentResponse> getEnrollmentPage(String approvalStatus, Pageable pageable) {
+        if (approvalStatus == null || approvalStatus.isBlank()) {
+            return getEnrollmentPage(pageable);
+        }
+        EnrollmentStatus status = EnrollmentStatus.valueOf(approvalStatus.toUpperCase());
+        Page<Enrollment> enrollmentPage = enrollmentRepository.findByApprovalStatus(status, pageable);
+        Page<EnrollmentResponse> enrollmentResponse = enrollmentPage.map(this::convertEnrollmentToDTO);
+        return new PageResponse<>(
+                enrollmentResponse.getNumber() + 1,
+                enrollmentResponse.getTotalPages(),
+                (int) enrollmentResponse.getTotalElements(),
+                enrollmentResponse.getContent()
+        );
+    }
+
+    @Override
     public PageResponse<UserViewResponse> searchStudentsInCourse(Integer courseId, SearchUserRequest request, Pageable pageable) {
         Specification<User> spec = buildBaseUserSearchSpec(request);
         spec = spec.and(UserSpecification.hasRole(RoleType.STUDENT));

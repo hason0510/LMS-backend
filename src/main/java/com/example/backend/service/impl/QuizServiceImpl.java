@@ -782,6 +782,7 @@ public class QuizServiceImpl implements QuizService {
                 item.getBlankType(),
                 item.getBlankOptions(),
                 item.getResource() != null ? item.getResource().getId() : null,
+                convertResourceToDTO(item.getResource()),
                 item.getOrderIndex()
         );
     }

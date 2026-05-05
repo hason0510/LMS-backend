@@ -89,6 +89,17 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
+    public ResourceResponse createStandaloneResource(ResourceRequest request) {
+        Resource newResource = buildDetachedResource(request);
+        validateStandaloneResource(newResource);
+        newResource.setLesson(null);
+        newResource.setAssignment(null);
+        newResource.setSubmission(null);
+        resourceRepository.save(newResource);
+        return convertEntityToDTO(newResource);
+    }
+
+    @Override
     public ResourceResponse updateResource(Integer id, ResourceRequest request) {
         Resource resource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
@@ -349,5 +360,15 @@ public class ResourceServiceImpl implements ResourceService {
             return "Resource";
         }
         return candidate.length() > 120 ? candidate.substring(0, 120) : candidate;
+    }
+
+    private void validateStandaloneResource(Resource resource) {
+        if (resource.getSource() == ResourceSource.EMBED && !StringUtils.hasText(resource.getEmbedUrl())) {
+            throw new BusinessException("Embed URL is required");
+        }
+
+        if (resource.getSource() == ResourceSource.UPLOAD && !StringUtils.hasText(resource.getFileUrl())) {
+            throw new BusinessException("File URL is required");
+        }
     }
 }

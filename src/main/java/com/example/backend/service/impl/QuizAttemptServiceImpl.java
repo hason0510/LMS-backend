@@ -2110,6 +2110,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 item.getSourceItem() != null ? item.getSourceItem().getBlankType() : null,
                 item.getSourceItem() != null ? item.getSourceItem().getBlankOptions() : null,
                 item.getResource() != null ? item.getResource().getId() : null,
+                convertResourceToDTO(item.getResource()),
                 item.getOrderIndex()
         );
     }
@@ -2159,6 +2160,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 item.getBlankType(),
                 item.getBlankOptions(),
                 item.getResource() != null ? item.getResource().getId() : null,
+                convertResourceToDTO(item.getResource()),
                 item.getOrderIndex()
         );
     }

@@ -1,6 +1,7 @@
 package com.example.backend.dto.response.quiz;
 
 import com.example.backend.constant.QuestionInteractionItemRole;
+import com.example.backend.dto.response.ResourceResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,5 +25,6 @@ public class QuestionInteractionItemResponse {
     private String blankType;
     private String blankOptions;
     private Integer resourceId;
+    private ResourceResponse resource;
     private Integer orderIndex;
 }

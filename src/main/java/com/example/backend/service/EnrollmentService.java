@@ -54,6 +54,8 @@ public interface EnrollmentService {
 
     PageResponse<EnrollmentResponse> getEnrollmentPage(Pageable pageable);
 
+    PageResponse<EnrollmentResponse> getEnrollmentPage(String approvalStatus, Pageable pageable);
+
     PageResponse<UserViewResponse> searchStudentsInCourse(Integer courseId, SearchUserRequest request, Pageable pageable);
 
     PageResponse<UserViewResponse> searchStudentsNotInCourse(Integer courseId, SearchUserRequest request, Pageable pageable);

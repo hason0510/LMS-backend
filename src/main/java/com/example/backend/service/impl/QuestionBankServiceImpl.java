@@ -1425,8 +1425,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private boolean canListView(QuestionBank questionBank, User currentUser) {
-        RoleType role = currentUser.getRole().getRoleName();
-        return role == RoleType.ADMIN || role == RoleType.TEACHER;
+        return canView(questionBank, currentUser);
     }
 
     private boolean canView(QuestionBank questionBank, User currentUser) {
@@ -1573,6 +1572,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 item.getBlankType(),
                 item.getBlankOptions(),
                 item.getResource() != null ? item.getResource().getId() : null,
+                convertResourceToDTO(item.getResource()),
                 item.getOrderIndex()
         );
     }
@@ -1595,6 +1595,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 option.getIsCorrect(),
                 option.getExplanation(),
                 option.getResource() != null ? option.getResource().getId() : null,
+                convertResourceToDTO(option.getResource()),
                 option.getOrderIndex()
         );
     }
