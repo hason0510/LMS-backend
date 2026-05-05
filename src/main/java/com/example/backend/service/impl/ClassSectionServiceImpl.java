@@ -593,7 +593,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setId(classContentItem.getId());
         response.setClassChapterId(classContentItem.getClassChapter() != null ? classContentItem.getClassChapter().getId() : null);
         response.setItemType(classContentItem.getItemType());
-        response.setTitle(classContentItem.getTitle());
+        response.setTitle(resolveContentItemResponseTitle(classContentItem));
         response.setOrderIndex(classContentItem.getOrderIndex());
         response.setHidden(classContentItem.getIsHidden());
         response.setLocked(classContentItem.getIsLocked());
@@ -603,6 +603,19 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setQuizId(classContentItem.getQuiz() != null ? classContentItem.getQuiz().getId() : null);
         response.setAssignmentId(classContentItem.getAssignment() != null ? classContentItem.getAssignment().getId() : null);
         return response;
+    }
+
+    private String resolveContentItemResponseTitle(ClassContentItem classContentItem) {
+        if (classContentItem.getLesson() != null && StringUtils.hasText(classContentItem.getLesson().getTitle())) {
+            return classContentItem.getLesson().getTitle();
+        }
+        if (classContentItem.getQuiz() != null && StringUtils.hasText(classContentItem.getQuiz().getTitle())) {
+            return classContentItem.getQuiz().getTitle();
+        }
+        if (classContentItem.getAssignment() != null && StringUtils.hasText(classContentItem.getAssignment().getTitle())) {
+            return classContentItem.getAssignment().getTitle();
+        }
+        return classContentItem.getTitle();
     }
 
     private void applyContentReferenceByIds(

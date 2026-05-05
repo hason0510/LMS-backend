@@ -178,9 +178,11 @@ public class QuizServiceImpl implements QuizService {
 
         Quiz quiz = quizRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
+        String previousTitle = quiz.getTitle();
         applyQuizMetadata(quiz, request, false);
         Quiz savedQuiz = quizRepository.save(quiz);
         syncQuizPlacement(savedQuiz, request);
+        syncLinkedClassContentItemTitle(savedQuiz, previousTitle);
         syncQuizContent(savedQuiz, request);
         return convertQuizToDTO(savedQuiz);
     }
@@ -296,6 +298,16 @@ public class QuizServiceImpl implements QuizService {
             classContentItem.setTitle(quiz.getTitle());
         }
         classContentItemRepository.save(classContentItem);
+    }
+
+    private void syncLinkedClassContentItemTitle(Quiz quiz, String previousQuizTitle) {
+        classContentItemRepository.findByQuiz_Id(quiz.getId()).ifPresent(classContentItem -> {
+            String itemTitle = classContentItem.getTitle();
+            if (!StringUtils.hasText(itemTitle) || Objects.equals(itemTitle, previousQuizTitle)) {
+                classContentItem.setTitle(quiz.getTitle());
+                classContentItemRepository.save(classContentItem);
+            }
+        });
     }
 
     private void syncQuizContent(Quiz quiz, QuizRequest request) {

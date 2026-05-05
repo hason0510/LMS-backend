@@ -141,10 +141,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Caching(
-            put = @CachePut(value = "user", key = "#id"),
-            evict = @CacheEvict(value = "user_page", allEntries = true)
-    )
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "user", key = "#id"),
+            @CacheEvict(value = "user_page", allEntries = true)
+    })
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
 
@@ -189,6 +190,28 @@ public class UserServiceImpl implements UserService {
             updatedUser.setGmail(request.getGmail());
         }
 
+        if (request.getImageUrl() != null) {
+            final String nextImageUrl = request.getImageUrl().trim();
+            final String currentImageUrl = updatedUser.getImageUrl();
+            final boolean imageUrlChanged = !StringUtils.hasText(nextImageUrl)
+                    ? StringUtils.hasText(currentImageUrl)
+                    : !nextImageUrl.equals(currentImageUrl);
+
+            if (imageUrlChanged && StringUtils.hasText(updatedUser.getCloudinaryImageId())) {
+                cloudinaryService.deleteFile(updatedUser.getCloudinaryImageId(), ResourceType.IMAGE);
+            }
+
+            if (StringUtils.hasText(nextImageUrl)) {
+                updatedUser.setImageUrl(nextImageUrl);
+            } else {
+                updatedUser.setImageUrl(null);
+            }
+
+            if (imageUrlChanged) {
+                updatedUser.setCloudinaryImageId(null);
+            }
+        }
+
         if (request.getBirthday() != null) {
             updatedUser.setBirthday(request.getBirthday());
         }
@@ -216,8 +239,11 @@ public class UserServiceImpl implements UserService {
             updatedUser.setBio(request.getBio());
         }
 
-        userRepository.save(updatedUser);
-        return convertUserInfoToDTO(updatedUser);
+        userRepository.saveAndFlush(updatedUser);
+
+        User persistedUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        return convertUserInfoToDTO(persistedUser);
     }
 
     @Override
@@ -239,6 +265,9 @@ public class UserServiceImpl implements UserService {
     public CloudinaryResponse uploadImage(final Integer id, final MultipartFile file) {
         final User avatarUser = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (!isCurrentUser(id) && !getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
+            throw new UnauthorizedException("You have no permission");
+        }
         FileUploadUtil.assertAllowed(file, "image");
         final String cloudinaryImageId = avatarUser.getCloudinaryImageId();
         if (StringUtils.hasText(cloudinaryImageId)) {

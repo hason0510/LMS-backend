@@ -5,22 +5,25 @@ import com.example.backend.dto.response.LessonResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.entity.Lesson;
-import com.example.backend.entity.User;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.ProgressRepository;
 import com.example.backend.service.LessonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class LessonServiceImpl implements LessonService {
     private final LessonRepository lessonRepository;
     private final ProgressRepository progressRepository;
+    private final ClassContentItemRepository classContentItemRepository;
 
     @Override
     public LessonResponse getLessonById(Integer id) {
@@ -42,6 +45,7 @@ public class LessonServiceImpl implements LessonService {
     @Override
     public LessonResponse updateLesson(Integer id, LessonRequest request) {
         Lesson lesson = lessonRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+        String previousTitle = lesson.getTitle();
         if(request.getTitle() != null){
             lesson.setTitle(request.getTitle());
         }
@@ -54,7 +58,9 @@ public class LessonServiceImpl implements LessonService {
         if(request.getNotes() != null){
             lesson.setNotes(request.getNotes());
         }
-        return convertEntityToDTO(lessonRepository.save(lesson));
+        Lesson savedLesson = lessonRepository.save(lesson);
+        syncLinkedClassContentItemTitle(savedLesson, previousTitle);
+        return convertEntityToDTO(savedLesson);
     }
 
     @Override
@@ -99,5 +105,15 @@ public class LessonServiceImpl implements LessonService {
             response.setResources(List.of()); // tránh null cho frontend
         }
         return response;
+    }
+
+    private void syncLinkedClassContentItemTitle(Lesson lesson, String previousLessonTitle) {
+        classContentItemRepository.findByLesson_Id(lesson.getId()).ifPresent(classContentItem -> {
+            String itemTitle = classContentItem.getTitle();
+            if (!StringUtils.hasText(itemTitle) || Objects.equals(itemTitle, previousLessonTitle)) {
+                classContentItem.setTitle(lesson.getTitle());
+                classContentItemRepository.save(classContentItem);
+            }
+        });
     }
 }

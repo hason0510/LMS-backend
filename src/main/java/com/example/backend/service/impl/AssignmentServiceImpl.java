@@ -92,6 +92,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     public AssignmentResponse updateAssignment(Integer id, AssignmentRequest request) {
         Assignment assignment = assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+        String previousTitle = assignment.getTitle();
 
         ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
@@ -103,7 +104,9 @@ public class AssignmentServiceImpl implements AssignmentService {
         requireTeacherPermission(classSection);
 
         applyRequest(assignment, request, classSection, false);
-        return convertToResponse(assignmentRepository.save(assignment));
+        Assignment savedAssignment = assignmentRepository.save(assignment);
+        syncLinkedClassContentItemTitle(savedAssignment, previousTitle);
+        return convertToResponse(savedAssignment);
     }
 
     @Override
@@ -386,6 +389,16 @@ public class AssignmentServiceImpl implements AssignmentService {
             return null;
         }*/
         return null;
+    }
+
+    private void syncLinkedClassContentItemTitle(Assignment assignment, String previousAssignmentTitle) {
+        classContentItemRepository.findByAssignment_Id(assignment.getId()).ifPresent(classContentItem -> {
+            String itemTitle = classContentItem.getTitle();
+            if (!StringUtils.hasText(itemTitle) || Objects.equals(itemTitle, previousAssignmentTitle)) {
+                classContentItem.setTitle(assignment.getTitle());
+                classContentItemRepository.save(classContentItem);
+            }
+        });
     }
 
     private boolean isNewerSubmission(Submission candidate, Submission current) {
