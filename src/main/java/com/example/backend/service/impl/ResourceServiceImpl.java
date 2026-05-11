@@ -284,6 +284,7 @@ public class ResourceServiceImpl implements ResourceService {
         ResourceType inferredType = FileUploadUtil.resolveResourceType(file.getOriginalFilename());
         String uploadType = switch (inferredType) {
             case VIDEO -> "video";
+            case AUDIO -> "audio";
             case IMAGE -> "image";
             default -> "raw";
         };

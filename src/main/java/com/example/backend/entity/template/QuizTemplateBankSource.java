@@ -2,6 +2,7 @@ package com.example.backend.entity.template;
 
 import com.example.backend.constant.DifficultyLevel;
 import com.example.backend.constant.QuizSourceSelectionMode;
+import com.example.backend.constant.QuizTagMatchMode;
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionTag;
@@ -36,12 +37,13 @@ public class QuizTemplateBankSource extends BaseEntity {
     @Column(name = "question_count")
     private Integer questionCount;
 
-    @Column(name = "manual_question_ids", columnDefinition = "MEDIUMTEXT")
-    private String manualQuestionIds;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "difficulty_level", length = 20)
     private DifficultyLevel difficultyLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tag_match_mode", nullable = false, length = 10)
+    private QuizTagMatchMode tagMatchMode = QuizTagMatchMode.ANY;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quiz_template_id", nullable = false)
@@ -51,8 +53,12 @@ public class QuizTemplateBankSource extends BaseEntity {
     @JoinColumn(name = "question_bank_id", nullable = false)
     private QuestionBank questionBank;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tag_id")
-    private QuestionTag tag;
-}
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "quiz_template_bank_source_tags",
+            joinColumns = @JoinColumn(name = "source_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private java.util.List<QuestionTag> tags;
 
+}

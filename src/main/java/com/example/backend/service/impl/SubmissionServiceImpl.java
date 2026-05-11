@@ -224,9 +224,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setGrade(request.getGrade());
         submission.setFeedback(request.getFeedback());
         submission.setGradedAt(LocalDateTime.now());
-        submission.setStatus(Boolean.TRUE.equals(request.getReturnToStudent())
-                ? SubmissionStatus.RETURNED
-                : SubmissionStatus.GRADED);
+        submission.setStatus(SubmissionStatus.GRADED);
 
         return convertToResponse(submissionRepository.save(submission));
     }

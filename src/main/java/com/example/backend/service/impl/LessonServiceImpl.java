@@ -1,17 +1,24 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.constant.ClassContentAvailabilityStatus;
+import com.example.backend.constant.ContentItemType;
 import com.example.backend.dto.request.LessonRequest;
 import com.example.backend.dto.response.LessonResponse;
-import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.ResourceResponse;
+import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.Lesson;
+import com.example.backend.entity.User;
+import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.ProgressRepository;
+import com.example.backend.service.ClassContentAccessResult;
+import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.LessonService;
+import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -24,10 +31,20 @@ public class LessonServiceImpl implements LessonService {
     private final LessonRepository lessonRepository;
     private final ProgressRepository progressRepository;
     private final ClassContentItemRepository classContentItemRepository;
+    private final UserService userService;
+    private final ClassContentAccessService classContentAccessService;
 
     @Override
     public LessonResponse getLessonById(Integer id) {
+        return getLessonById(id, null);
+    }
+
+    @Override
+    public LessonResponse getLessonById(Integer id, Integer classContentItemId) {
         Lesson lesson = lessonRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+        if (classContentItemId != null) {
+            validateLessonAccess(lesson, classContentItemId);
+        }
         return convertEntityToDTO(lesson);
     }
 
@@ -115,5 +132,31 @@ public class LessonServiceImpl implements LessonService {
                 classContentItemRepository.save(classContentItem);
             }
         });
+    }
+
+    private void validateLessonAccess(Lesson lesson, Integer classContentItemId) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+
+        ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
+        if (classContentItem.getItemType() != ContentItemType.LESSON
+                || classContentItem.getLesson() == null
+                || !classContentItem.getLesson().getId().equals(lesson.getId())) {
+            throw new UnauthorizedException("Noi dung bai hoc khong hop le");
+        }
+
+        ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
+        if (accessResult.accessible()) {
+            return;
+        }
+        if (accessResult.availabilityStatus() == ClassContentAvailabilityStatus.NO_ENROLLMENT) {
+            throw new UnauthorizedException(accessResult.message());
+        }
+        throw new BusinessException(accessResult.message() != null
+                ? accessResult.message()
+                : "Ban khong co quyen truy cap noi dung nay");
     }
 }

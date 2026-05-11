@@ -213,6 +213,16 @@ public class CurriculumTemplateController {
         return ResponseEntity.ok(curriculumTemplateService.getQuizTemplateById(id));
     }
 
+    @Operation(summary = "Lay bo cau hoi mau cho preview quiz template")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("/quiz-templates/{id}/preview-sample")
+    public ResponseEntity<QuizTemplateResponse> getQuizTemplatePreviewSample(
+            @PathVariable Integer id,
+            @RequestParam(required = false) Long seed
+    ) {
+        return ResponseEntity.ok(curriculumTemplateService.getQuizTemplatePreviewSample(id, seed));
+    }
+
     @Operation(summary = "Cap nhat quiz template")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @PutMapping("/quiz-templates/{id}")

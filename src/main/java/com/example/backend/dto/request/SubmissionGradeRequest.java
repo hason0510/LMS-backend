@@ -17,6 +17,4 @@ public class SubmissionGradeRequest {
     private Integer grade;
 
     private String feedback;
-
-    private Boolean returnToStudent;
 }

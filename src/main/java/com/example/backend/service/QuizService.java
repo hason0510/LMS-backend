@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
 public interface QuizService {
     QuizResponse createQuiz(QuizRequest request);
     QuizResponse getQuizById(Integer id);
+    QuizResponse getQuizById(Integer id, Integer classContentItemId);
+    QuizResponse getQuizPreviewSample(Integer id, Long seed);
     QuizResponse updateQuiz(Integer id, QuizRequest request);
     void deleteQuiz(Integer id);
     

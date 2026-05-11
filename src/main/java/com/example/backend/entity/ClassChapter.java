@@ -1,6 +1,5 @@
 package com.example.backend.entity;
 
-import com.example.backend.entity.template.ChapterTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

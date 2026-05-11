@@ -2,6 +2,8 @@ package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassMemberRole;
+import com.example.backend.constant.ClassContentAvailabilityStatus;
+import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.dto.request.AssignmentRequest;
@@ -27,6 +29,8 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.SubmissionRepository;
 import com.example.backend.service.AssignmentService;
+import com.example.backend.service.ClassContentAccessResult;
+import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassNotificationService;
 import com.example.backend.service.ResourceService;
@@ -60,6 +64,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final SubmissionRepository submissionRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final ClassContentAccessService classContentAccessService;
     private final ResourceService resourceService;
     private final ClassNotificationService classNotificationService;
 
@@ -112,13 +117,24 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Override
     @Transactional(readOnly = true)
     public AssignmentResponse getAssignmentById(Integer id) {
+        return getAssignmentById(id, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AssignmentResponse getAssignmentById(Integer id, Integer classContentItemId) {
         Assignment assignment = assignmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+        User currentUser = requireCurrentUser();
+
+        if (classContentItemId != null) {
+            validateAssignmentAccessByClassContentItem(assignment, classContentItemId, currentUser);
+            return convertToResponse(assignment);
+        }
 
         if (assignment.getClassSection() != null) {
             requireViewPermission(assignment.getClassSection());
         } else {
-            User currentUser = requireCurrentUser();
             List<ClassSection> classSections = classContentItemRepository.findClassSectionsByAssignmentId(assignment.getId());
             if (classSections.isEmpty()) {
                 if (currentUser.getRole().getRoleName() == RoleType.STUDENT) {
@@ -576,5 +592,30 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new UnauthorizedException("Unauthorized");
         }
         return currentUser;
+    }
+
+    private void validateAssignmentAccessByClassContentItem(
+            Assignment assignment,
+            Integer classContentItemId,
+            User currentUser
+    ) {
+        ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
+        if (classContentItem.getItemType() != ContentItemType.ASSIGNMENT
+                || classContentItem.getAssignment() == null
+                || !classContentItem.getAssignment().getId().equals(assignment.getId())) {
+            throw new UnauthorizedException("Noi dung bai tap khong hop le");
+        }
+
+        ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
+        if (accessResult.accessible()) {
+            return;
+        }
+        if (accessResult.availabilityStatus() == ClassContentAvailabilityStatus.NO_ENROLLMENT) {
+            throw new UnauthorizedException(accessResult.message());
+        }
+        throw new BusinessException(accessResult.message() != null
+                ? accessResult.message()
+                : "Ban khong co quyen truy cap noi dung nay");
     }
 }

@@ -50,6 +50,7 @@ public interface CurriculumTemplateService {
     QuizTemplateResponse createQuizTemplate(QuizTemplateRequest request);
 
     QuizTemplateResponse getQuizTemplateById(Integer id);
+    QuizTemplateResponse getQuizTemplatePreviewSample(Integer id, Long seed);
 
     QuizTemplateResponse updateQuizTemplate(Integer id, QuizTemplateRequest request);
 }

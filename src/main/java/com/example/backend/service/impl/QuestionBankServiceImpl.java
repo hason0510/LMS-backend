@@ -40,6 +40,7 @@ import com.example.backend.repository.QuestionBankMemberRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.QuestionTagRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
+import com.example.backend.repository.QuizTemplateBankSourceRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.service.DifficultyTagResolver;
 import com.example.backend.repository.SubjectRepository;
@@ -88,6 +89,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final UserRepository userRepository;
     private final UserService userService;
     private final QuizBankSourceRepository quizBankSourceRepository;
+    private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
     private final DifficultyTagResolver difficultyTagResolver;
     private final ResourceRepository resourceRepository;
 
@@ -908,7 +910,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             throw new BusinessException("Question tag does not belong to this question bank");
         }
         long questionUsageCount = bankQuestionTagRepository.countByTag_Id(tagId);
-        long quizUsageCount = quizBankSourceRepository.countByTag_Id(tagId);
+        long quizUsageCount = quizBankSourceRepository.countDistinctByTags_Id(tagId)
+                + quizTemplateBankSourceRepository.countDistinctByTags_Id(tagId);
         if (questionUsageCount > 0 || quizUsageCount > 0) {
             throw new BusinessException(
                     "Cannot delete question tag because it is currently in use by "
@@ -1092,6 +1095,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 item.setCorrectOrderIndex(itemRequest.getCorrectOrderIndex());
                 item.setBlankIndex(itemRequest.getBlankIndex());
                 item.setAcceptedAnswers(joinAcceptedAnswers(itemRequest.getAcceptedAnswers()));
+                item.setBlankType(StringUtils.hasText(itemRequest.getBlankType()) ? itemRequest.getBlankType().trim() : "TEXT_INPUT");
+                item.setBlankOptions(StringUtils.hasText(itemRequest.getBlankOptions()) ? itemRequest.getBlankOptions().trim() : null);
                 if (itemRequest.getResourceId() != null) {
                     item.setResource(resourceRepository.findById(itemRequest.getResourceId()).orElse(null));
                 }
@@ -1621,7 +1626,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     private QuestionTagResponse convertTag(QuestionTag tag) {
         long questionUsageCount = bankQuestionTagRepository.countByTag_Id(tag.getId());
-        long quizUsageCount = quizBankSourceRepository.countByTag_Id(tag.getId());
+        long quizUsageCount = quizBankSourceRepository.countDistinctByTags_Id(tag.getId())
+                + quizTemplateBankSourceRepository.countDistinctByTags_Id(tag.getId());
         long totalUsageCount = questionUsageCount + quizUsageCount;
         return new QuestionTagResponse(
                 tag.getId(),

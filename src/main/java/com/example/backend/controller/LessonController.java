@@ -54,8 +54,11 @@ public class LessonController {
     @Operation(summary = "Lấy thông tin bài học theo ID")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/lessons/{id}")
-    public ResponseEntity<LessonResponse> getLessonById(@PathVariable Integer id) {
-        LessonResponse response = lessonService.getLessonById(id);
+    public ResponseEntity<LessonResponse> getLessonById(
+            @PathVariable Integer id,
+            @RequestParam(required = false) Integer classContentItemId
+    ) {
+        LessonResponse response = lessonService.getLessonById(id, classContentItemId);
         return ResponseEntity.ok(response);
     }
 

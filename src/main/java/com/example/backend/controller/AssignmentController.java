@@ -42,8 +42,11 @@ public class AssignmentController {
     @Operation(summary = "Get assignment by id")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}")
-    public ResponseEntity<AssignmentResponse> getAssignmentById(@PathVariable Integer id) {
-        return ResponseEntity.ok(assignmentService.getAssignmentById(id));
+    public ResponseEntity<AssignmentResponse> getAssignmentById(
+            @PathVariable Integer id,
+            @RequestParam(required = false) Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(assignmentService.getAssignmentById(id, classContentItemId));
     }
 
     @Operation(summary = "Get assignments in class section")

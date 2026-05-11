@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;  // ← ADD THIS IMPORT
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -34,7 +35,7 @@ public class QuizAttemptController {
     public ResponseEntity<QuizAttemptDetailResponse> startQuizAttempt(
             @PathVariable Integer quizId, @PathVariable Integer chapterItemId
     ) {
-        return ResponseEntity.ok(quizAttemptService.startQuizAttempt(quizId, chapterItemId));
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     @Operation(summary = "Bắt đầu làm quiz trong class content item")
@@ -90,9 +91,7 @@ public class QuizAttemptController {
     public ResponseEntity<QuizAttemptDetailResponse> getCurrentAttempt(
             @PathVariable Integer chapterItemId
     ) {
-        return ResponseEntity.ok(
-                quizAttemptService.getCurrentAttempt(chapterItemId)
-        );
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     @Operation(summary = "Lấy bài quiz đang làm trong class content item")
@@ -134,9 +133,7 @@ public class QuizAttemptController {
     public ResponseEntity<Integer> getStudentBestScoreOnQuizAttempt(
             @PathVariable Integer chapterItemId
     ) {
-        return ResponseEntity.ok(
-                quizAttemptService.getStudentBestScore(chapterItemId)
-        );
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -154,9 +151,7 @@ public class QuizAttemptController {
     public ResponseEntity<List<QuizAttemptResponse>> getStudentAttemptsHistory(
             @PathVariable Integer chapterItemId
     ) {
-        return ResponseEntity.ok(
-                quizAttemptService.getStudentAttemptsHistory(chapterItemId)
-        );
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -179,9 +174,7 @@ public class QuizAttemptController {
             @PathVariable Integer chapterItemId,
             Pageable pageable
     ) {
-        return ResponseEntity.ok(
-                quizAttemptService.getAttemptsForTeacherOrAdmin(chapterItemId, pageable)
-        );
+        return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
     @Operation(summary = "Danh sách bài làm của học viên theo class content item")

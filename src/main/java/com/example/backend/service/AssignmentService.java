@@ -12,6 +12,7 @@ public interface AssignmentService {
     AssignmentResponse updateAssignment(Integer id, AssignmentRequest request);
 
     AssignmentResponse getAssignmentById(Integer id);
+    AssignmentResponse getAssignmentById(Integer id, Integer classContentItemId);
 
     PageResponse<AssignmentResponse> getAssignmentsByClassSection(Integer classSectionId);
 

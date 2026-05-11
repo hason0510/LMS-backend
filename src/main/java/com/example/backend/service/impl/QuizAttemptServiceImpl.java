@@ -18,6 +18,8 @@ import com.example.backend.repository.*;
 import com.example.backend.repository.old.ChapterItemRepository;
 import com.example.backend.repository.old.CourseRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
+import com.example.backend.service.ClassContentAccessResult;
+import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.QuizAttemptService;
 import com.example.backend.service.UserService;
@@ -33,12 +35,15 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class QuizAttemptServiceImpl implements QuizAttemptService {
+    private static final Pattern CLOZE_TOKEN_PATTERN = Pattern.compile("\\[\\[([^\\]]+)\\]\\]");
 
     private final QuizRepository quizRepository;
     private final UserService userService;
@@ -61,6 +66,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final EnrollmentService enrollmentService;
     private final CourseRepository courseRepository;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final ClassContentAccessService classContentAccessService;
 
 
     // =========================================================================
@@ -179,6 +185,13 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
         if (!isEnrolled) {
             throw new UnauthorizedException("Ban khong co quyen truy cap vao tai nguyen nay!");
+        }
+
+        ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
+        if (!accessResult.accessible()) {
+            throw new BusinessException(accessResult.message() != null
+                    ? accessResult.message()
+                    : "Ban khong co quyen truy cap vao tai nguyen nay!");
         }
 
         checkQuizAvailability(chosenQuiz);
@@ -476,11 +489,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     }
 
     private List<BankQuestion> selectBankQuestionsForSource(QuizBankSource source, Random random, Set<Integer> excludedQuestionIds) {
-        List<BankQuestion> matchedQuestions = bankQuestionRepository.findSelectableQuestions(
-                source.getQuestionBank().getId(),
-                source.getDifficultyLevel(),
-                source.getTag() != null ? source.getTag().getId() : null
-        );
+        List<BankQuestion> matchedQuestions = resolveMatchedBankQuestions(source);
 
         if (source.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
             if (excludedQuestionIds == null || excludedQuestionIds.isEmpty()) {
@@ -504,45 +513,47 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             Collections.shuffle(candidates, random);
             return candidates.subList(0, source.getQuestionCount());
         }
-
-        if (source.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
-            List<Integer> selectedIds = parseCsvIds(source.getManualQuestionIds());
-            if (selectedIds.isEmpty()) {
-                throw new BusinessException("manualQuestionIds is required for MANUAL question bank sources");
-            }
-            List<BankQuestion> selectedQuestions = bankQuestionRepository.findAllById(selectedIds);
-            if (selectedQuestions.size() != selectedIds.size()) {
-                throw new BusinessException("Some manually selected bank questions do not exist");
-            }
-            for (BankQuestion question : selectedQuestions) {
-                if (!question.getQuestionBank().getId().equals(source.getQuestionBank().getId())) {
-                    throw new BusinessException("Manual question selection must belong to the configured question bank");
-                }
-            }
-            selectedQuestions.sort((left, right) -> Integer.compare(selectedIds.indexOf(left.getId()), selectedIds.indexOf(right.getId())));
-            if (excludedQuestionIds == null || excludedQuestionIds.isEmpty()) {
-                return selectedQuestions;
-            }
-            return selectedQuestions.stream()
-                    .filter(q -> !excludedQuestionIds.contains(q.getId()))
-                    .toList();
-        }
-
         throw new BusinessException("Unsupported question bank selection mode");
     }
 
-    private List<Integer> parseCsvIds(String csv) {
-        if (csv == null || csv.trim().isEmpty()) {
+    private List<BankQuestion> resolveMatchedBankQuestions(QuizBankSource source) {
+        List<BankQuestion> candidates = bankQuestionRepository.findSelectableQuestions(
+                source.getQuestionBank().getId(),
+                source.getDifficultyLevel(),
+                null
+        );
+        List<Integer> tagIds = toTagIds(source.getTags());
+        if (tagIds.isEmpty()) {
+            return candidates;
+        }
+
+        final Set<Integer> selectedTagIds = new HashSet<>(tagIds);
+        final Predicate<Set<Integer>> matcher = source.getTagMatchMode() == QuizTagMatchMode.ALL
+                ? questionTagIds -> questionTagIds.containsAll(selectedTagIds)
+                : questionTagIds -> questionTagIds.stream().anyMatch(selectedTagIds::contains);
+
+        return candidates.stream()
+                .filter(question -> {
+                    Set<Integer> questionTagIds = question.getTagMappings() == null ? Set.of()
+                            : question.getTagMappings().stream()
+                            .filter(mapping -> mapping != null && mapping.getTag() != null && mapping.getTag().getId() != null)
+                            .map(mapping -> mapping.getTag().getId())
+                            .collect(java.util.stream.Collectors.toSet());
+                    return matcher.test(questionTagIds);
+                })
+                .toList();
+    }
+
+    private List<Integer> toTagIds(List<QuestionTag> tags) {
+        if (tags == null || tags.isEmpty()) {
             return List.of();
         }
-        List<Integer> ids = new ArrayList<>();
-        for (String value : csv.split(",")) {
-            String trimmed = value.trim();
-            if (!trimmed.isEmpty()) {
-                ids.add(Integer.valueOf(trimmed));
-            }
-        }
-        return ids;
+        return tags.stream()
+                .filter(Objects::nonNull)
+                .map(QuestionTag::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     @Override
@@ -2055,7 +2066,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 : (question.getSourceQuizQuestion() != null && question.getSourceQuizQuestion().getSourceBankQuestion() != null
                 ? question.getSourceQuizQuestion().getSourceBankQuestion().getId()
                 : null));
-        response.setContent(question.getContent());
+        response.setContent(sanitizeQuestionContent(question.getType(), question.getContent(), showCorrectAnswer));
         response.setType(question.getType());
         response.setPoints(question.getPoints());
         response.setResource(convertResourceToDTO(question.getResource()));
@@ -2073,7 +2084,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizQuestionResponse response = new QuizQuestionResponse();
         response.setId(question.getId());
         response.setSourceBankQuestionId(question.getSourceBankQuestion() != null ? question.getSourceBankQuestion().getId() : null);
-        response.setContent(question.getContent());
+        response.setContent(sanitizeQuestionContent(question.getType(), question.getContent(), showCorrectAnswer));
         response.setType(question.getType());
         response.setResource(convertResourceToDTO(question.getResource()));
         response.setPoints(question.getPoints());
@@ -2174,6 +2185,21 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             return null;
         }
         return content;
+    }
+
+    private String sanitizeQuestionContent(QuestionType type, String content, boolean showCorrectAnswer) {
+        if (type != QuestionType.CLOZE || showCorrectAnswer || !StringUtils.hasText(content)) {
+            return content;
+        }
+        var matcher = CLOZE_TOKEN_PATTERN.matcher(content);
+        StringBuffer sanitized = new StringBuffer();
+        int blankIndex = 1;
+        while (matcher.find()) {
+            matcher.appendReplacement(sanitized, Matcher.quoteReplacement("[[blank_" + blankIndex + "]]"));
+            blankIndex += 1;
+        }
+        matcher.appendTail(sanitized);
+        return sanitized.toString();
     }
 
     private QuizAnswerResponse convertQuizAnswerToDTO(QuizAnswer quizAnswer, boolean showCorrectAnswer) {

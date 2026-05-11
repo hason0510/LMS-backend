@@ -34,6 +34,4 @@ public class QuestionTag extends BaseEntity {
     @OneToMany(mappedBy = "tag")
     private List<BankQuestionTag> questionMappings;
 
-    @OneToMany(mappedBy = "tag")
-    private List<QuizBankSource> quizSources;
 }

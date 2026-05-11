@@ -13,7 +13,6 @@ public class ClassContentItemCreateRequest {
     private ContentItemType itemType;
     private Integer orderIndex;
     private Boolean hidden;
-    private String title;
     private Boolean locked;
     private LocalDateTime availableFrom;
     private LocalDateTime availableTo;

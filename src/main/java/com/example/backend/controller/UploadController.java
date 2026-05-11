@@ -43,7 +43,8 @@ public class UploadController {
         FileUploadUtil.assertAllowed(file, "resource");
         ResourceType inferredType = FileUploadUtil.resolveResourceType(file.getOriginalFilename());
         String uploadType = switch (inferredType) {
-            case VIDEO, AUDIO -> "video";
+            case VIDEO -> "video";
+            case AUDIO -> "audio";
             case IMAGE, PDF -> "image";
             default -> "raw";
         };

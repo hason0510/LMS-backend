@@ -2,6 +2,7 @@ package com.example.backend.dto.request.quiz;
 
 import com.example.backend.constant.DifficultyLevel;
 import com.example.backend.constant.QuizSourceSelectionMode;
+import com.example.backend.constant.QuizTagMatchMode;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,9 +17,9 @@ import java.util.List;
 public class QuizBankSourceRequest {
     private Integer id;
     private Integer questionBankId;
-    private Integer tagId;
+    private List<Integer> tagIds;
+    private QuizTagMatchMode tagMatchMode;
     private QuizSourceSelectionMode selectionMode;
     private Integer questionCount;
     private DifficultyLevel difficultyLevel;
-    private List<Integer> manualQuestionIds;
 }

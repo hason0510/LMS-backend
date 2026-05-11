@@ -9,5 +9,5 @@ import java.util.List;
 @Repository
 public interface QuizTemplateBankSourceRepository extends JpaRepository<QuizTemplateBankSource, Integer> {
     List<QuizTemplateBankSource> findByQuizTemplate_IdOrderByOrderIndexAsc(Integer quizTemplateId);
+    long countDistinctByTags_Id(Integer tagId);
 }
-

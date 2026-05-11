@@ -13,7 +13,6 @@ import java.util.List;
 @AllArgsConstructor
 public class ClassChapterResponse {
     private Integer id;
-    private Integer chapterTemplateId;
     private String title;
     private String description;
     private Integer orderIndex;

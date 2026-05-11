@@ -10,7 +10,6 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ClassContentItemOverrideRequest {
-    private String title;
     private Integer orderIndex;
     private Boolean hidden;
     private Boolean locked;

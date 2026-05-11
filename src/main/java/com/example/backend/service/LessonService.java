@@ -11,6 +11,7 @@ import java.util.List;
 public interface LessonService {
 
     LessonResponse getLessonById(Integer id);
+    LessonResponse getLessonById(Integer id, Integer classContentItemId);
 
     LessonResponse createLesson(LessonRequest request);
 
