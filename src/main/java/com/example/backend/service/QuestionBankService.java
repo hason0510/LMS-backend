@@ -22,7 +22,15 @@ public interface QuestionBankService {
 
     void deleteQuestionBank(Integer id);
 
-    QuestionBankResponse getQuestionBankById(Integer id);
+    default QuestionBankResponse getQuestionBankById(Integer id) {
+        return getQuestionBankById(id, (List<Integer>) null);
+    }
+
+    default QuestionBankResponse getQuestionBankById(Integer id, Integer tagId) {
+        return getQuestionBankById(id, tagId == null ? null : List.of(tagId));
+    }
+
+    QuestionBankResponse getQuestionBankById(Integer id, List<Integer> tagIds);
 
     List<QuestionBankResponse> getQuestionBanks(Integer subjectId, String subjectKeyword, boolean includeQuestions);
 

@@ -5,6 +5,7 @@ import com.example.backend.dto.request.classsection.ClassChapterOverrideRequest;
 import com.example.backend.dto.request.classsection.ClassChapterCreateRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemOverrideRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemCreateRequest;
+import com.example.backend.dto.request.classsection.ClassMemberPermissionsRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
@@ -25,6 +26,8 @@ public interface ClassSectionService {
     ClassMemberResponse addMember(Integer classSectionId, ClassMemberRequest request);
 
     ClassMemberResponse updateMemberRole(Integer classSectionId, Integer userId, ClassMemberRoleRequest request);
+
+    ClassMemberResponse updateMemberPermissions(Integer classSectionId, Integer userId, ClassMemberPermissionsRequest request);
 
     void removeMember(Integer classSectionId, Integer userId);
 

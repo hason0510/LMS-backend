@@ -1,6 +1,7 @@
 package com.example.backend.service;
 
 import com.example.backend.constant.ClassContentAvailabilityStatus;
+import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.entity.ClassChapter;
@@ -56,7 +57,7 @@ public class ClassContentAccessService {
         return new ClassContentAccessResult(
                 baseStatus,
                 false,
-                "Bạn không có quyền truy cập nội dung này",
+                resolveTeachingPermissionMessage(classContentItem),
                 "classContent.access.forbidden"
         );
     }
@@ -150,12 +151,37 @@ public class ClassContentAccessService {
             return true;
         }
         ClassSection classSection = classContentItem.getClassChapter().getClassSection();
-        return classMemberAuthorizationService.isTeacherOrTa(classSection, user);
+        if (!classMemberAuthorizationService.isTeacherOrTa(classSection, user)) {
+            return false;
+        }
+
+        if (classMemberAuthorizationService.canEditContent(classSection, user)) {
+            return true;
+        }
+
+        if (classContentItem.getItemType() == ContentItemType.QUIZ) {
+            return classMemberAuthorizationService.canReviewQuizzes(classSection, user);
+        }
+        if (classContentItem.getItemType() == ContentItemType.ASSIGNMENT) {
+            return classMemberAuthorizationService.canGradeAssignments(classSection, user);
+        }
+        return true;
     }
 
     private boolean isStudent(User user) {
         return user != null
                 && user.getRole() != null
                 && user.getRole().getRoleName() == RoleType.STUDENT;
+    }
+
+    private String resolveTeachingPermissionMessage(ClassContentItem classContentItem) {
+        if (classContentItem == null || classContentItem.getItemType() == null) {
+            return "Bạn không có quyền truy cập nội dung này";
+        }
+        return switch (classContentItem.getItemType()) {
+            case QUIZ -> "Bạn không có quyền rà soát bài quiz này";
+            case ASSIGNMENT -> "Bạn không có quyền chấm bài tập này";
+            default -> "Bạn không có quyền truy cập nội dung này";
+        };
     }
 }

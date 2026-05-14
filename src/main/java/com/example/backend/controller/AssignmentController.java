@@ -68,7 +68,7 @@ public class AssignmentController {
     }
 
     @Operation(summary = "Teacher assignment overview by tab/search/class filter")
-    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/teaching")
     public ResponseEntity<PageResponse<TeacherAssignmentOverviewResponse>> getTeachingAssignments(
             @RequestParam(defaultValue = "ALL") String tab,

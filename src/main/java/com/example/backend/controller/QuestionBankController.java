@@ -11,6 +11,7 @@ import com.example.backend.dto.response.questionbank.GiftImportResultResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankMemberResponse;
 import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
+import com.example.backend.exception.BusinessException;
 import com.example.backend.service.QuestionBankService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/lms/question-banks")
@@ -56,8 +60,12 @@ public class QuestionBankController {
 
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}")
-    public ResponseEntity<QuestionBankResponse> getQuestionBankById(@PathVariable Integer id) {
-        return ResponseEntity.ok(questionBankService.getQuestionBankById(id));
+    public ResponseEntity<QuestionBankResponse> getQuestionBankById(
+            @PathVariable Integer id,
+            @RequestParam(required = false) Integer tagId,
+            @RequestParam(required = false) String tagIds
+    ) {
+        return ResponseEntity.ok(questionBankService.getQuestionBankById(id, mergeTagIds(tagId, tagIds)));
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -195,5 +203,26 @@ public class QuestionBankController {
     @GetMapping("/{questionBankId}/members")
     public ResponseEntity<List<QuestionBankMemberResponse>> getMembers(@PathVariable Integer questionBankId) {
         return ResponseEntity.ok(questionBankService.getMembers(questionBankId));
+    }
+
+    private List<Integer> mergeTagIds(Integer tagId, String tagIds) {
+        Set<Integer> merged = new LinkedHashSet<>();
+        if (tagId != null) {
+            merged.add(tagId);
+        }
+        if (tagIds != null && !tagIds.isBlank()) {
+            try {
+                for (String rawId : tagIds.split(",")) {
+                    String trimmed = rawId.trim();
+                    if (trimmed.isEmpty()) {
+                        continue;
+                    }
+                    merged.add(Integer.parseInt(trimmed));
+                }
+            } catch (NumberFormatException ex) {
+                throw new BusinessException("Invalid tagIds parameter");
+            }
+        }
+        return merged.isEmpty() ? null : new ArrayList<>(merged);
     }
 }

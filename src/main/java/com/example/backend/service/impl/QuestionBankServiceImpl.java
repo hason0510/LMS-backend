@@ -101,7 +101,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         applyQuestionBankRequest(questionBank, request);
         QuestionBank saved = questionBankRepository.save(questionBank);
         createOrUpdateMembership(saved, currentUser, QuestionBankMemberRole.OWNER);
-        return convertQuestionBank(saved, false, false);
+        return convertQuestionBank(saved, false, false, null);
     }
 
     @Override
@@ -111,7 +111,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
         requireOwnerPermission(questionBank);
         applyQuestionBankRequest(questionBank, request);
-        return convertQuestionBank(questionBankRepository.save(questionBank), false, false);
+        return convertQuestionBank(questionBankRepository.save(questionBank), false, false, null);
     }
 
     @Override
@@ -125,11 +125,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     @Override
     @Transactional(readOnly = true)
-    public QuestionBankResponse getQuestionBankById(Integer id) {
+    public QuestionBankResponse getQuestionBankById(Integer id, List<Integer> tagIds) {
         QuestionBank questionBank = questionBankRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
         requireViewPermission(questionBank);
-        return convertQuestionBank(questionBank, true, true);
+        List<Integer> normalizedTagIds = normalizeTagIds(tagIds);
+        validateQuestionTagFilter(questionBank, normalizedTagIds);
+        return convertQuestionBank(questionBank, true, true, normalizedTagIds);
     }
 
     @Override
@@ -147,7 +149,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
         return questionBanks.stream()
                 .filter(questionBank -> canListView(questionBank, currentUser))
-                .map(questionBank -> convertQuestionBank(questionBank, includeQuestions, false))
+                .map(questionBank -> convertQuestionBank(questionBank, includeQuestions, false, null))
                 .toList();
     }
 
@@ -1490,7 +1492,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
     }
 
-    private QuestionBankResponse convertQuestionBank(QuestionBank questionBank, boolean includeQuestions, boolean includeMembers) {
+    private QuestionBankResponse convertQuestionBank(
+            QuestionBank questionBank,
+            boolean includeQuestions,
+            boolean includeMembers,
+            List<Integer> tagIds
+    ) {
         QuestionBankResponse response = new QuestionBankResponse();
         response.setId(questionBank.getId());
         response.setName(questionBank.getName());
@@ -1527,10 +1534,55 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
         response.setQuestions(includeQuestions
                 ? bankQuestionRepository.findByQuestionBank_Id(questionBank.getId()).stream()
+                .filter(question -> matchesQuestionTagFilter(question, tagIds))
                 .map(question -> convertQuestion(question, true))
                 .toList()
                 : null);
         return response;
+    }
+
+    private boolean matchesQuestionTagFilter(BankQuestion question, List<Integer> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return true;
+        }
+        if (question == null || question.getId() == null) {
+            return false;
+        }
+        Set<Integer> selectedTagIds = new HashSet<>(tagIds);
+        return bankQuestionTagRepository.findByBankQuestion_Id(question.getId()).stream()
+                .map(BankQuestionTag::getTag)
+                .filter(Objects::nonNull)
+                .map(QuestionTag::getId)
+                .filter(Objects::nonNull)
+                .anyMatch(selectedTagIds::contains);
+    }
+
+    private void validateQuestionTagFilter(QuestionBank questionBank, List<Integer> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return;
+        }
+        List<QuestionTag> tags = questionTagRepository.findAllById(tagIds);
+        if (tags.size() != new HashSet<>(tagIds).size()) {
+            throw new ResourceNotFoundException("Question tag not found");
+        }
+        for (QuestionTag tag : tags) {
+            if (tag.getQuestionBank() == null || !Objects.equals(tag.getQuestionBank().getId(), questionBank.getId())) {
+                throw new BusinessException("Question tag does not belong to this question bank");
+            }
+        }
+    }
+
+    private List<Integer> normalizeTagIds(List<Integer> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Integer> normalized = new LinkedHashSet<>();
+        for (Integer tagId : tagIds) {
+            if (tagId != null) {
+                normalized.add(tagId);
+            }
+        }
+        return List.copyOf(normalized);
     }
 
     private BankQuestionResponse convertQuestion(BankQuestion question, boolean includeDetails) {

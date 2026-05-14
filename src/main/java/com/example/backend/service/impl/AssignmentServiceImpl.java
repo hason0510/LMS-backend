@@ -270,10 +270,6 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Transactional(readOnly = true)
     public PageResponse<TeacherAssignmentOverviewResponse> getTeachingAssignments(String tab, String keyword, Integer classSectionId) {
         User currentUser = requireCurrentUser();
-        if (currentUser.getRole().getRoleName() != RoleType.TEACHER && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
-            throw new UnauthorizedException("Only teacher/admin can access teaching assignments");
-        }
-
         Set<Integer> classSectionIds = resolveTeachingClassSectionIds(currentUser);
         if (classSectionIds.isEmpty()) {
             return new PageResponse<>(1, 0, 0, List.of());

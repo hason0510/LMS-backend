@@ -94,6 +94,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
 
         List<User> users = userRepository.findAllById(request.getStudentIds());
+        ensureUsersAreNotClassStaff(classSection, users);
         List<Enrollment> enrollments = users.stream()
                 .map(user -> Enrollment.builder()
                         .student(user)
@@ -200,6 +201,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             if (classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
                 throw new BusinessException("Lop hoc da luu tru, khong the tham gia");
             }
+            ensureCurrentUserIsNotClassStaff(currentUser, classSection);
 
             Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(
                     currentUser.getId(),
@@ -267,6 +269,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         User currentUser = userService.getCurrentUser();
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc"));
+        ensureCurrentUserIsNotClassStaff(currentUser, classSection);
 
         Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(currentUser.getId(), classSectionId);
         if (existingEnrollment != null) {
@@ -373,6 +376,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay nguoi dung!"));
 
         validateEnrollmentTarget(request);
+        ensureStudentIsNotClassStaff(request, student);
         Enrollment enrollment = findPendingEnrollment(request);
         if (enrollment == null) {
             throw new ResourceNotFoundException("Yeu cau tham gia khong ton tai hoac da duoc xu ly!");
@@ -716,6 +720,42 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         if (hasCourse == hasClassSection) {
             throw new BusinessException("Chi duoc truyen mot trong hai truong: courseId hoac classSectionId");
         }
+    }
+
+    private void ensureCurrentUserIsNotClassStaff(User currentUser, ClassSection classSection) {
+        if (currentUser == null || classSection == null) {
+            return;
+        }
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
+            throw new BusinessException("Khong the dang ky vao lop khi ban dang giu vai tro giang day trong chinh lop nay");
+        }
+    }
+
+    private void ensureUsersAreNotClassStaff(ClassSection classSection, List<User> users) {
+        if (classSection == null || users == null || users.isEmpty()) {
+            return;
+        }
+        for (User user : users) {
+            ensureUserIsNotClassStaff(classSection, user);
+        }
+    }
+
+    private void ensureUserIsNotClassStaff(ClassSection classSection, User user) {
+        if (user == null || classSection == null) {
+            return;
+        }
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, user)) {
+            throw new BusinessException("Khong the them hoc vien vao lop khi nguoi dung da la giang vien hoac tro giang cua lop nay");
+        }
+    }
+
+    private void ensureStudentIsNotClassStaff(EnrollmentRequest request, User student) {
+        if (student == null || request == null || request.getClassSectionId() == null) {
+            return;
+        }
+        ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+        ensureUserIsNotClassStaff(classSection, student);
     }
 
     private Enrollment findPendingEnrollment(EnrollmentRequest request) {

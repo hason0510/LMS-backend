@@ -166,7 +166,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         Assignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
         ClassSection classSection = resolveClassSection(assignment, classSectionId);
-        requireTeachingPermission(classSection);
+        requireTeachingPermission(classSection, ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS);
 
         List<Submission> existingSubmissions = submissionRepository.findByAssignment_IdAndClassSection_IdOrderBySubmissionTimeDesc(
                 assignmentId,
@@ -211,7 +211,11 @@ public class SubmissionServiceImpl implements SubmissionService {
     public SubmissionResponse gradeSubmission(Integer submissionId, SubmissionGradeRequest request) {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
-        requireTeachingPermission(submission.getClassSection());
+        User currentUser = requireTeachingPermission(
+                submission.getClassSection(),
+                ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS
+        );
+        preventSelfReview(submission, currentUser);
         if (submission.getSubmissionTime() == null || submission.getStatus() == SubmissionStatus.NOT_SUBMITTED) {
             throw new BusinessException("Cannot grade a submission that has not been turned in");
         }
@@ -234,7 +238,11 @@ public class SubmissionServiceImpl implements SubmissionService {
     public SubmissionResponse returnSubmission(Integer submissionId, SubmissionReturnRequest request) {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
-        requireTeachingPermission(submission.getClassSection());
+        User currentUser = requireTeachingPermission(
+                submission.getClassSection(),
+                ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS
+        );
+        preventSelfReview(submission, currentUser);
         if (submission.getSubmissionTime() == null || submission.getStatus() == SubmissionStatus.NOT_SUBMITTED) {
             throw new BusinessException("Cannot return a submission that has not been turned in");
         }
@@ -263,7 +271,7 @@ public class SubmissionServiceImpl implements SubmissionService {
             return convertToResponse(submission);
         }
 
-        requireTeachingPermission(submission.getClassSection());
+        requireTeachingPermission(submission.getClassSection(), ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS);
         return convertToResponse(submission);
     }
 
@@ -434,12 +442,18 @@ public class SubmissionServiceImpl implements SubmissionService {
         return response;
     }
 
-    private void requireTeachingPermission(ClassSection classSection) {
+    private User requireTeachingPermission(ClassSection classSection, String capability) {
         User currentUser = requireCurrentUser();
-        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
-            return;
+        if (classMemberAuthorizationService.hasCapability(classSection, currentUser, capability)) {
+            return currentUser;
         }
         throw new UnauthorizedException("You do not have teaching permission in this class section");
+    }
+
+    private void preventSelfReview(Submission submission, User currentUser) {
+        if (submission.getStudent() != null && submission.getStudent().getId().equals(currentUser.getId())) {
+            throw new BusinessException("You cannot review your own submission");
+        }
     }
 
     private User requireCurrentUser() {

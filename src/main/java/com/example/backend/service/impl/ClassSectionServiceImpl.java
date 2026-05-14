@@ -5,6 +5,7 @@ import com.example.backend.dto.request.classsection.ClassChapterCreateRequest;
 import com.example.backend.dto.request.classsection.ClassChapterOverrideRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemCreateRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemOverrideRequest;
+import com.example.backend.dto.request.classsection.ClassMemberPermissionsRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
@@ -26,8 +27,6 @@ import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.Lesson;
 import com.example.backend.entity.template.LessonTemplate;
 import com.example.backend.entity.quiz.Quiz;
-import com.example.backend.entity.quiz.BankQuestion;
-import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuizAnswer;
 import com.example.backend.entity.quiz.QuizBankSource;
@@ -62,6 +61,8 @@ import com.example.backend.repository.QuizTemplateBankSourceRepository;
 import com.example.backend.repository.QuizTemplateQuestionRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
+import com.example.backend.service.ClassContentAccessResult;
+import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassSectionService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -100,6 +101,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final UserRepository userRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final ClassContentAccessService classContentAccessService;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -110,7 +112,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Curriculum template not found"));
 
         User currentUser = userService.getCurrentUser();
-        User teacher = resolveUser(request.getTeacherId(), currentUser);
+        User teacher = resolveTeacherForClassCreation(request.getTeacherId(), currentUser);
 
         ClassSection classSection = new ClassSection();
         classSection.setClassCode(StringUtils.hasText(request.getClassCode())
@@ -195,18 +197,20 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassMemberResponse addMember(Integer classSectionId, ClassMemberRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_STAFF);
 
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (request.getRole() == ClassMemberRole.TEACHER) {
+            ensureUserIsNotEnrolledInClassSection(user, classSection);
             transferTeacherOwnership(classSection, user);
             return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, user.getId())
                     .map(this::convertClassMember)
                     .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
         }
 
+        ensureUserIsNotEnrolledInClassSection(user, classSection);
         ClassMember saved = createOrUpdateMembership(classSection, user, ClassMemberRole.TA);
         return convertClassMember(saved);
     }
@@ -216,12 +220,13 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassMemberResponse updateMemberRole(Integer classSectionId, Integer userId, ClassMemberRoleRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_STAFF);
 
         ClassMember member = classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
 
         if (request.getRole() == ClassMemberRole.TEACHER) {
+            ensureUserIsNotEnrolledInClassSection(member.getUser(), classSection);
             transferTeacherOwnership(classSection, member.getUser());
             return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
                     .map(this::convertClassMember)
@@ -232,6 +237,32 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             throw new BusinessException("Cannot downgrade TEACHER directly. Transfer teacher role first.");
         }
         member.setRole(ClassMemberRole.TA);
+        applyDefaultPermissions(member, ClassMemberRole.TA);
+        return convertClassMember(classMemberRepository.save(member));
+    }
+
+    @Override
+    @Transactional
+    public ClassMemberResponse updateMemberPermissions(
+            Integer classSectionId,
+            Integer userId,
+            ClassMemberPermissionsRequest request
+    ) {
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_STAFF);
+
+        ClassMember member = classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
+        if (member.getRole() == ClassMemberRole.TEACHER) {
+            throw new BusinessException("Teacher permissions are fixed by the class owner role");
+        }
+        if (member.getRole() != ClassMemberRole.TA) {
+            throw new BusinessException("Only TA permissions can be updated");
+        }
+
+        List<String> normalizedPermissions = normalizeTaPermissions(request.getPermissions());
+        member.setPermissions(normalizedPermissions);
         return convertClassMember(classMemberRepository.save(member));
     }
 
@@ -240,7 +271,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public void removeMember(Integer classSectionId, Integer userId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_STAFF);
 
         ClassMember member = classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
@@ -254,7 +285,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public List<ClassMemberResponse> getMembers(Integer classSectionId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_STAFF);
         return getTeachingMembers(classSection);
     }
 
@@ -263,7 +294,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassChapterResponse createClassChapter(Integer classSectionId, ClassChapterCreateRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
         ClassChapter classChapter = new ClassChapter();
         classChapter.setClassSection(classSection);
         classChapter.setTitle(StringUtils.hasText(request.getTitle()) ? request.getTitle() : "Chương mới");
@@ -285,7 +316,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     ) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
@@ -324,7 +355,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public void deleteClassChapter(Integer classSectionId, Integer classChapterId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
@@ -340,7 +371,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     ) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
@@ -352,7 +383,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         classContentItem.setIsLocked(Boolean.TRUE.equals(request.getLocked()));
         classContentItem.setAvailableFrom(request.getAvailableFrom());
         classContentItem.setAvailableTo(request.getAvailableTo());
-        classContentItem.setTitle(normalizeNullableText(request.getTitle()));
 
        /* ContentItemTemplate contentItemTemplate = resolveContentItemTemplateForClassSection(
                 classSection,
@@ -364,7 +394,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             applyTemplateSnapshot(classContentItem, classSection, contentItemTemplate);
         } else {*/
         if (request.getItemType() == null) {
-            throw new BusinessException("itemType is required when contentItemTemplateId is not provided");
+            throw new BusinessException("itemType is required");
         }
         classContentItem.setItemType(request.getItemType());
         applyContentReferenceByIds(
@@ -389,14 +419,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     ) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassContentItem classContentItem = classContentItemRepository
                 .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
-        if (request.getTitle() != null) {
-            classContentItem.setTitle(normalizeNullableText(request.getTitle()));
-        }
         if (request.getLessonId() != null || request.getQuizId() != null || request.getAssignmentId() != null) {
             applyContentReferenceByIds(
                     classContentItem,
@@ -424,6 +451,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             classContentItem.setAvailableTo(request.getAvailableTo());
         }
 
+        syncContentItemTitleFromReference(classContentItem);
         if (!StringUtils.hasText(classContentItem.getTitle())) {
             throw new BusinessException("Class content item must have a title");
         }
@@ -436,7 +464,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public void deleteClassContentItem(Integer classSectionId, Integer classContentItemId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassContentItem classContentItem = classContentItemRepository
                 .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
@@ -486,6 +514,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
     @Override
     public List<ClassChapterResponse> getClassChapters(Integer classSectionId) {
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        requireViewPermission(classSection);
         return classChapterRepository.findByClassSection_IdOrderByOrderIndexAsc(classSectionId).stream()
                 .map(this::convertChapterToResponse)
                 .toList();
@@ -493,8 +524,15 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
     @Override
     public List<ClassContentItemResponse> getClassContentItems(Integer classSectionId, Integer classChapterId) {
-        return classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapterId).stream()
-                .map(this::convertContentItemToResponse)
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        requireViewPermission(classSection);
+        ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
+        User currentUser = userService.getCurrentUser();
+        return classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapter.getId()).stream()
+                .filter(item -> shouldIncludeItemForUser(item, currentUser))
+                .map(item -> convertContentItemToResponse(item, currentUser))
                 .toList();
     }
 
@@ -503,7 +541,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassSectionResponse updateClassSectionStatus(Integer id, ClassSectionStatus status) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSection.setStatus(status);
         return convertToResponse(classSectionRepository.save(classSection), false);
     }
@@ -523,6 +561,10 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setTeacherId(primaryTeacher != null ? primaryTeacher.getId() : null);
         response.setTeacherName(primaryTeacher != null ? primaryTeacher.getFullName() : null);
         response.setTeachingMembers(getTeachingMembers(classSection));
+        User currentUser = userService.getCurrentUser();
+        response.setMyClassRole(classMemberAuthorizationService.resolveMyClassRole(classSection, currentUser));
+        response.setMyWorkspaceType(classMemberAuthorizationService.resolveWorkspaceType(classSection, currentUser));
+        response.setMyCapabilities(classMemberAuthorizationService.resolveCapabilities(classSection, currentUser));
         response.setCurriculumTemplateId(classSection.getCurriculumTemplate() != null ? classSection.getCurriculumTemplate().getId() : null);
         response.setTemplateBased(classSection.getCurriculumTemplate() != null);
         response.setChapters(includeChapters
@@ -555,6 +597,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         fallbackTeacher.setUsername(classSection.getTeacher().getUserName());
         fallbackTeacher.setFullName(classSection.getTeacher().getFullName());
         fallbackTeacher.setRole(ClassMemberRole.TEACHER);
+        fallbackTeacher.setPermissions(classMemberAuthorizationService.resolveDefaultCapabilities(ClassMemberRole.TEACHER));
         return List.of(fallbackTeacher);
     }
 
@@ -569,11 +612,18 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setUsername(member.getUser() != null ? member.getUser().getUserName() : null);
         response.setFullName(member.getUser() != null ? member.getUser().getFullName() : null);
         response.setRole(member.getRole());
+        response.setPermissions(member.getUser() != null
+                ? classMemberAuthorizationService.resolveCapabilities(member.getClassSection(), member.getUser())
+                : classMemberAuthorizationService.resolveDefaultCapabilities(member.getRole()));
         return response;
     }
 
     private ClassChapterResponse convertChapterToResponse(ClassChapter classChapter) {
-        List<ClassContentItem> contentItems = classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapter.getId());
+        User currentUser = userService.getCurrentUser();
+        List<ClassContentItem> contentItems = classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapter.getId())
+                .stream()
+                .filter(item -> shouldIncludeItemForUser(item, currentUser))
+                .toList();
 
         ClassChapterResponse response = new ClassChapterResponse();
         response.setId(classChapter.getId());
@@ -584,16 +634,23 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setLocked(classChapter.getIsLocked());
         response.setAvailableFrom(classChapter.getAvailableFrom());
         response.setAvailableTo(classChapter.getAvailableTo());
-        response.setContentItems(contentItems.stream().map(this::convertContentItemToResponse).toList());
+        response.setContentItems(contentItems.stream()
+                .map(item -> convertContentItemToResponse(item, currentUser))
+                .toList());
         return response;
     }
 
     private ClassContentItemResponse convertContentItemToResponse(ClassContentItem classContentItem) {
+        return convertContentItemToResponse(classContentItem, userService.getCurrentUser());
+    }
+
+    private ClassContentItemResponse convertContentItemToResponse(ClassContentItem classContentItem, User currentUser) {
+        ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
         ClassContentItemResponse response = new ClassContentItemResponse();
         response.setId(classContentItem.getId());
         response.setClassChapterId(classContentItem.getClassChapter() != null ? classContentItem.getClassChapter().getId() : null);
         response.setItemType(classContentItem.getItemType());
-        response.setTitle(resolveContentItemResponseTitle(classContentItem));
+        response.setTitle(classContentItem.getTitle());
         response.setOrderIndex(classContentItem.getOrderIndex());
         response.setHidden(classContentItem.getIsHidden());
         response.setLocked(classContentItem.getIsLocked());
@@ -602,10 +659,14 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setLessonId(classContentItem.getLesson() != null ? classContentItem.getLesson().getId() : null);
         response.setQuizId(classContentItem.getQuiz() != null ? classContentItem.getQuiz().getId() : null);
         response.setAssignmentId(classContentItem.getAssignment() != null ? classContentItem.getAssignment().getId() : null);
+        response.setDisplayTitle(resolveContentItemDisplayTitle(classContentItem));
+        response.setAvailabilityStatus(accessResult.availabilityStatus());
+        response.setAccessible(accessResult.accessible());
+        response.setAccessMessage(accessResult.message());
         return response;
     }
 
-    private String resolveContentItemResponseTitle(ClassContentItem classContentItem) {
+    private String resolveContentItemDisplayTitle(ClassContentItem classContentItem) {
         if (classContentItem.getLesson() != null && StringUtils.hasText(classContentItem.getLesson().getTitle())) {
             return classContentItem.getLesson().getTitle();
         }
@@ -648,9 +709,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             Lesson lesson = lessonRepository.findById(lessonId)
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
             classContentItem.setLesson(lesson);
-            if (!StringUtils.hasText(classContentItem.getTitle())) {
-                classContentItem.setTitle(lesson.getTitle());
-            }
+            syncContentItemTitleFromReference(classContentItem);
             return;
         }
 
@@ -668,9 +727,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 quizRepository.save(quiz);
             }
             classContentItem.setQuiz(quiz);
-            if (!StringUtils.hasText(classContentItem.getTitle())) {
-                classContentItem.setTitle(quiz.getTitle());
-            }
+            syncContentItemTitleFromReference(classContentItem);
             return;
         }
 
@@ -684,9 +741,21 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 throw new BusinessException("Assignment belongs to a different class section");
             }
             classContentItem.setAssignment(assignment);
-            if (!StringUtils.hasText(classContentItem.getTitle())) {
-                classContentItem.setTitle(assignment.getTitle());
-            }
+            syncContentItemTitleFromReference(classContentItem);
+        }
+    }
+
+    private void syncContentItemTitleFromReference(ClassContentItem classContentItem) {
+        if (classContentItem.getLesson() != null && StringUtils.hasText(classContentItem.getLesson().getTitle())) {
+            classContentItem.setTitle(classContentItem.getLesson().getTitle());
+            return;
+        }
+        if (classContentItem.getQuiz() != null && StringUtils.hasText(classContentItem.getQuiz().getTitle())) {
+            classContentItem.setTitle(classContentItem.getQuiz().getTitle());
+            return;
+        }
+        if (classContentItem.getAssignment() != null && StringUtils.hasText(classContentItem.getAssignment().getTitle())) {
+            classContentItem.setTitle(classContentItem.getAssignment().getTitle());
         }
     }
 
@@ -760,9 +829,10 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 quizTemplateQuestionRepository.findByQuizTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
 
         if (!templateSources.isEmpty()) {
-            List<QuizBankSource> savedSources = cloneBankSourcesFromTemplate(savedQuiz, templateSources);
+            cloneBankSourcesFromTemplate(savedQuiz, templateSources);
             if (!savedQuiz.isGenerateQuestionsPerAttempt()) {
-                generateQuestionsFromBankSources(savedQuiz, savedSources);
+                savedQuiz.setGenerateQuestionsPerAttempt(true);
+                quizRepository.save(savedQuiz);
             }
             return savedQuiz;
         }
@@ -784,11 +854,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             QuizBankSource source = new QuizBankSource();
             source.setQuiz(quiz);
             source.setQuestionBank(templateSource.getQuestionBank());
-            source.setTag(templateSource.getTag());
+            source.setTags(templateSource.getTags() != null ? new ArrayList<>(templateSource.getTags()) : new ArrayList<>());
+            source.setTagMatchMode(templateSource.getTagMatchMode() != null ? templateSource.getTagMatchMode() : com.example.backend.constant.QuizTagMatchMode.ANY);
             source.setSelectionMode(templateSource.getSelectionMode());
             source.setQuestionCount(templateSource.getQuestionCount());
             source.setDifficultyLevel(templateSource.getDifficultyLevel());
-            source.setManualQuestionIds(templateSource.getManualQuestionIds());
             source.setOrderIndex(
                     templateSource.getOrderIndex() != null ? templateSource.getOrderIndex() : orderIndex
             );
@@ -846,128 +916,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             items.add(item);
         }
         return items;
-    }
-
-    private void generateQuestionsFromBankSources(Quiz quiz, List<QuizBankSource> bankSources) {
-        LinkedHashMap<Integer, BankQuestion> selectedQuestions = new LinkedHashMap<>();
-        for (QuizBankSource source : bankSources) {
-            for (BankQuestion question : selectQuestions(source)) {
-                selectedQuestions.putIfAbsent(question.getId(), question);
-            }
-        }
-
-        if (selectedQuestions.isEmpty()) {
-            throw new BusinessException("No questions matched the configured question bank sources");
-        }
-
-        for (BankQuestion sourceQuestion : selectedQuestions.values()) {
-            QuizQuestion question = new QuizQuestion();
-            question.setQuiz(quiz);
-            question.setSourceBankQuestion(sourceQuestion);
-            question.setContent(sourceQuestion.getContent());
-            question.setType(sourceQuestion.getType());
-            question.setResource(sourceQuestion.getResource());
-            question.setPoints(sourceQuestion.getDefaultPoints() != null ? sourceQuestion.getDefaultPoints() : BigDecimal.ONE);
-
-            List<QuizAnswer> answers = new ArrayList<>();
-            if (sourceQuestion.getOptions() != null) {
-                for (BankQuestionOption sourceOption : sourceQuestion.getOptions()) {
-                    QuizAnswer answer = new QuizAnswer();
-                    answer.setQuizQuestion(question);
-                    answer.setContent(sourceOption.getContent());
-                    answer.setIsCorrect(sourceOption.getIsCorrect());
-                    answer.setResource(sourceOption.getResource());
-                    answers.add(answer);
-                }
-            }
-            question.setAnswers(answers);
-            question.setInteractionItems(copyBankInteractionItems(sourceQuestion, question));
-            quizQuestionRepository.save(question);
-        }
-    }
-
-    private List<BankQuestion> selectQuestions(QuizBankSource source) {
-        List<BankQuestion> matchedQuestions = bankQuestionRepository.findSelectableQuestions(
-                source.getQuestionBank().getId(),
-                source.getDifficultyLevel(),
-                source.getTag() != null ? source.getTag().getId() : null
-        );
-
-        if (source.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
-            return matchedQuestions;
-        }
-
-        if (source.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
-            if (source.getQuestionCount() == null || source.getQuestionCount() <= 0) {
-                throw new BusinessException("questionCount is required for RANDOM question bank sources");
-            }
-            if (matchedQuestions.size() < source.getQuestionCount()) {
-                throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
-            }
-            List<BankQuestion> shuffled = new ArrayList<>(matchedQuestions);
-            Collections.shuffle(shuffled);
-            return shuffled.subList(0, source.getQuestionCount());
-        }
-
-        if (source.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
-            List<Integer> selectedIds = parseIds(source.getManualQuestionIds());
-            if (selectedIds.isEmpty()) {
-                throw new BusinessException("manualQuestionIds is required for MANUAL question bank sources");
-            }
-            List<BankQuestion> selectedQuestions = bankQuestionRepository.findAllById(selectedIds);
-            if (selectedQuestions.size() != selectedIds.size()) {
-                throw new BusinessException("Some manually selected bank questions do not exist");
-            }
-            for (BankQuestion question : selectedQuestions) {
-                if (!question.getQuestionBank().getId().equals(source.getQuestionBank().getId())) {
-                    throw new BusinessException("Manual question selection must belong to the configured question bank");
-                }
-            }
-            selectedQuestions.sort((left, right) ->
-                    Integer.compare(selectedIds.indexOf(left.getId()), selectedIds.indexOf(right.getId())));
-            return selectedQuestions;
-        }
-
-        throw new BusinessException("Unsupported question bank selection mode");
-    }
-
-    private List<QuestionInteractionItem> copyBankInteractionItems(BankQuestion sourceQuestion, QuizQuestion question) {
-        if (sourceQuestion.getInteractionItems() == null) {
-            return List.of();
-        }
-
-        List<QuestionInteractionItem> items = new ArrayList<>();
-        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
-            QuestionInteractionItem item = new QuestionInteractionItem();
-            item.setQuizQuestion(question);
-            item.setContent(sourceItem.getContent());
-            item.setItemKey(sourceItem.getItemKey());
-            item.setRole(sourceItem.getRole());
-            item.setCorrectMatchKey(sourceItem.getCorrectMatchKey());
-            item.setCorrectOrderIndex(sourceItem.getCorrectOrderIndex());
-            item.setBlankIndex(sourceItem.getBlankIndex());
-            item.setAcceptedAnswers(sourceItem.getAcceptedAnswers());
-            item.setBlankType(sourceItem.getBlankType());
-            item.setBlankOptions(sourceItem.getBlankOptions());
-            item.setResource(sourceItem.getResource());
-            item.setOrderIndex(sourceItem.getOrderIndex());
-            items.add(item);
-        }
-        return items;
-    }
-
-    private List<Integer> parseIds(String csv) {
-        if (!StringUtils.hasText(csv)) {
-            return List.of();
-        }
-        List<Integer> ids = new ArrayList<>();
-        for (String value : csv.split(",")) {
-            String trimmed = value.trim();
-            if (StringUtils.hasText(trimmed)) {
-                ids.add(Integer.valueOf(trimmed));
-            }
-        }
-        return ids;
     }
 
     private Assignment cloneAssignmentTemplate(AssignmentTemplate template, ClassSection classSection) {
@@ -1088,6 +1036,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     private ClassMember createOrUpdateMembership(ClassSection classSection, User user, ClassMemberRole role) {
+        ensureUserIsNotEnrolledInClassSection(user, classSection);
         ClassMember member = classMemberRepository
                 .findByClassSection_IdAndUser_Id(classSection.getId(), user.getId())
                 .orElseGet(() -> {
@@ -1096,7 +1045,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                     created.setUser(user);
                     return created;
                 });
+        ClassMemberRole previousRole = member.getRole();
         member.setRole(role);
+        if (member.getPermissions() == null || member.getPermissions().isEmpty() || previousRole != role) {
+            applyDefaultPermissions(member, role);
+        }
         return classMemberRepository.save(member);
     }
 
@@ -1113,8 +1066,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             return;
         }
 
+        ensureUserIsNotEnrolledInClassSection(newTeacher, classSection);
+
         if (currentTeacher != null) {
             currentTeacher.setRole(ClassMemberRole.TA);
+            applyDefaultPermissions(currentTeacher, ClassMemberRole.TA);
             classMemberRepository.save(currentTeacher);
         }
 
@@ -1144,12 +1100,28 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         throw new ResourceNotFoundException("User not found");
     }
 
+    private User resolveTeacherForClassCreation(Integer teacherId, User currentUser) {
+        boolean isAdminCreator = currentUser != null
+                && currentUser.getRole() != null
+                && currentUser.getRole().getRoleName() == RoleType.ADMIN;
+
+        if (isAdminCreator && teacherId == null) {
+            throw new BusinessException("Admin must choose a TEACHER as class owner");
+        }
+
+        User teacher = resolveUser(teacherId, currentUser);
+        if (teacher.getRole() == null || teacher.getRole().getRoleName() != RoleType.TEACHER) {
+            throw new BusinessException("Class owner must be a TEACHER account");
+        }
+        return teacher;
+    }
+
     @Override
     @Transactional
     public ClassSectionResponse resetClassCode(Integer id) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSection.setClassCode(resolveClassCode());
         classSectionRepository.save(classSection);
         return getClassSectionById(id);
@@ -1160,7 +1132,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassSectionResponse deleteClassCode(Integer id) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSection.setClassCode(null);
         classSectionRepository.save(classSection);
         return getClassSectionById(id);
@@ -1171,7 +1143,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public void deleteClassSection(Integer id) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSectionRepository.delete(classSection);
     }
 
@@ -1180,7 +1152,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassSectionResponse updateClassSection(Integer id, ClassSectionUpdateRequest request) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherPermission(classSection);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
             classSection.setTitle(request.getTitle());
         }
@@ -1218,13 +1190,76 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         return Optional.ofNullable(values).orElseGet(ArrayList::new);
     }
 
-    private void requireTeacherPermission(ClassSection classSection) {
+    private void applyDefaultPermissions(ClassMember member, ClassMemberRole role) {
+        member.setPermissions(new ArrayList<>(classMemberAuthorizationService.resolveDefaultCapabilities(role)));
+    }
+
+    private List<String> normalizeTaPermissions(List<String> requestedPermissions) {
+        List<String> allowedPermissions = classMemberAuthorizationService.getAssignableTaCapabilities();
+        Set<String> invalidPermissions = new LinkedHashSet<>(safeList(requestedPermissions));
+        invalidPermissions.removeAll(allowedPermissions);
+        if (!invalidPermissions.isEmpty()) {
+            throw new BusinessException("Invalid TA permissions: " + String.join(", ", invalidPermissions));
+        }
+
+        Set<String> requested = new LinkedHashSet<>(safeList(requestedPermissions));
+        requested.add(ClassMemberAuthorizationService.CAP_VIEW_CLASS);
+        return allowedPermissions.stream()
+                .filter(requested::contains)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    }
+
+    private void requireCapability(ClassSection classSection, String capability) {
         User currentUser = userService.getCurrentUser();
         if (currentUser == null) {
             throw new UnauthorizedException("Unauthorized");
         }
-        if (!classMemberAuthorizationService.isTeacher(classSection, currentUser)) {
-            throw new UnauthorizedException("You do not manage this class section");
+        if (!classMemberAuthorizationService.hasCapability(classSection, currentUser, capability)) {
+            throw new UnauthorizedException("You do not have permission in this class section");
         }
+    }
+
+    private void requireViewPermission(ClassSection classSection) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        if (!canViewClassSection(classSection, currentUser)) {
+            throw new UnauthorizedException("You do not have permission to access this class section");
+        }
+    }
+
+    private boolean canViewClassSection(ClassSection classSection, User currentUser) {
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
+            return true;
+        }
+        if (currentUser.getRole().getRoleName() != RoleType.STUDENT) {
+            return false;
+        }
+        return enrollmentRepository.findByStudent_IdAndClassSection_Id(
+                currentUser.getId(),
+                classSection.getId()
+        ) != null;
+    }
+
+    private void ensureUserIsNotEnrolledInClassSection(User user, ClassSection classSection) {
+        if (user == null || classSection == null || classSection.getId() == null) {
+            return;
+        }
+        Enrollment enrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(user.getId(), classSection.getId());
+        if (enrollment != null) {
+            throw new BusinessException("Khong the them nguoi dung da la hoc vien vao vai tro giang day trong cung lop");
+        }
+    }
+
+    private boolean shouldIncludeItemForUser(ClassContentItem item, User currentUser) {
+        ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(item, currentUser);
+        return !(isStudent(currentUser) && accessResult.availabilityStatus() == ClassContentAvailabilityStatus.HIDDEN);
+    }
+
+    private boolean isStudent(User user) {
+        return user != null
+                && user.getRole() != null
+                && user.getRole().getRoleName() == RoleType.STUDENT;
     }
 }

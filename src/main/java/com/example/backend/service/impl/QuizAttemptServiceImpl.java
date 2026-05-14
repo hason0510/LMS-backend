@@ -954,7 +954,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         User currentUser = userService.getCurrentUser();
         boolean isStudent = attempt.getStudent().getId().equals(currentUser.getId());
-        boolean isTeacher = canManageAttempt(attempt, currentUser);
+        boolean isTeacher = canReviewAttempt(attempt, currentUser);
         boolean isAdmin = currentUser.getRole().getRoleName() == RoleType.ADMIN;
 
         // Check Access Control (Quyá»n truy cáº­p)
@@ -974,6 +974,13 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             Pageable pageable
     ) {
         User currentUser = userService.getCurrentUser();
+        if (classSectionId != null && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+            ClassSection classSection = classSectionRepository.findById(classSectionId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+            if (!canReviewClassSection(classSection, currentUser)) {
+                throw new UnauthorizedException("Ban khong co quyen xem lich su bai lam");
+            }
+        }
         Integer teacherId = currentUser.getRole().getRoleName() == RoleType.ADMIN ? null : currentUser.getId();
         String resultFilter = StringUtils.hasText(result) ? result.trim().toUpperCase(Locale.ROOT) : null;
         if (resultFilter != null && !List.of("PASS", "FAIL", "PENDING").contains(resultFilter)) {
@@ -985,7 +992,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED),
                 classSectionId,
                 teacherId,
-                ClassMemberRole.TEACHER,
+                List.of(ClassMemberRole.TEACHER, ClassMemberRole.TA),
                 keyword,
                 resultFilter,
                 GradingStatus.NEEDS_REVIEW,
@@ -1006,8 +1013,11 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
         User currentUser = userService.getCurrentUser();
-        if (!canManageAttempt(attempt, currentUser) && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+        if (!canReviewAttempt(attempt, currentUser)) {
             throw new UnauthorizedException("Ban khong co quyen cham bai nay");
+        }
+        if (attempt.getStudent() != null && attempt.getStudent().getId().equals(currentUser.getId())) {
+            throw new BusinessException("Ban khong the tu cham bai cua chinh minh");
         }
         if (attempt.getStatus() != AttemptStatus.COMPLETED && attempt.getStatus() != AttemptStatus.EXPIRED) {
             throw new BusinessException("Chi co the cham bai da nop hoac da het gio");
@@ -1643,7 +1653,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
 
-        if (!canManageClassSection(classContentItem.getClassChapter().getClassSection(), currentUser)
+        if (!canReviewClassSection(classContentItem.getClassChapter().getClassSection(), currentUser)
                 && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
             throw new UnauthorizedException("Ban khong co quyen xem lich su bai lam");
         }
@@ -1699,7 +1709,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (currentUser.getRole().getRoleName() == RoleType.ADMIN) return true;
 
         // 2. GiÃ¡o viÃªn sá»Ÿ há»¯u khÃ³a há»c luÃ´n xem Ä‘Æ°á»£c
-        if (canManageAttempt(attempt, currentUser)) return true;
+        if (canReviewAttempt(attempt, currentUser)) return true;
 
         // 3. Há»c sinh: Chá»‰ xem Ä‘Æ°á»£c khi Ä‘Ã£ Ná»™p bÃ i hoáº·c Háº¿t giá»
         if (attempt.getStudent().getId().equals(currentUser.getId())) {
@@ -1771,7 +1781,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
 
-        if (!canManageClassSection(classSection, currentUser) && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+        if (!classMemberAuthorizationService.canViewProgress(classSection, currentUser)
+                && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
             throw new UnauthorizedException("Ban khong co quyen xem bang diem cua lop hoc nay");
         }
 
@@ -1874,7 +1885,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         return BigDecimal.ONE;
     }
 
-    private boolean canManageAttempt(QuizAttempt attempt, User currentUser) {
+    private boolean canReviewAttempt(QuizAttempt attempt, User currentUser) {
         if (currentUser.getRole().getRoleName() == RoleType.ADMIN) {
             return true;
         }
@@ -1889,14 +1900,14 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (attempt.getClassContentItem() != null
                 && attempt.getClassContentItem().getClassChapter() != null
                 && attempt.getClassContentItem().getClassChapter().getClassSection() != null) {
-            return canManageClassSection(attempt.getClassContentItem().getClassChapter().getClassSection(), currentUser);
+            return canReviewClassSection(attempt.getClassContentItem().getClassChapter().getClassSection(), currentUser);
         }
 
         return false;
     }
 
-    private boolean canManageClassSection(ClassSection classSection, User currentUser) {
-        return classMemberAuthorizationService.isTeacher(classSection, currentUser);
+    private boolean canReviewClassSection(ClassSection classSection, User currentUser) {
+        return classMemberAuthorizationService.canReviewQuizzes(classSection, currentUser);
     }
 
     private QuizAttemptDetailResponse convertToDetailResponse(QuizAttempt attempt) {

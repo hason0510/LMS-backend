@@ -27,6 +27,9 @@ public class ClassSectionResponse {
     private Integer teacherId;
     private String teacherName;
     private List<ClassMemberResponse> teachingMembers;
+    private String myClassRole;
+    private String myWorkspaceType;
+    private List<String> myCapabilities;
     private Integer curriculumTemplateId;
     private Boolean templateBased;
     private List<ClassChapterResponse> chapters;

@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,7 +69,7 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
                         FROM ClassMember cm
                         WHERE cm.classSection.id = cs.id
                           AND cm.user.id = :teacherId
-                          AND cm.role = :teacherRole
+                          AND cm.role IN :teachingRoles
                    ))
               AND (:keyword IS NULL
                    OR LOWER(COALESCE(s.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -85,7 +86,7 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
             @Param("statuses") List<AttemptStatus> statuses,
             @Param("classSectionId") Integer classSectionId,
             @Param("teacherId") Integer teacherId,
-            @Param("teacherRole") ClassMemberRole teacherRole,
+            @Param("teachingRoles") Collection<ClassMemberRole> teachingRoles,
             @Param("keyword") String keyword,
             @Param("resultFilter") String resultFilter,
             @Param("pendingStatus") GradingStatus pendingStatus,

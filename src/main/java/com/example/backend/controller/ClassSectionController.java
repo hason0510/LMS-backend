@@ -5,6 +5,7 @@ import com.example.backend.dto.request.classsection.ClassChapterCreateRequest;
 import com.example.backend.dto.request.classsection.ClassChapterOverrideRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemCreateRequest;
 import com.example.backend.dto.request.classsection.ClassContentItemOverrideRequest;
+import com.example.backend.dto.request.classsection.ClassMemberPermissionsRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
@@ -52,6 +53,17 @@ public class ClassSectionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    /*@Operation(summary = "Create class section from latest template alias")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/from-template-latest/{curriculumTemplateId}")
+    public ResponseEntity<ClassSectionResponse> createFromTemplateLatest(
+            @PathVariable Integer curriculumTemplateId,
+            @Valid @RequestBody ClassSectionRequest request
+    ) {
+        ClassSectionResponse response = classSectionService.createFromTemplate(curriculumTemplateId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }*/
+
     @Operation(summary = "Get class section detail")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     @GetMapping("/{id}")
@@ -93,6 +105,17 @@ public class ClassSectionController {
             @Valid @RequestBody ClassMemberRoleRequest request
     ) {
         return ResponseEntity.ok(classSectionService.updateMemberRole(classSectionId, userId, request));
+    }
+
+    @Operation(summary = "Update TA permissions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PatchMapping("/{classSectionId}/members/{userId}/permissions")
+    public ResponseEntity<ClassMemberResponse> updateMemberPermissions(
+            @PathVariable Integer classSectionId,
+            @PathVariable Integer userId,
+            @Valid @RequestBody ClassMemberPermissionsRequest request
+    ) {
+        return ResponseEntity.ok(classSectionService.updateMemberPermissions(classSectionId, userId, request));
     }
 
     @Operation(summary = "Remove class member")

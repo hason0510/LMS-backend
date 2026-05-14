@@ -59,7 +59,7 @@ public class QuizAttemptController {
     }
 
     @Operation(summary = "Danh sách quiz attempts cho teacher/admin dashboard")
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/quiz-attempts/manage")
     public ResponseEntity<PageResponse<QuizAttemptResponse>> getManagedQuizAttempts(
             @RequestParam(required = false) Integer classSectionId,
@@ -73,7 +73,7 @@ public class QuizAttemptController {
     }
 
     @Operation(summary = "Chấm tay quiz attempt")
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @PutMapping("/quiz-attempts/{attemptId}/review")
     public ResponseEntity<QuizAttemptDetailResponse> reviewAttempt(
             @PathVariable Integer attemptId,
@@ -168,7 +168,7 @@ public class QuizAttemptController {
             summary = "Danh sách bài làm của học viên",
             description = "Teacher/Admin xem danh sách bài làm của quiz"
     )
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/chapterItem/{chapterItemId}/attempts")
     public ResponseEntity<PageResponse<QuizAttemptResponse>> getAttemptsForTeacherOrAdmin(
             @PathVariable Integer chapterItemId,
@@ -178,7 +178,7 @@ public class QuizAttemptController {
     }
 
     @Operation(summary = "Danh sách bài làm của học viên theo class content item")
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/class-content-items/{classContentItemId}/attempts")
     public ResponseEntity<PageResponse<QuizAttemptResponse>> getAttemptsForTeacherOrAdminByClassContentItem(
             @PathVariable Integer classContentItemId,
@@ -214,7 +214,7 @@ public class QuizAttemptController {
             summary = "Xem bảng điểm khóa học (Giáo viên/Admin)",
             description = "Xem tổng hợp kết quả làm bài Quiz của tất cả sinh viên trong một khóa học cụ thể."
     )
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/courses/{courseId}/quiz-grades")
     public ResponseEntity<List<CourseQuizResultResponse>> getCourseGradeBook(
             @PathVariable Integer courseId
@@ -223,7 +223,7 @@ public class QuizAttemptController {
     }
 
     @Operation(summary = "Xem bảng điểm class section")
-    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/class-sections/{classSectionId}/quiz-grades")
     public ResponseEntity<List<ClassSectionQuizGradeResponse>> getClassSectionGradeBook(
             @PathVariable Integer classSectionId
