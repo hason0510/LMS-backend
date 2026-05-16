@@ -11,6 +11,7 @@ import java.time.LocalDate;
 public class ClassSectionUpdateRequest {
     private String title;
     private String description;
+    private String imageUrl;
     private LocalDate startDate;
     private LocalDate endDate;
 }

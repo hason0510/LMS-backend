@@ -19,6 +19,7 @@ public class ClassSectionResponse {
     private String classCode;
     private String title;
     private String description;
+    private String imageUrl;
     private ClassSectionStatus status;
     private LocalDate startDate;
     private LocalDate endDate;
@@ -26,6 +27,7 @@ public class ClassSectionResponse {
     private String subjectTitle;
     private Integer teacherId;
     private String teacherName;
+    private String teacherImageUrl;
     private List<ClassMemberResponse> teachingMembers;
     private String myClassRole;
     private String myWorkspaceType;

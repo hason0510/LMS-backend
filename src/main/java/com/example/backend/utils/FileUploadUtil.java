@@ -7,6 +7,9 @@ import org.apache.commons.io.FilenameUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.text.SimpleDateFormat;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @UtilityClass
@@ -37,6 +40,22 @@ public class FileUploadUtil {
                     "mp4", "mov", "avi", "mkv",
                     "zip", "rar", "7z"
             );
+
+    public static final Map<String, Long> MAX_SIZE_BY_TYPE = Map.of(
+            "image", MAX_IMAGE_SIZE,
+            "video", MAX_VIDEO_SIZE,
+            "audio", MAX_RESOURCE_SIZE,
+            "pdf", MAX_PDF_SIZE,
+            "resource", MAX_RESOURCE_SIZE
+    );
+
+    public static final Map<String, List<String>> ALLOWED_EXTENSIONS_BY_TYPE = Map.of(
+            "image", sortedExtensions(IMAGE_EXTENSIONS),
+            "video", sortedExtensions(VIDEO_EXTENSIONS),
+            "audio", sortedExtensions(AUDIO_EXTENSIONS),
+            "pdf", sortedExtensions(PDF_EXTENSIONS),
+            "resource", sortedExtensions(RESOURCE_EXTENSIONS)
+    );
 
     public static final String DATE_FORMAT = "yyyyMMddHHmmss";
     public static final String FILE_NAME_FORMAT = "%s_%s";
@@ -82,6 +101,28 @@ public class FileUploadUtil {
             }
             default -> throw new BusinessException("Unsupported file type");
         }
+    }
+
+    public static long getMaxSizeBytes(String type) {
+        return MAX_SIZE_BY_TYPE.getOrDefault(normalizePolicyType(type), MAX_RESOURCE_SIZE);
+    }
+
+    public static List<String> getAllowedExtensions(String type) {
+        return ALLOWED_EXTENSIONS_BY_TYPE.getOrDefault(
+                normalizePolicyType(type),
+                sortedExtensions(RESOURCE_EXTENSIONS)
+        );
+    }
+
+    private static String normalizePolicyType(String type) {
+        if (type == null || type.isBlank()) {
+            return "resource";
+        }
+        return type.toLowerCase(Locale.ROOT);
+    }
+
+    private static List<String> sortedExtensions(Set<String> extensions) {
+        return extensions.stream().sorted().toList();
     }
 
     public static ResourceType resolveResourceType(String fileName) {

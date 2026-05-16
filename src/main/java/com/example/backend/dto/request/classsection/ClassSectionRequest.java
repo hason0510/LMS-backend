@@ -15,6 +15,7 @@ public class ClassSectionRequest {
     @NotBlank(message = "Class section title is required")
     private String title;
     private String description;
+    private String imageUrl;
     private String classCode;
     private ClassSectionStatus status;
     private LocalDate startDate;

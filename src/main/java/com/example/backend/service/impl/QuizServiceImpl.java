@@ -6,6 +6,7 @@ import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.QuizSourceSelectionMode;
 import com.example.backend.constant.QuizTagMatchMode;
+import com.example.backend.constant.ResourceScopeType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.quiz.QuizAnswerRequest;
@@ -48,6 +49,7 @@ import com.example.backend.service.QuizService;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassNotificationService;
+import com.example.backend.service.ResourceAuthorizationService;
 import com.example.backend.service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -56,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -86,6 +89,7 @@ public class QuizServiceImpl implements QuizService {
     private final ClassNotificationService classNotificationService;
     private final UserService userService;
     private final ClassContentAccessService classContentAccessService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
 
     public QuizServiceImpl(
             QuizRepository quizRepository,
@@ -99,7 +103,8 @@ public class QuizServiceImpl implements QuizService {
             ResourceRepository resourceRepository,
             ClassNotificationService classNotificationService,
             UserService userService,
-            ClassContentAccessService classContentAccessService
+            ClassContentAccessService classContentAccessService,
+            ResourceAuthorizationService resourceAuthorizationService
     ) {
         this.quizRepository = quizRepository;
         this.quizQuestionRepository = quizQuestionRepository;
@@ -113,6 +118,7 @@ public class QuizServiceImpl implements QuizService {
         this.classNotificationService = classNotificationService;
         this.userService = userService;
         this.classContentAccessService = classContentAccessService;
+        this.resourceAuthorizationService = resourceAuthorizationService;
     }
 
     @Override
@@ -636,7 +642,7 @@ public class QuizServiceImpl implements QuizService {
             question.setType(questionRequest.getType());
             question.setPoints(questionRequest.getPoints() != null ? questionRequest.getPoints() : BigDecimal.ONE);
             if (questionRequest.getResourceId() != null) {
-                question.setResource(resourceRepository.findById(questionRequest.getResourceId()).orElse(null));
+                question.setResource(resolveUsableQuizResource(quiz, questionRequest.getResourceId()));
             }
             question.setQuiz(quiz);
 
@@ -647,7 +653,7 @@ public class QuizServiceImpl implements QuizService {
                     answer.setContent(answerRequest.getContent());
                     answer.setIsCorrect(answerRequest.getIsCorrect() != null ? answerRequest.getIsCorrect() : false);
                     if (answerRequest.getResourceId() != null) {
-                        answer.setResource(resourceRepository.findById(answerRequest.getResourceId()).orElse(null));
+                        answer.setResource(resolveUsableQuizResource(quiz, answerRequest.getResourceId()));
                     }
                     answer.setQuizQuestion(question);
                     answers.add(answer);
@@ -681,7 +687,7 @@ public class QuizServiceImpl implements QuizService {
                 item.setBlankType(StringUtils.hasText(itemRequest.getBlankType()) ? itemRequest.getBlankType().trim() : "TEXT_INPUT");
                 item.setBlankOptions(StringUtils.hasText(itemRequest.getBlankOptions()) ? itemRequest.getBlankOptions().trim() : null);
                 if (itemRequest.getResourceId() != null) {
-                    item.setResource(resourceRepository.findById(itemRequest.getResourceId()).orElse(null));
+                    item.setResource(resolveUsableQuizResource(question.getQuiz(), itemRequest.getResourceId()));
                 }
                 item.setOrderIndex(itemRequest.getOrderIndex() != null ? itemRequest.getOrderIndex() : orderIndex);
                 items.add(item);
@@ -689,6 +695,19 @@ public class QuizServiceImpl implements QuizService {
             }
         }
         return items;
+    }
+
+    private Resource resolveUsableQuizResource(Quiz quiz, Integer resourceId) {
+        Resource resource = resourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+        Integer classSectionId = quiz != null && quiz.getClassSection() != null
+                ? quiz.getClassSection().getId()
+                : null;
+        ResourceScopeType expectedScope = classSectionId != null ? ResourceScopeType.CLASS_SECTION : null;
+        resourceAuthorizationService.assertCanUse(resource, expectedScope, classSectionId);
+        resource.setLastUsedAt(LocalDateTime.now());
+        resourceRepository.save(resource);
+        return resource;
     }
 
     private void validateInteractionItems(QuestionType type, List<QuestionInteractionItemRequest> items) {

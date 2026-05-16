@@ -3,6 +3,7 @@ package com.example.backend.service.impl;
 import com.example.backend.constant.QuestionBankMemberRole;
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
+import com.example.backend.constant.ResourceScopeType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.quiz.QuestionInteractionItemRequest;
 import com.example.backend.dto.request.questionbank.BankQuestionOptionRequest;
@@ -46,6 +47,7 @@ import com.example.backend.service.DifficultyTagResolver;
 import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
+import com.example.backend.service.ResourceAuthorizationService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.QuestionBankSpecification;
 import lombok.RequiredArgsConstructor;
@@ -59,6 +61,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -92,6 +95,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
     private final DifficultyTagResolver difficultyTagResolver;
     private final ResourceRepository resourceRepository;
+    private final ResourceAuthorizationService resourceAuthorizationService;
 
     @Override
     @Transactional
@@ -1038,7 +1042,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         question.setContent(request.getContent());
         question.setExplanation(request.getExplanation());
         if (request.getResourceId() != null) {
-            question.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
+            question.setResource(resolveUsableQuestionBankResource(question, request.getResourceId()));
         } else {
             question.setResource(null);
         }
@@ -1063,7 +1067,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 option.setContent(optionRequest.getContent());
                 option.setIsCorrect(Boolean.TRUE.equals(optionRequest.getIsCorrect()));
                 if (optionRequest.getResourceId() != null) {
-                    option.setResource(resourceRepository.findById(optionRequest.getResourceId()).orElse(null));
+                    option.setResource(resolveUsableQuestionBankResource(question, optionRequest.getResourceId()));
                 }
                 option.setOrderIndex(optionRequest.getOrderIndex() != null ? optionRequest.getOrderIndex() : orderIndex++);
                 incomingOptions.add(option);
@@ -1100,7 +1104,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 item.setBlankType(StringUtils.hasText(itemRequest.getBlankType()) ? itemRequest.getBlankType().trim() : "TEXT_INPUT");
                 item.setBlankOptions(StringUtils.hasText(itemRequest.getBlankOptions()) ? itemRequest.getBlankOptions().trim() : null);
                 if (itemRequest.getResourceId() != null) {
-                    item.setResource(resourceRepository.findById(itemRequest.getResourceId()).orElse(null));
+                    item.setResource(resolveUsableQuestionBankResource(question, itemRequest.getResourceId()));
                 }
                 item.setOrderIndex(itemRequest.getOrderIndex() != null ? itemRequest.getOrderIndex() : orderIndex);
                 incomingItems.add(item);
@@ -1114,6 +1118,16 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             question.getInteractionItems().clear();
         }
         question.getInteractionItems().addAll(incomingItems);
+    }
+
+    private Resource resolveUsableQuestionBankResource(BankQuestion question, Integer resourceId) {
+        Resource resource = resourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+        Integer questionBankId = question.getQuestionBank() != null ? question.getQuestionBank().getId() : null;
+        resourceAuthorizationService.assertCanUse(resource, ResourceScopeType.QUESTION_BANK, questionBankId);
+        resource.setLastUsedAt(LocalDateTime.now());
+        resourceRepository.save(resource);
+        return resource;
     }
 
     private void validateInteractionItems(QuestionType type, List<QuestionInteractionItemRequest> items) {

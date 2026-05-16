@@ -1,13 +1,22 @@
 package com.example.backend.controller;
 
+import com.example.backend.constant.ResourceScopeType;
+import com.example.backend.constant.ResourceSource;
+import com.example.backend.constant.ResourceStatus;
+import com.example.backend.constant.ResourceType;
 import com.example.backend.dto.request.ResourceRequest;
+import com.example.backend.dto.request.ResourceSearchRequest;
 import com.example.backend.dto.response.CloudinaryResponse;
 import com.example.backend.dto.response.PageResponse;
+import com.example.backend.dto.response.ResourceAuditLogResponse;
+import com.example.backend.dto.response.ResourceReferenceResponse;
 import com.example.backend.dto.response.ResourceResponse;
+import com.example.backend.dto.response.ResourceUploadPolicyResponse;
 import com.example.backend.service.ResourceService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -105,16 +114,56 @@ public class ResourceController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Get resource references")
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/resources/{id}/references")
+    public ResponseEntity<List<ResourceReferenceResponse>> getResourceReferences(@PathVariable Integer id) {
+        return ResponseEntity.ok(resourceService.getResourceReferences(id));
+    }
+
+    @Operation(summary = "Get resource audit log")
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/resources/{id}/audit-log")
+    public ResponseEntity<List<ResourceAuditLogResponse>> getResourceAuditLogs(@PathVariable Integer id) {
+        return ResponseEntity.ok(resourceService.getResourceAuditLogs(id));
+    }
+
     @Operation(summary = "Get paged resources")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/resources")
     public ResponseEntity<PageResponse<ResourceResponse>> getAllResources(
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
-            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize
+            @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize,
+            @RequestParam(value = "scopeType", required = false) ResourceScopeType scopeType,
+            @RequestParam(value = "scopeId", required = false) Integer scopeId,
+            @RequestParam(value = "type", required = false) ResourceType type,
+            @RequestParam(value = "source", required = false) ResourceSource source,
+            @RequestParam(value = "status", required = false) ResourceStatus status,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "createdByMe", required = false) Boolean createdByMe,
+            @RequestParam(value = "recent", required = false) Boolean recent,
+            @RequestParam(value = "sortBy", defaultValue = "date") String sortBy
     ) {
-        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
-        PageResponse<ResourceResponse> response = resourceService.getResourcePage(pageable);
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, resolveResourceSort(sortBy));
+        ResourceSearchRequest request = new ResourceSearchRequest();
+        request.setScopeType(scopeType);
+        request.setScopeId(scopeId);
+        request.setType(type);
+        request.setSource(source);
+        request.setStatus(status);
+        request.setSearch(search);
+        request.setCreatedByMe(createdByMe);
+        request.setRecent(recent);
+        request.setSortBy(sortBy);
+        PageResponse<ResourceResponse> response = resourceService.getResourcePage(request, pageable);
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Get resource upload policy")
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/resources/upload-policy")
+    public ResponseEntity<ResourceUploadPolicyResponse> getUploadPolicy() {
+        return ResponseEntity.ok(resourceService.getUploadPolicy());
     }
 
     @Operation(summary = "Get resources by lesson")
@@ -175,5 +224,14 @@ public class ResourceController {
     ) {
         CloudinaryResponse response = resourceService.uploadAttachmentResource(id, file);
         return ResponseEntity.ok(response);
+    }
+
+    private Sort resolveResourceSort(String sortBy) {
+        String normalized = sortBy == null ? "date" : sortBy.trim().toLowerCase();
+        return switch (normalized) {
+            case "name" -> Sort.by(Sort.Direction.ASC, "title");
+            case "size" -> Sort.by(Sort.Direction.DESC, "fileSize");
+            default -> Sort.by(Sort.Direction.DESC, "id");
+        };
     }
 }

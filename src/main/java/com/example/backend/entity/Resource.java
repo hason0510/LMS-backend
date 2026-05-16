@@ -1,6 +1,9 @@
 package com.example.backend.entity;
 
+import com.example.backend.constant.ResourceScopeType;
 import com.example.backend.constant.ResourceSource;
+import com.example.backend.constant.ResourceStatus;
+import com.example.backend.constant.ResourceVisibility;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.assignment.Submission;
 import jakarta.persistence.*;
@@ -8,6 +11,8 @@ import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import com.example.backend.constant.ResourceType;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -33,6 +38,15 @@ public class Resource extends BaseEntity {
     @Column(name = "filetype")
     private ResourceType type;
     private ResourceSource source;
+    @Enumerated(EnumType.STRING)
+    private ResourceScopeType scopeType;
+    private Integer scopeId;
+    @Enumerated(EnumType.STRING)
+    private ResourceVisibility visibility;
+    @Enumerated(EnumType.STRING)
+    private ResourceStatus status;
+    private Integer usageCount;
+    private LocalDateTime lastUsedAt;
     @ManyToOne
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;

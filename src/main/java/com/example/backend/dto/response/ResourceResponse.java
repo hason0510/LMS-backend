@@ -1,8 +1,13 @@
 package com.example.backend.dto.response;
 
+import com.example.backend.constant.ResourceScopeType;
+import com.example.backend.constant.ResourceStatus;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.ResourceSource;
+import com.example.backend.constant.ResourceVisibility;
 import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -20,6 +25,13 @@ public class ResourceResponse {
     private Long fileSize;
     private ResourceType type;
     private ResourceSource source;
+    private ResourceScopeType scopeType;
+    private Integer scopeId;
+    private ResourceVisibility visibility;
+    private ResourceStatus status;
+    private Integer usageCount;
+    private LocalDateTime lastUsedAt;
+    private String createdBy;
     private String lessonTitle;
     private Integer lessonId;
     private Integer assignmentId;

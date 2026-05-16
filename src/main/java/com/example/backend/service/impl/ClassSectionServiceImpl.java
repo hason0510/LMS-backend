@@ -120,6 +120,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 : resolveClassCode());
         classSection.setTitle(request.getTitle());
         classSection.setDescription(request.getDescription());
+        classSection.setImageUrl(request.getImageUrl());
         classSection.setStatus(resolveStatus(request.getStatus()));
         classSection.setStartDate(request.getStartDate());
         classSection.setEndDate(request.getEndDate());
@@ -553,6 +554,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setClassCode(classSection.getClassCode());
         response.setTitle(classSection.getTitle());
         response.setDescription(classSection.getDescription());
+        response.setImageUrl(classSection.getImageUrl());
         response.setStatus(classSection.getStatus());
         response.setStartDate(classSection.getStartDate());
         response.setEndDate(classSection.getEndDate());
@@ -560,6 +562,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setSubjectTitle(classSection.getSubject() != null ? classSection.getSubject().getTitle() : null);
         response.setTeacherId(primaryTeacher != null ? primaryTeacher.getId() : null);
         response.setTeacherName(primaryTeacher != null ? primaryTeacher.getFullName() : null);
+        response.setTeacherImageUrl(primaryTeacher != null ? primaryTeacher.getImageUrl() : null);
         response.setTeachingMembers(getTeachingMembers(classSection));
         User currentUser = userService.getCurrentUser();
         response.setMyClassRole(classMemberAuthorizationService.resolveMyClassRole(classSection, currentUser));
@@ -1159,6 +1162,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (request.getDescription() != null) {
             classSection.setDescription(request.getDescription());
         }
+        classSection.setImageUrl(request.getImageUrl());
         if (request.getStartDate() != null) {
             classSection.setStartDate(request.getStartDate());
         }

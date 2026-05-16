@@ -36,6 +36,9 @@ public class ClassSection extends BaseEntity {
     @Column(columnDefinition = "MEDIUMTEXT")
     private String description;
 
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     private ClassSectionStatus status;
 
