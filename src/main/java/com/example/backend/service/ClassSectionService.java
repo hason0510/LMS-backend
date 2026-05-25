@@ -9,9 +9,12 @@ import com.example.backend.dto.request.classsection.ClassMemberPermissionsReques
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
+import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
+import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
 import com.example.backend.dto.response.classsection.ClassSectionResponse;
 import java.util.List;
@@ -22,6 +25,10 @@ public interface ClassSectionService {
     ClassSectionResponse getClassSectionById(Integer id);
 
     List<ClassSectionResponse> getClassSections(Integer teacherId, Integer subjectId, Integer curriculumTemplateId, boolean includeChapters);
+
+    PageResponse<ClassSectionResponse> searchClassSections(ClassSectionSearchRequest request);
+
+    ClassSectionJoinPreviewResponse getJoinPreview(String classCode);
 
     ClassMemberResponse addMember(Integer classSectionId, ClassMemberRequest request);
 

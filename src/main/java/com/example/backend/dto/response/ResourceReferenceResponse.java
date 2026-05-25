@@ -14,4 +14,13 @@ public class ResourceReferenceResponse {
     private Integer entityId;
     private String fieldName;
     private String label;
+    private String contextPath;
+    private Integer classSectionId;
+    private String classSectionTitle;
+    private Integer quizId;
+    private String quizTitle;
+    private Integer questionBankId;
+    private String questionBankName;
+    private Integer subjectId;
+    private String subjectTitle;
 }

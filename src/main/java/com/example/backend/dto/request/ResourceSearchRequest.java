@@ -16,7 +16,10 @@ public class ResourceSearchRequest {
     private ResourceSource source;
     private ResourceStatus status;
     private String search;
+    private String owner;
     private Boolean createdByMe;
+    private Boolean ownerLibrary;
+    private Boolean includeCurrentScope;
     private Boolean recent;
     private String sortBy;
 }

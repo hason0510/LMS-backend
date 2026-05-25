@@ -30,6 +30,18 @@ public class ResourceAuthorizationService {
         }
     }
 
+    public void assertCanManage(Resource resource) {
+        if (!canManage(resource)) {
+            throw new UnauthorizedException("You have no permission to manage this resource");
+        }
+    }
+
+    public void assertCanDelete(Resource resource) {
+        if (!canDelete(resource)) {
+            throw new UnauthorizedException("You have no permission to delete this resource");
+        }
+    }
+
     public boolean canUse(Resource resource, ResourceScopeType expectedScopeType, Integer expectedScopeId) {
         if (resource == null) {
             return false;
@@ -64,6 +76,18 @@ public class ResourceAuthorizationService {
 
         return resource.getVisibility() == ResourceVisibility.SHARED
                 && canBrowseScope(resource.getScopeType(), resource.getScopeId());
+    }
+
+    public boolean canManage(Resource resource) {
+        if (resource == null) {
+            return false;
+        }
+        User currentUser = userService.getCurrentUser();
+        return isAdmin(currentUser) || isCreatedBy(resource, currentUser);
+    }
+
+    public boolean canDelete(Resource resource) {
+        return canManage(resource);
     }
 
     public boolean canBrowseScope(ResourceScopeType scopeType, Integer scopeId) {

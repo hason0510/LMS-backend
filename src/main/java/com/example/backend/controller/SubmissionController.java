@@ -4,6 +4,7 @@ import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.dto.request.SubmissionGradeRequest;
 import com.example.backend.dto.request.SubmissionRequest;
 import com.example.backend.dto.request.SubmissionReturnRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.SubmissionResponse;
 import com.example.backend.service.SubmissionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,13 +59,25 @@ public class SubmissionController {
     @Operation(summary = "Teacher get assignment submission list")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/assignments/{assignmentId}")
-    public ResponseEntity<List<SubmissionResponse>> getAssignmentSubmissions(
+    public ResponseEntity<PageResponse<SubmissionResponse>> getAssignmentSubmissions(
             @PathVariable Integer assignmentId,
             @RequestParam(required = false) Integer classSectionId,
-            @RequestParam(defaultValue = "true") boolean includeNotSubmitted
+            @RequestParam(defaultValue = "true") boolean includeNotSubmitted,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) SubmissionStatus status,
+            @RequestParam(defaultValue = "1") Integer pageNumber,
+            @RequestParam(defaultValue = "10") Integer pageSize
     ) {
         return ResponseEntity.ok(
-                submissionService.getAssignmentSubmissions(assignmentId, classSectionId, includeNotSubmitted)
+                submissionService.getAssignmentSubmissions(
+                        assignmentId,
+                        classSectionId,
+                        includeNotSubmitted,
+                        keyword,
+                        status,
+                        pageNumber,
+                        pageSize
+                )
         );
     }
 

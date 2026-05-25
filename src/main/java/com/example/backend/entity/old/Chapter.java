@@ -7,6 +7,11 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import java.util.List;
 
+/**
+ * Legacy chapter entity for old course-based structure.
+ * Keep only for compatibility during phased migration.
+ */
+@Deprecated(since = "2026-05", forRemoval = false)
 @Setter
 @Getter
 @AllArgsConstructor

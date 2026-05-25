@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
@@ -8,6 +9,7 @@ import com.example.backend.dto.request.ResourceRequest;
 import com.example.backend.dto.request.SubmissionGradeRequest;
 import com.example.backend.dto.request.SubmissionRequest;
 import com.example.backend.dto.request.SubmissionReturnRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.SubmissionResponse;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.ClassSection;
@@ -28,14 +30,17 @@ import com.example.backend.service.ResourceService;
 import com.example.backend.service.SubmissionService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import com.example.backend.specification.SubmissionSpecification;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -162,27 +167,49 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SubmissionResponse> getAssignmentSubmissions(Integer assignmentId, Integer classSectionId, boolean includeNotSubmitted) {
+    public PageResponse<SubmissionResponse> getAssignmentSubmissions(
+            Integer assignmentId,
+            Integer classSectionId,
+            boolean includeNotSubmitted,
+            String keyword,
+            SubmissionStatus status,
+            Integer pageNumber,
+            Integer pageSize
+    ) {
         Assignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
         ClassSection classSection = resolveClassSection(assignment, classSectionId);
         requireTeachingPermission(classSection, ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS);
 
-        List<Submission> existingSubmissions = submissionRepository.findByAssignment_IdAndClassSection_IdOrderBySubmissionTimeDesc(
-                assignmentId,
-                classSection.getId()
-        );
+        boolean onlyNotSubmitted = status == SubmissionStatus.NOT_SUBMITTED;
+        Specification<Submission> baseSpec = Specification
+                .where(SubmissionSpecification.hasAssignmentId(assignmentId))
+                .and(SubmissionSpecification.hasClassSectionId(classSection.getId()))
+                .and(SubmissionSpecification.studentContains(keyword));
+        Specification<Submission> filteredSpec = baseSpec;
+        if (status != null && !onlyNotSubmitted) {
+            filteredSpec = filteredSpec.and(SubmissionSpecification.hasStatus(status));
+        }
+
+        List<Submission> existingSubmissions = onlyNotSubmitted
+                ? List.of()
+                : submissionRepository.findAll(filteredSpec, Sort.by(Sort.Direction.DESC, "submissionTime"));
 
         List<SubmissionResponse> response = new ArrayList<>();
-        Map<Integer, Submission> submissionByStudentId = new HashMap<>();
-        for (Submission submission : existingSubmissions) {
+        Map<Integer, Submission> submissionByStudentId = new LinkedHashMap<>();
+        List<Submission> existingSubmissionsForExclusion = onlyNotSubmitted && includeNotSubmitted
+                ? submissionRepository.findAll(baseSpec)
+                : existingSubmissions;
+        for (Submission submission : existingSubmissionsForExclusion) {
             if (submission.getStudent() == null) {
                 continue;
             }
             submissionByStudentId.putIfAbsent(submission.getStudent().getId(), submission);
         }
-        for (Submission submission : submissionByStudentId.values()) {
-            response.add(convertToResponse(submission));
+        if (!onlyNotSubmitted) {
+            for (Submission submission : submissionByStudentId.values()) {
+                response.add(convertToResponse(submission));
+            }
         }
 
         if (includeNotSubmitted) {
@@ -195,7 +222,11 @@ public class SubmissionServiceImpl implements SubmissionService {
                 if (student == null || submissionByStudentId.containsKey(student.getId())) {
                     continue;
                 }
-                response.add(buildNotSubmittedResponse(assignment, classSection, student));
+                SubmissionResponse notSubmitted = buildNotSubmittedResponse(assignment, classSection, student);
+                if ((status == null || status == SubmissionStatus.NOT_SUBMITTED)
+                        && matchesSubmissionKeyword(notSubmitted, keyword)) {
+                    response.add(notSubmitted);
+                }
             }
         }
 
@@ -203,7 +234,40 @@ public class SubmissionServiceImpl implements SubmissionService {
                 SubmissionResponse::getStudentName,
                 Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)
         ));
-        return response;
+        return paginateSubmissions(response, pageNumber, pageSize);
+    }
+
+    private boolean matchesSubmissionKeyword(SubmissionResponse submission, String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return true;
+        }
+        String normalized = keyword.trim().toLowerCase();
+        return containsIgnoreCase(submission.getStudentName(), normalized)
+                || containsIgnoreCase(submission.getStudentNumber(), normalized)
+                || containsIgnoreCase(String.valueOf(submission.getStudentId()), normalized);
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedKeyword) {
+        return value != null && value.toLowerCase().contains(normalizedKeyword);
+    }
+
+    private PageResponse<SubmissionResponse> paginateSubmissions(
+            List<SubmissionResponse> submissions,
+            Integer pageNumber,
+            Integer pageSize
+    ) {
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
+        int safePageNumber = pageNumber == null || pageNumber < 1 ? 1 : pageNumber;
+        int totalElements = submissions.size();
+        int totalPage = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safePageSize);
+        int fromIndex = Math.min((safePageNumber - 1) * safePageSize, totalElements);
+        int toIndex = Math.min(fromIndex + safePageSize, totalElements);
+        return new PageResponse<>(
+                safePageNumber,
+                totalPage,
+                totalElements,
+                submissions.subList(fromIndex, toIndex)
+        );
     }
 
     @Override
@@ -301,8 +365,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         if (StringUtils.hasText(request.getEmbedUrl())) {
             ResourceRequest linkResource = new ResourceRequest();
             linkResource.setTitle("Link");
-            linkResource.setSource(ResourceSource.EMBED);
-            linkResource.setEmbedUrl(request.getEmbedUrl());
+            linkResource.setType(ResourceType.LINK);
+            linkResource.setSource(ResourceSource.LINK);
+            linkResource.setFileUrl(request.getEmbedUrl());
             resources.add(linkResource);
         }
         return resources;
@@ -336,7 +401,8 @@ public class SubmissionServiceImpl implements SubmissionService {
         }
 
         for (Resource resource : submission.getResources()) {
-            if (resource.getSource() == ResourceSource.UPLOAD && submission.getFileUrl() == null) {
+            if ((resource.getSource() == ResourceSource.UPLOAD || resource.getSource() == ResourceSource.LINK)
+                    && submission.getFileUrl() == null) {
                 submission.setFileUrl(resource.getFileUrl());
                 submission.setCloudinaryId(resource.getCloudinaryId());
                 continue;
@@ -402,6 +468,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setStudentId(submission.getStudent() != null ? submission.getStudent().getId() : null);
         response.setStudentName(submission.getStudent() != null ? submission.getStudent().getFullName() : null);
         response.setStudentNumber(submission.getStudent() != null ? submission.getStudent().getStudentNumber() : null);
+        response.setStudentAvatar(submission.getStudent() != null ? submission.getStudent().getImageUrl() : null);
         response.setDescription(submission.getDescription());
         response.setFileUrl(submission.getFileUrl());
         response.setEmbedUrl(submission.getEmbedUrl());
@@ -432,6 +499,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         response.setStudentId(student.getId());
         response.setStudentName(student.getFullName());
         response.setStudentNumber(student.getStudentNumber());
+        response.setStudentAvatar(student.getImageUrl());
         response.setStatus(SubmissionStatus.NOT_SUBMITTED);
         response.setSubmissionCount(0);
         response.setDueAt(assignment.getDueAt());

@@ -22,14 +22,14 @@ public class AnnouncementController {
     private final AnnouncementService announcementService;
 
     @Operation(summary = "Create announcement")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping
     public ResponseEntity<AnnouncementResponse> createAnnouncement(@Valid @RequestBody AnnouncementRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(announcementService.createAnnouncement(request));
     }
 
     @Operation(summary = "Update announcement")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @PutMapping("/{id}")
     public ResponseEntity<AnnouncementResponse> updateAnnouncement(
             @PathVariable Integer id,
@@ -75,7 +75,7 @@ public class AnnouncementController {
     }
 
     @Operation(summary = "Delete announcement")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAnnouncement(@PathVariable Integer id) {
         announcementService.deleteAnnouncement(id);

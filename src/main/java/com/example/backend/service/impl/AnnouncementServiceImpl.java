@@ -205,7 +205,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
     private void requireManagePermission(ClassSection classSection) {
         User currentUser = requireCurrentUser();
-        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
+        if (classMemberAuthorizationService.canPostAnnouncements(classSection, currentUser)) {
             return;
         }
         throw new UnauthorizedException("You do not have permission to manage announcements in this class section");

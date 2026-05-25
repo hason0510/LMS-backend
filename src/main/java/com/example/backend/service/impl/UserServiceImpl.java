@@ -148,36 +148,35 @@ public class UserServiceImpl implements UserService {
     })
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
+        boolean isAdmin = getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN);
 
-        if (!isCurrentUser(id) && !getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
+        if (!isCurrentUser(id) && !isAdmin) {
             throw new UnauthorizedException("You have no permission");
         }
         if (updatedUser == null) {
             throw new ResourceNotFoundException("User not found");
         }
 
-        if (request.getUserName() != null && !request.getUserName().equals(updatedUser.getUserName())) {
-            if (userRepository.existsByUserName(request.getUserName())) {
+        if (request.getUserName() != null) {
+            String nextUserName = request.getUserName().trim();
+            if (!nextUserName.equals(updatedUser.getUserName()) && userRepository.existsByUserName(nextUserName)) {
                 throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
-            } else {
-                updatedUser.setUserName(request.getUserName());
             }
-        } else if (request.getUserName() != null) {
-            updatedUser.setUserName(request.getUserName());
-        } else {
-            updatedUser.setUserName(updatedUser.getUserName());
+            updatedUser.setUserName(nextUserName);
         }
 
-        if (request.getStudentNumber() != null && !request.getStudentNumber().equals(updatedUser.getStudentNumber())) {
-            if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
-                throw new BusinessException("Ma so nay da duoc su dung");
-            } else {
-                updatedUser.setStudentNumber(request.getStudentNumber());
+        if (request.getStudentNumber() != null) {
+            String nextStudentNumber = request.getStudentNumber().trim();
+            if (!isAdmin && !nextStudentNumber.equals(updatedUser.getStudentNumber())) {
+                throw new UnauthorizedException("You have no permission");
             }
-        } else if (request.getStudentNumber() != null) {
-            updatedUser.setStudentNumber(request.getStudentNumber());
-        } else {
-            updatedUser.setStudentNumber(updatedUser.getStudentNumber());
+            if (!nextStudentNumber.equals(updatedUser.getStudentNumber())) {
+                if (userRepository.existsByStudentNumber(nextStudentNumber)) {
+                    throw new BusinessException("Ma so nay da duoc su dung");
+                } else {
+                    updatedUser.setStudentNumber(nextStudentNumber);
+                }
+            }
         }
 
         if (request.getGmail() != null && !request.getGmail().equals(updatedUser.getGmail())) {

@@ -9,9 +9,12 @@ import com.example.backend.dto.request.classsection.ClassMemberPermissionsReques
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
+import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
+import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
 import com.example.backend.dto.response.classsection.ClassSectionResponse;
 import com.example.backend.service.ClassSectionService;
@@ -64,6 +67,13 @@ public class ClassSectionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }*/
 
+    @Operation(summary = "Search class sections with paging and filters")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    @GetMapping("/search")
+    public ResponseEntity<PageResponse<ClassSectionResponse>> searchClassSections(ClassSectionSearchRequest request) {
+        return ResponseEntity.ok(classSectionService.searchClassSections(request));
+    }
+
     @Operation(summary = "Get class section detail")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     @GetMapping("/{id}")
@@ -83,6 +93,13 @@ public class ClassSectionController {
         return ResponseEntity.ok(
                 classSectionService.getClassSections(teacherId, subjectId, curriculumTemplateId, includeChapters)
         );
+    }
+
+    @Operation(summary = "Preview class section by join code")
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/join-preview")
+    public ResponseEntity<ClassSectionJoinPreviewResponse> getJoinPreview(@RequestParam String classCode) {
+        return ResponseEntity.ok(classSectionService.getJoinPreview(classCode));
     }
 
     @Operation(summary = "Add teaching member (TEACHER/TA)")

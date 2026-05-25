@@ -1,9 +1,5 @@
 package com.example.backend.controller;
 
-import com.example.backend.constant.ResourceScopeType;
-import com.example.backend.constant.ResourceSource;
-import com.example.backend.constant.ResourceStatus;
-import com.example.backend.constant.ResourceType;
 import com.example.backend.dto.request.ResourceRequest;
 import com.example.backend.dto.request.ResourceSearchRequest;
 import com.example.backend.dto.response.CloudinaryResponse;
@@ -22,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -134,27 +131,9 @@ public class ResourceController {
     public ResponseEntity<PageResponse<ResourceResponse>> getAllResources(
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
             @RequestParam(value = "pageSize", defaultValue = "5") Integer pageSize,
-            @RequestParam(value = "scopeType", required = false) ResourceScopeType scopeType,
-            @RequestParam(value = "scopeId", required = false) Integer scopeId,
-            @RequestParam(value = "type", required = false) ResourceType type,
-            @RequestParam(value = "source", required = false) ResourceSource source,
-            @RequestParam(value = "status", required = false) ResourceStatus status,
-            @RequestParam(value = "search", required = false) String search,
-            @RequestParam(value = "createdByMe", required = false) Boolean createdByMe,
-            @RequestParam(value = "recent", required = false) Boolean recent,
-            @RequestParam(value = "sortBy", defaultValue = "date") String sortBy
+            @ModelAttribute ResourceSearchRequest request
     ) {
-        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, resolveResourceSort(sortBy));
-        ResourceSearchRequest request = new ResourceSearchRequest();
-        request.setScopeType(scopeType);
-        request.setScopeId(scopeId);
-        request.setType(type);
-        request.setSource(source);
-        request.setStatus(status);
-        request.setSearch(search);
-        request.setCreatedByMe(createdByMe);
-        request.setRecent(recent);
-        request.setSortBy(sortBy);
+        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, resolveResourceSort(request.getSortBy()));
         PageResponse<ResourceResponse> response = resourceService.getResourcePage(request, pageable);
         return ResponseEntity.ok(response);
     }
@@ -175,6 +154,28 @@ public class ResourceController {
         return ResponseEntity.ok(resourceService.getResourcesByLessonId(lessonId));
     }
 
+    @Operation(summary = "Attach existing resource to lesson")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/lessons/{lessonId}/resources/{resourceId}/attach")
+    public ResponseEntity<Void> attachResourceToLesson(
+            @PathVariable Integer lessonId,
+            @PathVariable Integer resourceId
+    ) {
+        resourceService.attachResourceToLesson(lessonId, resourceId);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Detach resource from lesson")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @DeleteMapping("/lessons/{lessonId}/resources/{resourceId}/detach")
+    public ResponseEntity<Void> detachResourceFromLesson(
+            @PathVariable Integer lessonId,
+            @PathVariable Integer resourceId
+    ) {
+        resourceService.detachResourceFromLesson(lessonId, resourceId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Get resources by assignment")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/assignments/{assignmentId}/resources")
@@ -182,6 +183,28 @@ public class ResourceController {
             @PathVariable Integer assignmentId
     ) {
         return ResponseEntity.ok(resourceService.getResourcesByAssignmentId(assignmentId));
+    }
+
+    @Operation(summary = "Attach existing resource to assignment")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PostMapping("/assignments/{assignmentId}/resources/{resourceId}/attach")
+    public ResponseEntity<Void> attachResourceToAssignment(
+            @PathVariable Integer assignmentId,
+            @PathVariable Integer resourceId
+    ) {
+        resourceService.attachResourceToAssignment(assignmentId, resourceId);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Detach resource from assignment")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @DeleteMapping("/assignments/{assignmentId}/resources/{resourceId}/detach")
+    public ResponseEntity<Void> detachResourceFromAssignment(
+            @PathVariable Integer assignmentId,
+            @PathVariable Integer resourceId
+    ) {
+        resourceService.detachResourceFromAssignment(assignmentId, resourceId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Get resources by submission")

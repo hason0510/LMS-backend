@@ -33,6 +33,7 @@ public class AssignmentRequest {
     private Boolean allowLateSubmission;
 
     private List<ResourceRequest> resources;
+    private List<Integer> resourceIds;
 
     @NotNull(message = "classSectionId is required")
     private Integer classSectionId;

@@ -7,6 +7,11 @@ import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+/**
+ * Legacy chapter item entity for old course-based structure.
+ * Keep only for compatibility during phased migration.
+ */
+@Deprecated(since = "2026-05", forRemoval = false)
 @Setter
 @Getter
 @AllArgsConstructor

@@ -2,6 +2,7 @@ package com.example.backend.repository;
 
 import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.entity.assignment.Submission;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,7 +11,7 @@ import java.util.Optional;
 import java.util.Collection;
 
 @Repository
-public interface SubmissionRepository extends JpaRepository<Submission, Integer> {
+public interface SubmissionRepository extends JpaRepository<Submission, Integer>, JpaSpecificationExecutor<Submission> {
     Optional<Submission> findByAssignment_IdAndClassSection_IdAndStudent_Id(
             Integer assignmentId,
             Integer classSectionId,

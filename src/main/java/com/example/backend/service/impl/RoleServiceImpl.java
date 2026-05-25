@@ -5,11 +5,9 @@ import com.example.backend.dto.request.RoleRequest;
 import com.example.backend.dto.request.UserRoleRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.RoleResponse;
-import com.example.backend.entity.Permission;
 import com.example.backend.entity.Role;
 import com.example.backend.entity.User;
 import com.example.backend.exception.ResourceNotFoundException;
-import com.example.backend.repository.PermissionRepository;
 import com.example.backend.repository.RoleRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.RoleService;
@@ -24,14 +22,11 @@ import java.util.List;
 @Service
 public class RoleServiceImpl implements RoleService {
     private final RoleRepository roleRepository;
-    private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
 
-    public RoleServiceImpl(RoleRepository roleRepository, 
-                          PermissionRepository permissionRepository,
+    public RoleServiceImpl(RoleRepository roleRepository,
                           UserRepository userRepository) {
         this.roleRepository = roleRepository;
-        this.permissionRepository = permissionRepository;
         this.userRepository = userRepository;
     }
 
@@ -44,15 +39,6 @@ public class RoleServiceImpl implements RoleService {
         }
         role.setRoleName(RoleType.valueOf(request.getRoleName()));
         role.setRoleDesc(request.getRoleDesc());
-        
-        if (request.getPermissionIds() != null && !request.getPermissionIds().isEmpty()) {
-            List<Permission> permissions = request.getPermissionIds().stream()
-                    .map(id -> permissionRepository.findById(id)
-                            .orElseThrow(() -> new ResourceNotFoundException("Permission not found with id: " + id)))
-                    .toList();
-            log.info("Adding {} permissions to role", permissions.size());
-            role.setPermissions(permissions);
-        }
         Role savedRole = roleRepository.save(role);
         log.info("Role created successfully with id: {}", savedRole.getRoleID());
         return convertToDTO(savedRole);
@@ -66,13 +52,6 @@ public class RoleServiceImpl implements RoleService {
                     return new ResourceNotFoundException("Role not found with id: " + roleId);
                 });
         role.setRoleDesc(request.getRoleDesc());
-        if (request.getPermissionIds() != null) {
-            List<Permission> permissions = request.getPermissionIds().stream()
-                    .map(id -> permissionRepository.findById(id)
-                            .orElseThrow(() -> new ResourceNotFoundException("Permission not found with id: " + id)))
-                    .toList();
-            role.setPermissions(permissions);
-        }
         roleRepository.save(role);
         return convertToDTO(role);
     }
@@ -81,7 +60,6 @@ public class RoleServiceImpl implements RoleService {
     public void deleteRole(Integer roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found with id: " + roleId));
-        role.getPermissions().forEach(permission -> permission.getRoles().remove(role));
         role.getUsers().forEach(user -> {
             Role defaultRole = roleRepository.findFirstByRoleNameOrderByRoleIDAsc(RoleType.STUDENT)
                     .orElseThrow(() -> new ResourceNotFoundException("Role not found with name: STUDENT"));
@@ -131,11 +109,6 @@ public class RoleServiceImpl implements RoleService {
         response.setRoleName(role.getRoleName().name());
         response.setRoleID(role.getRoleID());
         response.setRoleDesc(role.getRoleDesc());
-        List<Integer> permissionIds = role.getPermissions()
-                .stream()
-                .map(Permission::getId)
-                .toList();
-        response.setPermissionIds(permissionIds);
         return response;
     }
 }

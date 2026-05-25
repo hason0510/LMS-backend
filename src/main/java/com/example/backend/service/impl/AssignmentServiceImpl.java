@@ -78,6 +78,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         Assignment assignment = new Assignment();
         applyRequest(assignment, request, classSection, true);
         Assignment saved = assignmentRepository.save(assignment);
+        syncAssignmentAttachedResources(saved, request);
         classNotificationService.notifyApprovedStudents(
                 classSection,
                 "Bài tập mới: " + saved.getTitle(),
@@ -110,6 +111,7 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         applyRequest(assignment, request, classSection, false);
         Assignment savedAssignment = assignmentRepository.save(assignment);
+        syncAssignmentAttachedResources(savedAssignment, request);
         syncLinkedClassContentItemTitle(savedAssignment, previousTitle);
         return convertToResponse(savedAssignment);
     }
@@ -369,8 +371,18 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setAllowLateSubmission(Boolean.TRUE.equals(request.getAllowLateSubmission()));
         assignment.setClassSection(classSection);
 
-        if (createMode || request.getResources() != null) {
+        if ((request.getResourceIds() == null || request.getResourceIds().isEmpty())
+                && (createMode || request.getResources() != null)) {
             replaceAssignmentResources(assignment, request.getResources());
+            return;
+        }
+
+        if (request.getResourceIds() != null) {
+            if (assignment.getResources() == null) {
+                assignment.setResources(new ArrayList<>());
+            } else {
+                assignment.getResources().clear();
+            }
         }
     }
 
@@ -390,6 +402,19 @@ public class AssignmentServiceImpl implements AssignmentService {
             resource.setLesson(null);
             resource.setSubmission(null);
             assignment.getResources().add(resource);
+        }
+    }
+
+    private void syncAssignmentAttachedResources(Assignment assignment, AssignmentRequest request) {
+        if (assignment == null || assignment.getId() == null || request == null) {
+            return;
+        }
+        if (request.getResourceIds() != null) {
+            resourceService.replaceAttachedResources("ASSIGNMENT", assignment.getId(), request.getResourceIds());
+            return;
+        }
+        if (request.getResources() != null) {
+            resourceService.replaceAttachedResources("ASSIGNMENT", assignment.getId(), List.of());
         }
     }
 
@@ -536,11 +561,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setCloseAt(assignment.getCloseAt());
         response.setAllowLateSubmission(assignment.isAllowLateSubmission());
         response.setClassSectionId(assignment.getClassSection() != null ? assignment.getClassSection().getId() : null);
-        response.setResources(
-                assignment.getResources() == null
-                        ? List.of()
-                        : assignment.getResources().stream().map(resourceService::convertEntityToDTO).toList()
-        );
+        response.setResources(resourceService.getResourcesByAssignmentId(assignment.getId()));
         return response;
     }
 

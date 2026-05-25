@@ -11,6 +11,7 @@ import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.*;
 import com.example.backend.service.CommentService;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.NotificationService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class CommentServiceImpl implements CommentService {
     private final UserService userService;
     private final NotificationService notificationService;
     private final EnrollmentRepository enrollmentRepository;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
 
     @Transactional
     @Override
@@ -54,6 +56,11 @@ public class CommentServiceImpl implements CommentService {
 
         if (currentRole != RoleType.ADMIN && !isTeacher && !isClassMember && !isEnrolled) {
             throw new UnauthorizedException("Chỉ người dùng nằm trong khóa học này mới được bình luận!");
+        }
+
+        if (classMemberAuthorizationService.resolveTeachingRole(classSection, currentUser).isPresent()
+                && !classMemberAuthorizationService.canReplyComments(classSection, currentUser)) {
+            throw new UnauthorizedException("Bạn chưa được cấp quyền trả lời bình luận trong lớp này");
         }
 
         Comment comment = new Comment();

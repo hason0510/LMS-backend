@@ -8,6 +8,11 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 import java.util.List;
 
+/**
+ * Legacy course entity kept for backward compatibility with old endpoints.
+ * New learning flow should use ClassSection/CurriculumTemplate domain models.
+ */
+@Deprecated(since = "2026-05", forRemoval = false)
 @Setter
 @Getter
 @AllArgsConstructor

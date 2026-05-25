@@ -9,9 +9,12 @@ import com.example.backend.dto.request.classsection.ClassMemberPermissionsReques
 import com.example.backend.dto.request.classsection.ClassMemberRequest;
 import com.example.backend.dto.request.classsection.ClassMemberRoleRequest;
 import com.example.backend.dto.request.classsection.ClassSectionRequest;
+import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
+import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
 import com.example.backend.dto.response.classsection.ClassSectionResponse;
 import com.example.backend.entity.assignment.Assignment;
@@ -65,13 +68,20 @@ import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassSectionService;
 import com.example.backend.service.UserService;
+import com.example.backend.specification.ClassSectionSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -189,8 +199,100 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
 
         return classSections.stream()
+                .sorted(Comparator
+                        .comparing(ClassSection::getCreatedDate, Comparator.nullsLast(LocalDate::compareTo))
+                        .thenComparing(ClassSection::getId, Comparator.nullsLast(Integer::compareTo)))
                 .map(classSection -> convertToResponse(classSection, includeChapters))
                 .toList();
+    }
+
+    @Override
+    public PageResponse<ClassSectionResponse> searchClassSections(ClassSectionSearchRequest request) {
+        ClassSectionSearchRequest safeRequest = request != null ? request : new ClassSectionSearchRequest();
+        User currentUser = userService.getCurrentUser();
+        Pageable pageable = PageRequest.of(
+                resolvePageNumber(safeRequest.getPageNumber()) - 1,
+                resolvePageSize(safeRequest.getPageSize()),
+                resolveSort(safeRequest.getSortBy(), safeRequest.getSortDirection())
+        );
+
+        Specification<ClassSection> spec = Specification.where(ClassSectionSpecification.titleContains(safeRequest.getKeyword()))
+                .and(ClassSectionSpecification.teacherNameContains(safeRequest.getTeacherKeyword()))
+                .and(ClassSectionSpecification.subjectCodeContains(safeRequest.getSubjectKeyword()))
+                .and(ClassSectionSpecification.hasCategoryId(safeRequest.getCategoryId()))
+                .and(ClassSectionSpecification.hasSubjectId(safeRequest.getSubjectId()))
+                .and(ClassSectionSpecification.hasStatus(safeRequest.getStatus()))
+                .and(ClassSectionSpecification.startDateBetween(safeRequest.getStartDateFrom(), safeRequest.getStartDateTo()));
+
+        String scope = normalizeScope(safeRequest.getScope(), currentUser);
+        if ("MY".equals(scope)) {
+            spec = spec.and(ClassSectionSpecification.enrolledByStudent(currentUser.getId()));
+        } else if ("PUBLIC".equals(scope)) {
+            spec = spec.and(ClassSectionSpecification.visiblePublicClasses())
+                    .and(ClassSectionSpecification.notEnrolledByStudent(currentUser.getId()));
+        }
+
+        Page<ClassSection> page = classSectionRepository.findAll(spec, pageable);
+        List<ClassSectionResponse> items = page.getContent().stream()
+                .map(classSection -> convertToResponse(classSection, false))
+                .toList();
+
+        return new PageResponse<>(
+                page.getNumber() + 1,
+                page.getTotalPages(),
+                page.getTotalElements(),
+                items
+        );
+    }
+
+    @Override
+    public ClassSectionJoinPreviewResponse getJoinPreview(String classCode) {
+        if (!StringUtils.hasText(classCode)) {
+            throw new BusinessException("Ma lop khong hop le");
+        }
+
+        User currentUser = userService.getCurrentUser();
+        ClassSection classSection = classSectionRepository.findByClassCode(classCode.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+
+        if (classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Lop hoc da luu tru, khong the tham gia");
+        }
+        ensureCurrentUserIsNotClassStaff(currentUser, classSection);
+
+        Enrollment enrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(currentUser.getId(), classSection.getId());
+        ClassSectionJoinPreviewResponse response = new ClassSectionJoinPreviewResponse();
+        response.setId(classSection.getId());
+        response.setClassCode(classSection.getClassCode());
+        response.setTitle(classSection.getTitle());
+        response.setImageUrl(classSection.getImageUrl());
+        response.setStatus(classSection.getStatus());
+        response.setStartDate(classSection.getStartDate());
+        response.setEndDate(classSection.getEndDate());
+        response.setSubjectId(classSection.getSubject() != null ? classSection.getSubject().getId() : null);
+        response.setSubjectCode(classSection.getSubject() != null ? classSection.getSubject().getCode() : null);
+        response.setSubjectTitle(classSection.getSubject() != null ? classSection.getSubject().getTitle() : null);
+        response.setCategoryId(classSection.getSubject() != null && classSection.getSubject().getCategory() != null
+                ? classSection.getSubject().getCategory().getId()
+                : null);
+        response.setCategoryTitle(classSection.getSubject() != null && classSection.getSubject().getCategory() != null
+                ? classSection.getSubject().getCategory().getTitle()
+                : null);
+
+        User primaryTeacher = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
+        response.setTeacherId(primaryTeacher != null ? primaryTeacher.getId() : null);
+        response.setTeacherName(primaryTeacher != null ? primaryTeacher.getFullName() : null);
+        response.setTeacherImageUrl(primaryTeacher != null ? primaryTeacher.getImageUrl() : null);
+        response.setTotalEnrollments(enrollmentRepository.countApprovedEnrollmentsByClassSectionId(classSection.getId()));
+        response.setAlreadyJoined(enrollment != null);
+        response.setEnrollmentStatus(enrollment != null && enrollment.getApprovalStatus() != null
+                ? enrollment.getApprovalStatus().name()
+                : null);
+        response.setJoinMode(classSection.getStatus() == ClassSectionStatus.PUBLIC ? "INSTANT" : "REQUEST");
+        response.setJoinMessage(classSection.getStatus() == ClassSectionStatus.PUBLIC
+                ? "Lop hoc mo, bat ky ai co tai khoan deu co the tham gia ngay."
+                : "Lop hoc rieng tu. Yeu cau cua ban se duoc gui toi giang vien de phe duyet.");
+        return response;
     }
 
     @Override
@@ -504,9 +606,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     @Override
     public List<ClassSectionResponse> getAllClassSectionsForStudent() {
         User currentUser = userService.getCurrentUser();
-        List<Enrollment> enrollments = enrollmentRepository.findAll().stream()
-                .filter(e -> e.getStudent().getId().equals(currentUser.getId()))
-                .toList();
+        List<Enrollment> enrollments = enrollmentRepository.findByStudent_IdAndClassSection_IdIsNotNull(currentUser.getId());
 
         return enrollments.stream()
                 .map(enrollment -> convertToResponse(enrollment.getClassSection(), false))
@@ -558,8 +658,16 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setStatus(classSection.getStatus());
         response.setStartDate(classSection.getStartDate());
         response.setEndDate(classSection.getEndDate());
+        response.setCreatedDate(classSection.getCreatedDate());
         response.setSubjectId(classSection.getSubject() != null ? classSection.getSubject().getId() : null);
+        response.setSubjectCode(classSection.getSubject() != null ? classSection.getSubject().getCode() : null);
         response.setSubjectTitle(classSection.getSubject() != null ? classSection.getSubject().getTitle() : null);
+        response.setCategoryId(classSection.getSubject() != null && classSection.getSubject().getCategory() != null
+                ? classSection.getSubject().getCategory().getId()
+                : null);
+        response.setCategoryTitle(classSection.getSubject() != null && classSection.getSubject().getCategory() != null
+                ? classSection.getSubject().getCategory().getTitle()
+                : null);
         response.setTeacherId(primaryTeacher != null ? primaryTeacher.getId() : null);
         response.setTeacherName(primaryTeacher != null ? primaryTeacher.getFullName() : null);
         response.setTeacherImageUrl(primaryTeacher != null ? primaryTeacher.getImageUrl() : null);
@@ -577,6 +685,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 : null);
         response.setTotalEnrollments(
                 enrollmentRepository.countApprovedEnrollmentsByClassSectionId(classSection.getId()));
+        Enrollment myEnrollment = currentUser != null
+                ? enrollmentRepository.findByStudent_IdAndClassSection_Id(currentUser.getId(), classSection.getId())
+                : null;
+        response.setMyProgress(myEnrollment != null ? myEnrollment.getProgress() : null);
+        response.setMyEnrollmentStatus(myEnrollment != null ? myEnrollment.getApprovalStatus() : null);
         return response;
     }
 
@@ -1254,6 +1367,52 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (enrollment != null) {
             throw new BusinessException("Khong the them nguoi dung da la hoc vien vao vai tro giang day trong cung lop");
         }
+    }
+
+    private void ensureCurrentUserIsNotClassStaff(User user, ClassSection classSection) {
+        if (user == null || classSection == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, user)) {
+            throw new BusinessException("Ban dang la nhan su giang day cua lop hoc nay");
+        }
+    }
+
+    private int resolvePageNumber(Integer pageNumber) {
+        return pageNumber != null && pageNumber > 0 ? pageNumber : 1;
+    }
+
+    private int resolvePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize <= 0) {
+            return 12;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private String normalizeScope(String scope, User currentUser) {
+        if (currentUser == null || currentUser.getRole() == null) {
+            return "ALL";
+        }
+        if (!StringUtils.hasText(scope)) {
+            return currentUser.getRole().getRoleName() == RoleType.STUDENT ? "PUBLIC" : "ALL";
+        }
+        String normalized = scope.trim().toUpperCase(Locale.ROOT);
+        if ("MY".equals(normalized) || "PUBLIC".equals(normalized) || "ALL".equals(normalized)) {
+            return normalized;
+        }
+        return currentUser.getRole().getRoleName() == RoleType.STUDENT ? "PUBLIC" : "ALL";
+    }
+
+    private Sort resolveSort(String sortBy, String sortDirection) {
+        String property = switch (sortBy != null ? sortBy.trim() : "") {
+            case "title" -> "title";
+            case "startDate" -> "startDate";
+            default -> "createdDate";
+        };
+        Sort.Direction direction = "DESC".equalsIgnoreCase(sortDirection)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return Sort.by(direction, property).and(Sort.by(Sort.Direction.ASC, "id"));
     }
 
     private boolean shouldIncludeItemForUser(ClassContentItem item, User currentUser) {

@@ -2,6 +2,8 @@ package com.example.backend.dto.request;
 
 import lombok.*;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -11,4 +13,5 @@ public class LessonRequest {
     private String content;
     private String videoUrl;
     private String notes;
+    private List<Integer> resourceIds;
 }

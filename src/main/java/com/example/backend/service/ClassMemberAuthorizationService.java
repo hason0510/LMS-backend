@@ -227,6 +227,10 @@ public class ClassMemberAuthorizationService {
         return hasCapability(classSection, user, CAP_POST_ANNOUNCEMENTS);
     }
 
+    public boolean canReplyComments(ClassSection classSection, User user) {
+        return hasCapability(classSection, user, CAP_REPLY_COMMENTS);
+    }
+
     public boolean canManageEnrollments(ClassSection classSection, User user) {
         return hasCapability(classSection, user, CAP_MANAGE_ENROLLMENTS);
     }

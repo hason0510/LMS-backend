@@ -42,6 +42,11 @@ public interface ResourceService {
     List<ResourceResponse> getResourcesByLessonId(Integer lessonId);
     List<ResourceResponse> getResourcesByAssignmentId(Integer assignmentId);
     List<ResourceResponse> getResourcesBySubmissionId(Integer submissionId);
+    void attachResourceToLesson(Integer lessonId, Integer resourceId);
+    void attachResourceToAssignment(Integer assignmentId, Integer resourceId);
+    void detachResourceFromLesson(Integer lessonId, Integer resourceId);
+    void detachResourceFromAssignment(Integer assignmentId, Integer resourceId);
+    void replaceAttachedResources(String entityType, Integer entityId, List<Integer> resourceIds);
 
     ResourceResponse convertEntityToDTO(Resource resource);
     Resource buildDetachedResource(ResourceRequest request);

@@ -17,6 +17,7 @@ import com.example.backend.repository.ProgressRepository;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.LessonService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class LessonServiceImpl implements LessonService {
     private final ClassContentItemRepository classContentItemRepository;
     private final UserService userService;
     private final ClassContentAccessService classContentAccessService;
+    private final ResourceService resourceService;
 
     @Override
     public LessonResponse getLessonById(Integer id) {
@@ -55,8 +57,11 @@ public class LessonServiceImpl implements LessonService {
         lesson.setContent(request.getContent());
         lesson.setVideoUrl(request.getVideoUrl());
         lesson.setNotes(request.getNotes());
-        lessonRepository.save(lesson);
-        return convertEntityToDTO(lesson);
+        Lesson savedLesson = lessonRepository.save(lesson);
+        if (request.getResourceIds() != null) {
+            resourceService.replaceAttachedResources("LESSON", savedLesson.getId(), request.getResourceIds());
+        }
+        return convertEntityToDTO(savedLesson);
     }
 
     @Override
@@ -76,6 +81,9 @@ public class LessonServiceImpl implements LessonService {
             lesson.setNotes(request.getNotes());
         }
         Lesson savedLesson = lessonRepository.save(lesson);
+        if (request.getResourceIds() != null) {
+            resourceService.replaceAttachedResources("LESSON", savedLesson.getId(), request.getResourceIds());
+        }
         syncLinkedClassContentItemTitle(savedLesson, previousTitle);
         return convertEntityToDTO(savedLesson);
     }
@@ -101,26 +109,7 @@ public class LessonServiceImpl implements LessonService {
         response.setContent(lesson.getContent());
         response.setVideoUrl(lesson.getVideoUrl());
         response.setNotes(lesson.getNotes());
-        if (lesson.getResources() != null && !lesson.getResources().isEmpty()) {
-            List<ResourceResponse> resourceResponses = lesson.getResources()
-                    .stream()
-                    .map(resource -> {
-                        ResourceResponse rr = new ResourceResponse();
-                        rr.setId(resource.getId());
-                        rr.setTitle(resource.getTitle());
-                        rr.setFileUrl(resource.getFileUrl());
-                        rr.setEmbedUrl(resource.getEmbedUrl());
-                        rr.setCloudinaryId(resource.getCloudinaryId());
-                        rr.setType(resource.getType());
-                        rr.setLessonId(resource.getLesson().getId());
-                        rr.setLessonTitle(resource.getLesson().getTitle());
-                        return rr;
-                    })
-                    .toList();
-            response.setResources(resourceResponses);
-        } else {
-            response.setResources(List.of()); // tránh null cho frontend
-        }
+        response.setResources(resourceService.getResourcesByLessonId(lesson.getId()));
         return response;
     }
 

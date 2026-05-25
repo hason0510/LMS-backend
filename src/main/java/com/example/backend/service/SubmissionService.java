@@ -4,6 +4,7 @@ import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.dto.request.SubmissionGradeRequest;
 import com.example.backend.dto.request.SubmissionRequest;
 import com.example.backend.dto.request.SubmissionReturnRequest;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.SubmissionResponse;
 
 import java.util.List;
@@ -15,7 +16,15 @@ public interface SubmissionService {
 
     List<SubmissionResponse> getMySubmissions(Integer classSectionId, SubmissionStatus status);
 
-    List<SubmissionResponse> getAssignmentSubmissions(Integer assignmentId, Integer classSectionId, boolean includeNotSubmitted);
+    PageResponse<SubmissionResponse> getAssignmentSubmissions(
+            Integer assignmentId,
+            Integer classSectionId,
+            boolean includeNotSubmitted,
+            String keyword,
+            SubmissionStatus status,
+            Integer pageNumber,
+            Integer pageSize
+    );
 
     SubmissionResponse gradeSubmission(Integer submissionId, SubmissionGradeRequest request);
 

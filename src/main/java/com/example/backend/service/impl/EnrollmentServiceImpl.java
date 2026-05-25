@@ -216,26 +216,32 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 }
             }
 
+            EnrollmentStatus targetStatus = classSection.getStatus() == ClassSectionStatus.PUBLIC
+                    ? EnrollmentStatus.APPROVED
+                    : EnrollmentStatus.PENDING;
+
             Enrollment newEnrollment = Enrollment.builder()
                     .student(currentUser)
                     .classSection(classSection)
                     .progress(0)
-                    .approvalStatus(EnrollmentStatus.PENDING)
+                    .approvalStatus(targetStatus)
                     .build();
             enrollmentRepository.save(newEnrollment);
 
-            User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
-            if (notifyUser != null) {
-                String message = "Sinh vien " + currentUser.getFullName()
-                        + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
-                notificationService.createNotification(
-                        notifyUser,
-                        "Yeu cau tham gia lop hoc",
-                        message,
-                        "CLASS_SECTION_ENROLLMENT_REQUEST",
-                        null,
-                        null
-                );
+            if (targetStatus == EnrollmentStatus.PENDING) {
+                User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
+                if (notifyUser != null) {
+                    String message = "Sinh vien " + currentUser.getFullName()
+                            + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
+                    notificationService.createNotification(
+                            notifyUser,
+                            "Yeu cau tham gia lop hoc",
+                            message,
+                            "CLASS_SECTION_ENROLLMENT_REQUEST",
+                            null,
+                            null
+                    );
+                }
             }
             return convertEnrollmentToDTO(newEnrollment);
         }
@@ -285,14 +291,18 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .student(currentUser)
                 .classSection(classSection)
                 .progress(0)
-                .approvalStatus(EnrollmentStatus.PENDING)
+                .approvalStatus(classSection.getStatus() == ClassSectionStatus.PUBLIC
+                        ? EnrollmentStatus.APPROVED
+                        : EnrollmentStatus.PENDING)
                 .build();
         enrollmentRepository.save(newEnrollment);
 
-        User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
-        if (notifyUser != null) {
-            String message = "Sinh vien " + currentUser.getFullName() + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
-            notificationService.createNotification(notifyUser, "Yeu cau tham gia lop hoc", message, "CLASS_SECTION_ENROLLMENT_REQUEST", null, null);
+        if (newEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
+            User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
+            if (notifyUser != null) {
+                String message = "Sinh vien " + currentUser.getFullName() + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
+                notificationService.createNotification(notifyUser, "Yeu cau tham gia lop hoc", message, "CLASS_SECTION_ENROLLMENT_REQUEST", null, null);
+            }
         }
 
         return convertEnrollmentToDTO(newEnrollment);

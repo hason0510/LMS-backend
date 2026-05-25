@@ -14,6 +14,8 @@ import lombok.Setter;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.util.List;
+
 @Entity
 @Table(name = "quiz_template_bank_sources")
 @Getter
@@ -59,6 +61,6 @@ public class QuizTemplateBankSource extends BaseEntity {
             joinColumns = @JoinColumn(name = "source_id"),
             inverseJoinColumns = @JoinColumn(name = "tag_id")
     )
-    private java.util.List<QuestionTag> tags;
+    private List<QuestionTag> tags;
 
 }
