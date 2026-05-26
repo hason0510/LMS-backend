@@ -5,9 +5,10 @@
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-!**/target
+.claude/
+run*.log
+*.log
+.DS_Store
 ### STS ###
 .apt_generated
 .classpath

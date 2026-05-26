@@ -1221,15 +1221,29 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 && currentUser.getRole() != null
                 && currentUser.getRole().getRoleName() == RoleType.ADMIN;
 
-        if (isAdminCreator && teacherId == null) {
-            throw new BusinessException("Admin must choose a TEACHER as class owner");
-        }
-
         User teacher = resolveUser(teacherId, currentUser);
-        if (teacher.getRole() == null || teacher.getRole().getRoleName() != RoleType.TEACHER) {
-            throw new BusinessException("Class owner must be a TEACHER account");
+        if (isTeacherAccount(teacher)) {
+            return teacher;
         }
-        return teacher;
+        if (isAdminCreator && isCurrentAdmin(teacher, currentUser)) {
+            return teacher;
+        }
+        if (isAdminCreator) {
+            throw new BusinessException("Class owner must be the current ADMIN or a TEACHER account");
+        }
+        throw new BusinessException("Class owner must be a TEACHER account");
+    }
+
+    private boolean isTeacherAccount(User user) {
+        return user != null
+                && user.getRole() != null
+                && user.getRole().getRoleName() == RoleType.TEACHER;
+    }
+
+    private boolean isCurrentAdmin(User user, User currentUser) {
+        return user != null
+                && currentUser != null
+                && Objects.equals(user.getId(), currentUser.getId());
     }
 
     @Override

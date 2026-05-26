@@ -8,6 +8,7 @@ import com.example.backend.repository.EnrollmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,18 +82,33 @@ public class ClassNotificationService {
             }
             notificationService.createNotification(
                     recipient,
-                    title,
-                    message,
+                    sanitizeText(title),
+                    sanitizeText(message),
                     type,
-                    description,
+                    sanitizeText(description),
                     actionUrl,
-                    summary,
+                    sanitizeText(summary),
                     classSection.getId(),
                     classTitle,
                     referenceType,
                     referenceId,
-                    dedupeKey
+                dedupeKey
             );
         }
+    }
+
+    private String sanitizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = HtmlUtils.htmlUnescape(value)
+                .replaceAll("(?i)<br\\s*/?>", " ")
+                .replaceAll("(?i)</(p|div|li|h[1-6]|tr)>", " ")
+                .replaceAll("(?i)<li\\b[^>]*>", " - ")
+                .replaceAll("<[^>]+>", " ")
+                .replace('\u00A0', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
+        return normalized;
     }
 }

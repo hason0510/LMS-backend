@@ -7,6 +7,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SubjectRequest {
+    private String code;
     private String title;
     private String description;
     private Integer categoryId;
