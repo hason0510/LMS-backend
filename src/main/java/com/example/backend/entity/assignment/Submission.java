@@ -42,7 +42,7 @@ public class Submission extends BaseEntity {
     @JoinColumn(name = "student_id")
     private User student;
 
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String description;
 
     private String fileUrl;

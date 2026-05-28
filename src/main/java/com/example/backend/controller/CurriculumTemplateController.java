@@ -70,10 +70,12 @@ public class CurriculumTemplateController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping
     public ResponseEntity<List<CurriculumTemplateResponse>> getTemplates(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer categoryId,
             @RequestParam(required = false) Integer subjectId,
             @RequestParam(defaultValue = "false") boolean includeChapters
     ) {
-        return ResponseEntity.ok(curriculumTemplateService.getTemplates(subjectId, includeChapters));
+        return ResponseEntity.ok(curriculumTemplateService.getTemplates(keyword, categoryId, subjectId, includeChapters));
     }
 
     @Operation(summary = "Tao chapter cho template")

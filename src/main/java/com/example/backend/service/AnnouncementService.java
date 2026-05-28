@@ -21,6 +21,8 @@ public interface AnnouncementService {
             String contentKeyword,
             String sort,
             LocalDate date,
+            LocalDate dateFrom,
+            LocalDate dateTo,
             String search,
             Integer pageNumber,
             Integer pageSize

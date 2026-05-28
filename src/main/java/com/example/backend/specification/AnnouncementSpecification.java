@@ -68,12 +68,18 @@ public class AnnouncementSpecification {
         };
     }
 
-    public static Specification<Announcement> createdOn(LocalDate date) {
+    public static Specification<Announcement> createdBetween(LocalDate from, LocalDate to) {
         return (root, query, cb) -> {
-            if (date == null) {
+            if (from == null && to == null) {
                 return cb.conjunction();
             }
-            return cb.between(root.get("createdAt"), date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+            if (from != null && to != null) {
+                return cb.between(root.get("createdAt"), from.atStartOfDay(), to.plusDays(1).atStartOfDay());
+            }
+            if (from != null) {
+                return cb.greaterThanOrEqualTo(root.get("createdAt"), from.atStartOfDay());
+            }
+            return cb.lessThan(root.get("createdAt"), to.plusDays(1).atStartOfDay());
         };
     }
 

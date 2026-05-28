@@ -2,6 +2,8 @@ package com.example.backend.service.impl;
 
 import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.ClassContentAvailabilityStatus;
+import com.example.backend.constant.ClassSectionStatus;
+import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.QuizSourceSelectionMode;
@@ -24,6 +26,7 @@ import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionTag;
@@ -39,6 +42,7 @@ import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassSectionRepository;
+import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.QuestionTagRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
@@ -46,6 +50,7 @@ import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.service.QuizService;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassNotificationService;
@@ -85,9 +90,11 @@ public class QuizServiceImpl implements QuizService {
     private final QuestionTagRepository questionTagRepository;
     private final ClassSectionRepository classSectionRepository;
     private final ClassContentItemRepository classContentItemRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final ResourceRepository resourceRepository;
     private final ClassNotificationService classNotificationService;
     private final UserService userService;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
     private final ResourceAuthorizationService resourceAuthorizationService;
 
@@ -100,9 +107,11 @@ public class QuizServiceImpl implements QuizService {
             QuestionTagRepository questionTagRepository,
             ClassSectionRepository classSectionRepository,
             ClassContentItemRepository classContentItemRepository,
+            EnrollmentRepository enrollmentRepository,
             ResourceRepository resourceRepository,
             ClassNotificationService classNotificationService,
             UserService userService,
+            ClassMemberAuthorizationService classMemberAuthorizationService,
             ClassContentAccessService classContentAccessService,
             ResourceAuthorizationService resourceAuthorizationService
     ) {
@@ -114,9 +123,11 @@ public class QuizServiceImpl implements QuizService {
         this.questionTagRepository = questionTagRepository;
         this.classSectionRepository = classSectionRepository;
         this.classContentItemRepository = classContentItemRepository;
+        this.enrollmentRepository = enrollmentRepository;
         this.resourceRepository = resourceRepository;
         this.classNotificationService = classNotificationService;
         this.userService = userService;
+        this.classMemberAuthorizationService = classMemberAuthorizationService;
         this.classContentAccessService = classContentAccessService;
         this.resourceAuthorizationService = resourceAuthorizationService;
     }
@@ -188,6 +199,8 @@ public class QuizServiceImpl implements QuizService {
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + id));
         if (classContentItemId != null) {
             validateQuizAccessByClassContentItem(quiz, classContentItemId);
+        } else {
+            requireViewPermission(resolveClassSectionForQuiz(quiz));
         }
         return convertQuizToDTO(quiz);
     }
@@ -196,6 +209,7 @@ public class QuizServiceImpl implements QuizService {
     public QuizResponse getQuizPreviewSample(Integer id, Long seed) {
         Quiz quiz = quizRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found with id: " + id));
+        requireEditContentPermission(resolveClassSectionForQuiz(quiz));
 
         QuizResponse response = convertQuizToDTO(quiz);
         long effectiveSeed = seed != null ? seed : (10_000L + id);
@@ -211,6 +225,7 @@ public class QuizServiceImpl implements QuizService {
     @Transactional
     public QuizResponse createQuiz(QuizRequest request) {
         validateQuizStructureRequest(request);
+        requireEditContentPermission(resolveTargetClassSection(request));
 
         Quiz quiz = new Quiz();
         applyQuizMetadata(quiz, request, true);
@@ -228,6 +243,9 @@ public class QuizServiceImpl implements QuizService {
 
         Quiz quiz = quizRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
+        ClassSection currentClassSection = resolveClassSectionForQuiz(quiz);
+        ClassSection requestedClassSection = resolveTargetClassSection(request);
+        requireEditContentPermission(requestedClassSection != null ? requestedClassSection : currentClassSection);
         String previousTitle = quiz.getTitle();
         applyQuizMetadata(quiz, request, false);
         Quiz savedQuiz = quizRepository.save(quiz);
@@ -241,6 +259,7 @@ public class QuizServiceImpl implements QuizService {
     @Override
     public void deleteQuiz(Integer id) {
         Quiz quiz = quizRepository.findById(id).orElseThrow();
+        requireEditContentPermission(resolveClassSectionForQuiz(quiz));
         quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(id).forEach(quizBankSourceRepository::delete);
         quizQuestionRepository.findByQuiz_IdOrderByIdAsc(id).forEach(question -> {
             if (question.getAnswers() != null) {
@@ -302,8 +321,8 @@ public class QuizServiceImpl implements QuizService {
         }
         classNotificationService.notifyApprovedStudents(
                 quiz.getClassSection(),
-                "Quiz má»›i: " + quiz.getTitle(),
-                "Lá»›p " + quiz.getClassSection().getTitle() + " vá»«a cÃ³ quiz má»›i.",
+                "Quiz mới: " + quiz.getTitle(),
+                "Lớp " + quiz.getClassSection().getTitle() + " vừa có quiz mới.",
                 "QUIZ_CREATED",
                 quiz.getDescription(),
                 "/class-sections/" + quiz.getClassSection().getId() + "/quizzes/" + quiz.getId() + "/detail",
@@ -849,6 +868,95 @@ public class QuizServiceImpl implements QuizService {
         if (Boolean.TRUE.equals(request.getGenerateQuestionsPerAttempt()) && !hasBankSources) {
             throw new BusinessException("bankSources is required when generateQuestionsPerAttempt is enabled");
         }
+    }
+
+    private ClassSection resolveTargetClassSection(QuizRequest request) {
+        if (request == null) {
+            return null;
+        }
+        if (request.getClassSectionId() != null) {
+            return classSectionRepository.findById(request.getClassSectionId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        }
+        if (request.getClassContentItemId() != null) {
+            ClassContentItem classContentItem = classContentItemRepository.findById(request.getClassContentItemId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
+            return classContentItem.getClassChapter() != null ? classContentItem.getClassChapter().getClassSection() : null;
+        }
+        return null;
+    }
+
+    private ClassSection resolveClassSectionForQuiz(Quiz quiz) {
+        if (quiz == null) {
+            return null;
+        }
+        if (quiz.getClassSection() != null) {
+            return quiz.getClassSection();
+        }
+        return classContentItemRepository.findByQuiz_Id(quiz.getId())
+                .map(item -> item.getClassChapter() != null ? item.getClassChapter().getClassSection() : null)
+                .orElse(null);
+    }
+
+    private void requireEditContentPermission(ClassSection classSection) {
+        if (classSection == null) {
+            return;
+        }
+        ensureClassSectionInteractive(classSection);
+        User currentUser = requireCurrentUser();
+        if (classMemberAuthorizationService.hasCapability(
+                classSection,
+                currentUser,
+                ClassMemberAuthorizationService.CAP_EDIT_CONTENT
+        )) {
+            return;
+        }
+        throw new UnauthorizedException("You do not have permission to edit content in this class section");
+    }
+
+    private void requireViewPermission(ClassSection classSection) {
+        if (classSection == null) {
+            if (requireCurrentUser().getRole().getRoleName() == RoleType.STUDENT) {
+                throw new UnauthorizedException("You do not have permission to access this quiz");
+            }
+            return;
+        }
+        User currentUser = requireCurrentUser();
+        if (canViewClassSection(classSection, currentUser)) {
+            return;
+        }
+        throw new UnauthorizedException("You do not have permission to access this class section");
+    }
+
+    private boolean canViewClassSection(ClassSection classSection, User currentUser) {
+        if (classSection == null || currentUser == null) {
+            return false;
+        }
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
+            return true;
+        }
+        if (currentUser.getRole().getRoleName() != RoleType.STUDENT) {
+            return false;
+        }
+        return enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
+                currentUser.getId(),
+                classSection.getId(),
+                EnrollmentStatus.APPROVED
+        );
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
+    }
+
+    private User requireCurrentUser() {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        return currentUser;
     }
 
     private Integer resolveQuizQuestionCount(Quiz quiz, List<QuizQuestion> questions, List<QuizBankSource> bankSources) {

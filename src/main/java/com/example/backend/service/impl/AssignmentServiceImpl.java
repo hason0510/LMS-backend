@@ -3,6 +3,7 @@ package com.example.backend.service.impl;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ClassContentAvailabilityStatus;
+import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
@@ -566,6 +567,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     private void requireTeacherPermission(ClassSection classSection) {
+        ensureClassSectionInteractive(classSection);
         User currentUser = requireCurrentUser();
         if (classMemberAuthorizationService.isTeacher(classSection, currentUser)) {
             return;
@@ -574,11 +576,18 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     private void requireTeacherOrTaPermission(ClassSection classSection) {
+        ensureClassSectionInteractive(classSection);
         User currentUser = requireCurrentUser();
         if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
             return;
         }
         throw new UnauthorizedException("You do not have teaching permission in this class section");
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
     }
 
     private void requireViewPermission(ClassSection classSection) {

@@ -16,6 +16,7 @@ public class ClassSectionRequest {
     private String title;
     private String description;
     private String imageUrl;
+    private Integer imageResourceId;
     private String classCode;
     private ClassSectionStatus status;
     private LocalDate startDate;

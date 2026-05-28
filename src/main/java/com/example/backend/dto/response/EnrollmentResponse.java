@@ -13,6 +13,7 @@ public class EnrollmentResponse {
     private String userName;
     private String fullName;
     private String studentNumber;
+    private String email;
     private String studentAvatar;
     private String courseTitle;
     private String courseCode;

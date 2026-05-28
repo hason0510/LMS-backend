@@ -433,13 +433,34 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         return convertToPageResponse(enrollmentPage);
     }
 
-    @Override
     public PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, Pageable pageable) {
+        return getStudentsApprovedInClassSection(classSectionId, null, pageable);
+    }
+
+    @Override
+    public PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, String keyword, Pageable pageable) {
         if (!classSectionRepository.existsById(classSectionId)) {
             throw new ResourceNotFoundException("Khong tim thay lop hoc");
         }
-        Page<Enrollment> enrollmentPage = enrollmentRepository.findByClassSection_IdAndApprovalStatus(classSectionId, EnrollmentStatus.APPROVED, pageable);
-        return convertToPageResponse(enrollmentPage);
+        assertCanViewClassSectionRoster(classSectionId);
+        User currentUser = userService.getCurrentUser();
+        boolean includeProgress = currentUser == null
+                || currentUser.getRole() == null
+                || currentUser.getRole().getRoleName() != RoleType.STUDENT;
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        Page<Enrollment> enrollmentPage = enrollmentRepository.searchByClassSection_IdAndApprovalStatus(
+                classSectionId,
+                EnrollmentStatus.APPROVED,
+                normalizedKeyword,
+                pageable
+        );
+        Page<EnrollmentResponse> enrollmentResponse = enrollmentPage.map(enrollment -> convertEnrollmentToDTO(enrollment, includeProgress));
+        return new PageResponse<>(
+                enrollmentResponse.getNumber() + 1,
+                enrollmentResponse.getTotalPages(),
+                (int) enrollmentResponse.getTotalElements(),
+                enrollmentResponse.getContent()
+        );
     }
 
     @Override
@@ -617,7 +638,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return;
         }
 
-        long totalItems = classContentItemRepository.countTotalItemsByClassSectionId(classSectionId);
+        long totalItems = classContentItemRepository.countLearningItemsByClassSectionId(classSectionId);
         if (totalItems == 0) {
             enrollment.setProgress(0);
             enrollmentRepository.save(enrollment);
@@ -703,6 +724,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private EnrollmentResponse convertEnrollmentToDTO(Enrollment enrollment) {
+        return convertEnrollmentToDTO(enrollment, true);
+    }
+
+    private EnrollmentResponse convertEnrollmentToDTO(Enrollment enrollment, boolean includeProgress) {
         Course course = enrollment.getCourse();
         ClassSection classSection = enrollment.getClassSection();
 
@@ -712,6 +737,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .userName(enrollment.getStudent() != null ? enrollment.getStudent().getUserName() : null)
                 .fullName(enrollment.getStudent() != null ? enrollment.getStudent().getFullName() : null)
                 .studentNumber(enrollment.getStudent() != null ? enrollment.getStudent().getStudentNumber() : null)
+                .email(enrollment.getStudent() != null ? enrollment.getStudent().getGmail() : null)
                 .studentAvatar(enrollment.getStudent() != null ? enrollment.getStudent().getImageUrl() : null)
                 .courseTitle(course != null ? course.getTitle() : null)
                 .courseCode(course != null ? course.getClassCode() : null)
@@ -719,9 +745,35 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .classSectionTitle(classSection != null ? classSection.getTitle() : null)
                 .classSectionCode(classSection != null ? classSection.getClassCode() : null)
                 .classSectionId(classSection != null ? classSection.getId() : null)
-                .progress(enrollment.getProgress())
+                .progress(includeProgress ? enrollment.getProgress() : null)
                 .approvalStatus(enrollment.getApprovalStatus() != null ? enrollment.getApprovalStatus().toString() : null)
                 .build();
+    }
+
+    private void assertCanViewClassSectionRoster(Integer classSectionId) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        if (currentUser.getRole() != null && currentUser.getRole().getRoleName() == RoleType.ADMIN) {
+            return;
+        }
+
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc"));
+        if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
+            return;
+        }
+        if (currentUser.getRole() != null
+                && currentUser.getRole().getRoleName() == RoleType.STUDENT
+                && enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
+                        currentUser.getId(),
+                        classSectionId,
+                        EnrollmentStatus.APPROVED
+                )) {
+            return;
+        }
+        throw new UnauthorizedException("Ban khong co quyen xem danh sach hoc vien cua lop nay");
     }
 
     private void validateEnrollmentTarget(EnrollmentRequest request) {

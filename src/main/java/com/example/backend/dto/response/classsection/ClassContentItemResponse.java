@@ -29,4 +29,8 @@ public class ClassContentItemResponse {
     private Boolean accessible;
     private String accessMessageKey;
     private String accessMessage;
+    private Boolean progressEligible;
+    private Boolean completed;
+    private java.time.LocalDateTime completedAt;
+    private String assignmentStatus;
 }

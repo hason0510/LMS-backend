@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.CommentRequest;
 import com.example.backend.dto.response.CommentResponse;
@@ -44,6 +45,7 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng trong lớp học!"));
 
         ClassSection classSection = contentItem.getClassChapter().getClassSection();
+        ensureClassSectionInteractive(classSection);
 
         User currentUser = userService.getCurrentUser();
         RoleType currentRole = currentUser.getRole().getRoleName();
@@ -225,6 +227,7 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng trong lớp học!"));
 
         ClassSection classSection = contentItem.getClassChapter().getClassSection();
+        ensureClassSectionInteractive(classSection);
         User currentUser = userService.getCurrentUser();
         RoleType currentRole = currentUser.getRole().getRoleName();
 
@@ -252,5 +255,11 @@ public class CommentServiceImpl implements CommentService {
         }
         response.setReplies(new ArrayList<>());
         return response;
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
     }
 }

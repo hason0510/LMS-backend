@@ -24,7 +24,9 @@ import com.example.backend.entity.assignment.Submission;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.repository.AssignmentRepository;
+import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.LessonRepository;
+import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.ResourceAuditLogRepository;
 import com.example.backend.repository.ResourceReferenceRepository;
 import com.example.backend.repository.ResourceRepository;
@@ -66,8 +68,10 @@ public class ResourceServiceImpl implements ResourceService {
 
     private final ResourceRepository resourceRepository;
     private final LessonRepository lessonRepository;
+    private final ClassSectionRepository classSectionRepository;
     private final AssignmentRepository assignmentRepository;
     private final SubmissionRepository submissionRepository;
+    private final QuestionBankRepository questionBankRepository;
     private final ResourceAuditLogRepository resourceAuditLogRepository;
     private final ResourceReferenceRepository resourceReferenceRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -146,6 +150,11 @@ public class ResourceServiceImpl implements ResourceService {
         Resource resource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
         resourceAuthorizationService.assertCanManage(resource);
+        ResourceScopeType nextScopeType = request.getScopeType() != null ? request.getScopeType() : resource.getScopeType();
+        Integer nextScopeId = request.getScopeId() != null ? request.getScopeId() : resource.getScopeId();
+        if (request.getScopeType() != null || request.getScopeId() != null) {
+            resourceAuthorizationService.assertCanCreateInScope(nextScopeType, nextScopeId);
+        }
 
         if (request.getTitle() != null) {
             resource.setTitle(normalizeTitle(request.getTitle()));
@@ -304,6 +313,9 @@ public class ResourceServiceImpl implements ResourceService {
                 SELECT 'INTERACTION_ITEM' AS entity_type, id AS entity_id, 'interaction.resource' AS field_name
                 FROM question_interaction_items WHERE resource_id = ? AND is_deleted = false
                 UNION ALL
+                SELECT 'CLASS_SECTION' AS entity_type, id AS entity_id, 'cover.resource' AS field_name
+                FROM class_sections WHERE image_resource_id = ? AND is_deleted = false
+                UNION ALL
                 SELECT 'LESSON' AS entity_type, lesson_id AS entity_id, 'lesson.resources' AS field_name
                 FROM resource WHERE id = ? AND lesson_id IS NOT NULL AND is_deleted = false
                 UNION ALL
@@ -325,7 +337,7 @@ public class ResourceServiceImpl implements ResourceService {
                 rs.getString("entity_type"),
                 rs.getInt("entity_id"),
                 rs.getString("field_name")
-        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId);
+        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId);
     }
 
     private List<ResourceReferenceResponse> loadEnrichedResourceReferences(Integer resourceId) {
@@ -447,7 +459,26 @@ public class ResourceServiceImpl implements ResourceService {
                     rr.entity_type,
                     rr.entity_id,
                     rr.field_name,
-                    CONCAT('Bài học #', l.id) AS label,
+                    COALESCE(NULLIF(TRIM(cs.title), ''), CONCAT('Lớp học #', cs.id)) AS label,
+                    CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Ảnh lớp học') AS context_path,
+                    cs.id AS class_section_id,
+                    cs.title AS class_section_title,
+                    NULL AS quiz_id,
+                    NULL AS quiz_title,
+                    NULL AS question_bank_id,
+                    NULL AS question_bank_name,
+                    s.id AS subject_id,
+                    s.title AS subject_title
+                FROM resource_references rr
+                JOIN class_sections cs ON rr.entity_type = 'CLASS_SECTION' AND rr.entity_id = cs.id AND cs.is_deleted = false
+                LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
+                WHERE rr.resource_id = ? AND rr.is_deleted = false
+                UNION ALL
+                SELECT
+                    rr.entity_type,
+                    rr.entity_id,
+                    rr.field_name,
+                    COALESCE(NULLIF(TRIM(l.title), ''), CONCAT('Bài học #', l.id)) AS label,
                     CONCAT('Môn: ', COALESCE(lx.subject_title, '-'), ' -> Lớp: ', COALESCE(lx.class_titles, '-')) AS context_path,
                     lx.class_section_id,
                     lx.class_section_title,
@@ -480,7 +511,7 @@ public class ResourceServiceImpl implements ResourceService {
                     rr.entity_type,
                     rr.entity_id,
                     rr.field_name,
-                    CONCAT('Bài tập #', a.id) AS label,
+                    COALESCE(NULLIF(TRIM(a.title), ''), CONCAT('Bài tập #', a.id)) AS label,
                     CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Lớp: ', COALESCE(cs.title, '-')) AS context_path,
                     cs.id AS class_section_id,
                     cs.title AS class_section_title,
@@ -536,7 +567,7 @@ public class ResourceServiceImpl implements ResourceService {
                         nullableInt(rs, "subject_id"),
                         rs.getString("subject_title")
                 ),
-                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
+                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
         );
     }
 
@@ -677,8 +708,10 @@ public class ResourceServiceImpl implements ResourceService {
         response.setStatus(resource.getStatus());
         Integer usageCount = resolveUsageCount(resource.getId());
         response.setUsageCount(usageCount);
+        response.setCreatedDate(resource.getCreatedDate());
         response.setLastUsedAt(resource.getLastUsedAt());
         response.setCreatedBy(resource.getCreatedBy());
+        response.setScopeTargetName(resolveScopeTargetName(resource.getScopeType(), resource.getScopeId()));
         response.setEmbedUrl(normalizedEmbedUrl);
         response.setCloudinaryId(normalizedCloudinaryId);
         response.setFileUrl(normalizedFileUrl);
@@ -690,6 +723,21 @@ public class ResourceServiceImpl implements ResourceService {
         response.setAssignmentId(resource.getAssignment() != null ? resource.getAssignment().getId() : null);
         response.setSubmissionId(resource.getSubmission() != null ? resource.getSubmission().getId() : null);
         return response;
+    }
+
+    private String resolveScopeTargetName(ResourceScopeType scopeType, Integer scopeId) {
+        if (scopeType == null || scopeId == null) {
+            return null;
+        }
+        return switch (scopeType) {
+            case CLASS_SECTION -> classSectionRepository.findById(scopeId)
+                    .map(classSection -> StringUtils.hasText(classSection.getTitle()) ? classSection.getTitle() : classSection.getClassCode())
+                    .orElse(null);
+            case QUESTION_BANK -> questionBankRepository.findById(scopeId)
+                    .map(questionBank -> questionBank.getName())
+                    .orElse(null);
+            default -> null;
+        };
     }
 
     @Override
@@ -862,6 +910,7 @@ public class ResourceServiceImpl implements ResourceService {
                   (SELECT COUNT(*) FROM quiz_question WHERE resource_id = ? AND is_deleted = false) +
                   (SELECT COUNT(*) FROM quiz_answer WHERE resource_id = ? AND is_deleted = false) +
                   (SELECT COUNT(*) FROM question_interaction_items WHERE resource_id = ? AND is_deleted = false) +
+                  (SELECT COUNT(*) FROM class_sections WHERE image_resource_id = ? AND is_deleted = false) +
                   (SELECT COUNT(*) FROM resource WHERE id = ? AND lesson_id IS NOT NULL AND is_deleted = false) +
                   (SELECT COUNT(*) FROM resource WHERE id = ? AND assignment_id IS NOT NULL AND is_deleted = false) +
                   (SELECT COUNT(*) FROM resource WHERE id = ? AND submission_id IS NOT NULL AND is_deleted = false) +
@@ -875,7 +924,7 @@ public class ResourceServiceImpl implements ResourceService {
         Integer count = jdbcTemplate.queryForObject(
                 sql,
                 Integer.class,
-                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
+                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
         );
         return count != null ? count : 0;
     }

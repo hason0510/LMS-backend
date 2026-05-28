@@ -21,6 +21,7 @@ public class QuizAnswer extends BaseEntity {
     private Integer id;
     @Column(name = "is_correct")
     private Boolean isCorrect;
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
     @Column(columnDefinition = "LONGTEXT")
     private String explanation;

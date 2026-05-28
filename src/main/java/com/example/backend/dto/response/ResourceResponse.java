@@ -7,6 +7,7 @@ import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.ResourceVisibility;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -30,8 +31,10 @@ public class ResourceResponse {
     private ResourceVisibility visibility;
     private ResourceStatus status;
     private Integer usageCount;
+    private LocalDate createdDate;
     private LocalDateTime lastUsedAt;
     private String createdBy;
+    private String scopeTargetName;
     private String lessonTitle;
     private Integer lessonId;
     private Integer assignmentId;

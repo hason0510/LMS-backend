@@ -23,6 +23,7 @@ public class QuizQuestion extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
     @Column(precision = 10, scale = 2)
     private BigDecimal points;

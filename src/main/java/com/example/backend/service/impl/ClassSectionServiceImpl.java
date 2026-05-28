@@ -13,16 +13,20 @@ import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
+import com.example.backend.dto.response.classsection.ClassContentCompletionRowResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
 import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
 import com.example.backend.dto.response.classsection.ClassSectionResponse;
+import com.example.backend.entity.Progress;
 import com.example.backend.entity.assignment.Assignment;
+import com.example.backend.entity.assignment.Submission;
 import com.example.backend.entity.template.AssignmentTemplate;
 import com.example.backend.entity.template.ChapterTemplate;
 import com.example.backend.entity.ClassChapter;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassMember;
+import com.example.backend.entity.Resource;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.template.ContentItemTemplate;
 import com.example.backend.entity.template.CurriculumTemplate;
@@ -56,17 +60,22 @@ import com.example.backend.repository.CurriculumTemplateRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.LessonTemplateRepository;
+import com.example.backend.repository.ProgressRepository;
 import com.example.backend.repository.QuizRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
 import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizTemplateRepository;
 import com.example.backend.repository.QuizTemplateBankSourceRepository;
 import com.example.backend.repository.QuizTemplateQuestionRepository;
+import com.example.backend.repository.ResourceRepository;
+import com.example.backend.repository.SubmissionRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassSectionService;
+import com.example.backend.service.EnrollmentService;
+import com.example.backend.service.ResourceAuthorizationService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.ClassSectionSpecification;
 import lombok.RequiredArgsConstructor;
@@ -99,19 +108,24 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final EnrollmentRepository enrollmentRepository;
     private final LessonRepository lessonRepository;
     private final LessonTemplateRepository lessonTemplateRepository;
+    private final ProgressRepository progressRepository;
     private final QuizRepository quizRepository;
     private final QuizBankSourceRepository quizBankSourceRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizTemplateRepository quizTemplateRepository;
     private final QuizTemplateQuestionRepository quizTemplateQuestionRepository;
     private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
+    private final ResourceRepository resourceRepository;
     private final AssignmentRepository assignmentRepository;
     private final AssignmentTemplateRepository assignmentTemplateRepository;
+    private final SubmissionRepository submissionRepository;
     private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
+    private final EnrollmentService enrollmentService;
+    private final ResourceAuthorizationService resourceAuthorizationService;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -130,7 +144,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 : resolveClassCode());
         classSection.setTitle(request.getTitle());
         classSection.setDescription(request.getDescription());
-        classSection.setImageUrl(request.getImageUrl());
+        Resource imageResource = resolveImageResource(request.getImageResourceId());
+        classSection.setImageResource(imageResource);
+        classSection.setImageUrl(resolveImageUrl(request.getImageUrl(), imageResource));
         classSection.setStatus(resolveStatus(request.getStatus()));
         classSection.setStartDate(request.getStartDate());
         classSection.setEndDate(request.getEndDate());
@@ -508,9 +524,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 request.getAssignmentId(),
                 true
         );
-
-
-        return convertContentItemToResponse(classContentItemRepository.save(classContentItem));
+        ClassContentItem savedItem = classContentItemRepository.save(classContentItem);
+        recalculateLearningProgressForApprovedStudents(classSectionId);
+        return convertContentItemToResponse(savedItem);
     }
 
     @Override
@@ -558,8 +574,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (!StringUtils.hasText(classContentItem.getTitle())) {
             throw new BusinessException("Class content item must have a title");
         }
-
-        return convertContentItemToResponse(classContentItemRepository.save(classContentItem));
+        ClassContentItem savedItem = classContentItemRepository.save(classContentItem);
+        recalculateLearningProgressForApprovedStudents(classSectionId);
+        return convertContentItemToResponse(savedItem);
     }
 
     @Override
@@ -573,6 +590,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
         classContentItemRepository.delete(classContentItem);
+        recalculateLearningProgressForApprovedStudents(classSectionId);
     }
 
     @Override
@@ -631,9 +649,87 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
         User currentUser = userService.getCurrentUser();
-        return classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapter.getId()).stream()
+        List<ClassContentItem> contentItems = classContentItemRepository.findByClassChapter_IdOrderByOrderIndexAsc(classChapter.getId()).stream()
                 .filter(item -> shouldIncludeItemForUser(item, currentUser))
-                .map(item -> convertContentItemToResponse(item, currentUser))
+                .toList();
+        Map<Integer, Progress> completedProgressByItemId = resolveCompletedProgressByItemId(contentItems, currentUser);
+        Map<Integer, Submission> submissionsByAssignmentId = resolveSubmissionByAssignmentId(contentItems, currentUser);
+        return contentItems.stream()
+                .map(item -> convertContentItemToResponse(item, currentUser, completedProgressByItemId, submissionsByAssignmentId))
+                .toList();
+    }
+
+    @Override
+    public List<ClassContentCompletionRowResponse> getClassContentCompletion(Integer classSectionId, Integer classContentItemId) {
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_VIEW_PROGRESS, false);
+
+        ClassContentItem classContentItem = classContentItemRepository.findByIdAndClassChapter_ClassSection_Id(
+                        classContentItemId,
+                        classSectionId
+                )
+                .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
+
+        if (classContentItem.getItemType() != ContentItemType.LESSON) {
+            throw new BusinessException("Only lesson completion is supported in this view");
+        }
+
+        List<Enrollment> approvedEnrollments = enrollmentRepository.findByClassSection_IdAndApprovalStatus(
+                classSectionId,
+                EnrollmentStatus.APPROVED
+        );
+        if (approvedEnrollments.isEmpty()) {
+            return List.of();
+        }
+
+        List<Integer> studentIds = approvedEnrollments.stream()
+                .map(Enrollment::getStudent)
+                .filter(Objects::nonNull)
+                .map(User::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Integer, Progress> completedProgressByStudentId = progressRepository
+                .findCompletedByClassContentItemAndStudentIds(classContentItemId, studentIds)
+                .stream()
+                .filter(progress -> progress.getStudent() != null && progress.getStudent().getId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        progress -> progress.getStudent().getId(),
+                        progress -> progress,
+                        (left, right) -> {
+                            java.time.LocalDateTime leftCompletedAt = left.getCompletedAt();
+                            java.time.LocalDateTime rightCompletedAt = right.getCompletedAt();
+                            if (leftCompletedAt == null) {
+                                return right;
+                            }
+                            if (rightCompletedAt == null) {
+                                return left;
+                            }
+                            return rightCompletedAt.isAfter(leftCompletedAt) ? right : left;
+                        }
+                ));
+
+        return approvedEnrollments.stream()
+                .map(Enrollment::getStudent)
+                .filter(Objects::nonNull)
+                .map(student -> {
+                    Progress progress = completedProgressByStudentId.get(student.getId());
+                    return new ClassContentCompletionRowResponse(
+                            student.getId(),
+                            student.getFullName(),
+                            student.getStudentNumber(),
+                            student.getGmail(),
+                            student.getImageUrl(),
+                            progress != null && Boolean.TRUE.equals(progress.getIsCompleted()),
+                            progress != null ? progress.getCompletedAt() : null
+                    );
+                })
+                .sorted(Comparator
+                        .comparing(ClassContentCompletionRowResponse::getStudentNumber, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(ClassContentCompletionRowResponse::getStudentName, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(ClassContentCompletionRowResponse::getStudentId, Comparator.nullsLast(Integer::compareTo)))
                 .toList();
     }
 
@@ -642,7 +738,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public ClassSectionResponse updateClassSectionStatus(Integer id, ClassSectionStatus status) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS, false);
         classSection.setStatus(status);
         return convertToResponse(classSectionRepository.save(classSection), false);
     }
@@ -655,6 +751,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setTitle(classSection.getTitle());
         response.setDescription(classSection.getDescription());
         response.setImageUrl(classSection.getImageUrl());
+        response.setImageResourceId(classSection.getImageResource() != null ? classSection.getImageResource().getId() : null);
         response.setStatus(classSection.getStatus());
         response.setStartDate(classSection.getStartDate());
         response.setEndDate(classSection.getEndDate());
@@ -712,6 +809,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         fallbackTeacher.setUserId(classSection.getTeacher().getId());
         fallbackTeacher.setUsername(classSection.getTeacher().getUserName());
         fallbackTeacher.setFullName(classSection.getTeacher().getFullName());
+        fallbackTeacher.setEmail(classSection.getTeacher().getGmail());
+        fallbackTeacher.setAvatarUrl(classSection.getTeacher().getImageUrl());
         fallbackTeacher.setRole(ClassMemberRole.TEACHER);
         fallbackTeacher.setPermissions(classMemberAuthorizationService.resolveDefaultCapabilities(ClassMemberRole.TEACHER));
         return List.of(fallbackTeacher);
@@ -727,6 +826,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setUserId(member.getUser() != null ? member.getUser().getId() : null);
         response.setUsername(member.getUser() != null ? member.getUser().getUserName() : null);
         response.setFullName(member.getUser() != null ? member.getUser().getFullName() : null);
+        response.setEmail(member.getUser() != null ? member.getUser().getGmail() : null);
+        response.setAvatarUrl(member.getUser() != null ? member.getUser().getImageUrl() : null);
         response.setRole(member.getRole());
         response.setPermissions(member.getUser() != null
                 ? classMemberAuthorizationService.resolveCapabilities(member.getClassSection(), member.getUser())
@@ -740,6 +841,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .stream()
                 .filter(item -> shouldIncludeItemForUser(item, currentUser))
                 .toList();
+        Map<Integer, Progress> completedProgressByItemId = resolveCompletedProgressByItemId(contentItems, currentUser);
+        Map<Integer, Submission> submissionsByAssignmentId = resolveSubmissionByAssignmentId(contentItems, currentUser);
 
         ClassChapterResponse response = new ClassChapterResponse();
         response.setId(classChapter.getId());
@@ -751,16 +854,35 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setAvailableFrom(classChapter.getAvailableFrom());
         response.setAvailableTo(classChapter.getAvailableTo());
         response.setContentItems(contentItems.stream()
-                .map(item -> convertContentItemToResponse(item, currentUser))
+                .map(item -> convertContentItemToResponse(item, currentUser, completedProgressByItemId, submissionsByAssignmentId))
                 .toList());
         return response;
     }
 
     private ClassContentItemResponse convertContentItemToResponse(ClassContentItem classContentItem) {
-        return convertContentItemToResponse(classContentItem, userService.getCurrentUser());
+        return convertContentItemToResponse(
+                classContentItem,
+                userService.getCurrentUser(),
+                Collections.emptyMap(),
+                Collections.emptyMap()
+        );
     }
 
     private ClassContentItemResponse convertContentItemToResponse(ClassContentItem classContentItem, User currentUser) {
+        return convertContentItemToResponse(
+                classContentItem,
+                currentUser,
+                Collections.emptyMap(),
+                Collections.emptyMap()
+        );
+    }
+
+    private ClassContentItemResponse convertContentItemToResponse(
+            ClassContentItem classContentItem,
+            User currentUser,
+            Map<Integer, Progress> completedProgressByItemId,
+            Map<Integer, Submission> submissionsByAssignmentId
+    ) {
         ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
         ClassContentItemResponse response = new ClassContentItemResponse();
         response.setId(classContentItem.getId());
@@ -778,8 +900,114 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setDisplayTitle(resolveContentItemDisplayTitle(classContentItem));
         response.setAvailabilityStatus(accessResult.availabilityStatus());
         response.setAccessible(accessResult.accessible());
+        response.setAccessMessageKey(accessResult.messageKey());
         response.setAccessMessage(accessResult.message());
+        response.setProgressEligible(isProgressEligible(classContentItem.getItemType()));
+
+        if (isStudent(currentUser)) {
+            Progress progress = completedProgressByItemId.get(classContentItem.getId());
+            response.setCompleted(progress != null && Boolean.TRUE.equals(progress.getIsCompleted()));
+            response.setCompletedAt(progress != null ? progress.getCompletedAt() : null);
+
+            if (classContentItem.getItemType() == ContentItemType.ASSIGNMENT && classContentItem.getAssignment() != null) {
+                Submission submission = submissionsByAssignmentId.get(classContentItem.getAssignment().getId());
+                SubmissionStatus assignmentStatus = submission != null && submission.getStatus() != null
+                        ? submission.getStatus()
+                        : SubmissionStatus.NOT_SUBMITTED;
+                response.setAssignmentStatus(assignmentStatus.name());
+                response.setCompleted(assignmentStatus != SubmissionStatus.NOT_SUBMITTED);
+                response.setCompletedAt(submission != null ? submission.getSubmissionTime() : null);
+            }
+        }
         return response;
+    }
+
+    private Map<Integer, Progress> resolveCompletedProgressByItemId(List<ClassContentItem> contentItems, User currentUser) {
+        if (!isStudent(currentUser) || contentItems == null || contentItems.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Integer> classContentItemIds = contentItems.stream()
+                .map(ClassContentItem::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (classContentItemIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Integer, Progress> progressByItemId = new HashMap<>();
+        for (Progress progress : progressRepository.findByStudent_IdAndClassContentItem_IdIn(currentUser.getId(), classContentItemIds)) {
+            if (progress.getClassContentItem() == null
+                    || progress.getClassContentItem().getId() == null
+                    || !Boolean.TRUE.equals(progress.getIsCompleted())) {
+                continue;
+            }
+            progressByItemId.put(progress.getClassContentItem().getId(), progress);
+        }
+        return progressByItemId;
+    }
+
+    private Map<Integer, Submission> resolveSubmissionByAssignmentId(List<ClassContentItem> contentItems, User currentUser) {
+        if (!isStudent(currentUser) || contentItems == null || contentItems.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Integer> assignmentIds = contentItems.stream()
+                .map(ClassContentItem::getAssignment)
+                .filter(Objects::nonNull)
+                .map(Assignment::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (assignmentIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Integer, Submission> submissionsByAssignmentId = new HashMap<>();
+        for (Submission submission : submissionRepository.findByStudent_IdAndAssignment_IdIn(currentUser.getId(), assignmentIds)) {
+            if (submission.getAssignment() == null || submission.getAssignment().getId() == null) {
+                continue;
+            }
+            submissionsByAssignmentId.merge(
+                    submission.getAssignment().getId(),
+                    submission,
+                    this::pickLatestSubmission
+            );
+        }
+        return submissionsByAssignmentId;
+    }
+
+    private Submission pickLatestSubmission(Submission left, Submission right) {
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        if (left.getSubmissionTime() == null) {
+            return right;
+        }
+        if (right.getSubmissionTime() == null) {
+            return left;
+        }
+        return right.getSubmissionTime().isAfter(left.getSubmissionTime()) ? right : left;
+    }
+
+    private boolean isProgressEligible(ContentItemType itemType) {
+        return itemType == ContentItemType.LESSON || itemType == ContentItemType.QUIZ;
+    }
+
+    private void recalculateLearningProgressForApprovedStudents(Integer classSectionId) {
+        enrollmentRepository.findByClassSection_IdAndApprovalStatus(classSectionId, EnrollmentStatus.APPROVED).forEach(
+                enrollment -> {
+                    if (enrollment.getStudent() != null && enrollment.getStudent().getId() != null) {
+                        enrollmentService.recalculateAndSaveProgressForClassSection(
+                                enrollment.getStudent().getId(),
+                                classSectionId
+                        );
+                    }
+                }
+        );
     }
 
     private String resolveContentItemDisplayTitle(ClassContentItem classContentItem) {
@@ -1289,7 +1517,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (request.getDescription() != null) {
             classSection.setDescription(request.getDescription());
         }
-        classSection.setImageUrl(request.getImageUrl());
+        Resource imageResource = resolveImageResource(request.getImageResourceId());
+        classSection.setImageResource(imageResource);
+        classSection.setImageUrl(resolveImageUrl(request.getImageUrl(), imageResource));
         if (request.getStartDate() != null) {
             classSection.setStartDate(request.getStartDate());
         }
@@ -1302,6 +1532,32 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
     private ClassSectionStatus resolveStatus(ClassSectionStatus status) {
         return status != null ? status : ClassSectionStatus.PRIVATE;
+    }
+
+    private Resource resolveImageResource(Integer imageResourceId) {
+        if (imageResourceId == null) {
+            return null;
+        }
+        Resource imageResource = resourceRepository.findById(imageResourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image resource not found"));
+        resourceAuthorizationService.assertCanUse(imageResource, null, null);
+        return imageResource;
+    }
+
+    private String resolveImageUrl(String requestedImageUrl, Resource imageResource) {
+        if (StringUtils.hasText(requestedImageUrl)) {
+            return requestedImageUrl;
+        }
+        if (imageResource == null) {
+            return null;
+        }
+        if (StringUtils.hasText(imageResource.getFileUrl())) {
+            return imageResource.getFileUrl();
+        }
+        if (StringUtils.hasText(imageResource.getEmbedUrl())) {
+            return imageResource.getEmbedUrl();
+        }
+        return imageResource.getHlsUrl();
     }
 
     private String resolveClassCode() {
@@ -1341,12 +1597,25 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     private void requireCapability(ClassSection classSection, String capability) {
+        requireCapability(classSection, capability, true);
+    }
+
+    private void requireCapability(ClassSection classSection, String capability, boolean blockArchived) {
         User currentUser = userService.getCurrentUser();
         if (currentUser == null) {
             throw new UnauthorizedException("Unauthorized");
         }
+        if (blockArchived) {
+            ensureClassSectionInteractive(classSection);
+        }
         if (!classMemberAuthorizationService.hasCapability(classSection, currentUser, capability)) {
             throw new UnauthorizedException("You do not have permission in this class section");
+        }
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
         }
     }
 

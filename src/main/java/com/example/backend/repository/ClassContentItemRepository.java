@@ -20,8 +20,16 @@ public interface ClassContentItemRepository extends JpaRepository<ClassContentIt
 
     @Query("SELECT COUNT(ci) FROM ClassContentItem ci " +
             "WHERE ci.classChapter.classSection.id = :classSectionId " +
+            "AND ci.classChapter.isHidden = false " +
             "AND ci.isHidden = false AND ci.is_deleted = false")
     long countTotalItemsByClassSectionId(@Param("classSectionId") Integer classSectionId);
+
+    @Query("SELECT COUNT(ci) FROM ClassContentItem ci " +
+            "WHERE ci.classChapter.classSection.id = :classSectionId " +
+            "AND ci.classChapter.isHidden = false " +
+            "AND ci.isHidden = false AND ci.is_deleted = false " +
+            "AND ci.itemType IN (com.example.backend.constant.ContentItemType.LESSON, com.example.backend.constant.ContentItemType.QUIZ)")
+    long countLearningItemsByClassSectionId(@Param("classSectionId") Integer classSectionId);
 
     Optional<ClassContentItem> findByQuiz_Id(Integer quizId);
 

@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.ClassMemberRole;
+import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.AnnouncementRequest;
@@ -10,6 +11,7 @@ import com.example.backend.entity.Announcement;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Subject;
 import com.example.backend.entity.User;
+import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.AnnouncementRepository;
@@ -113,6 +115,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             String contentKeyword,
             String sort,
             LocalDate date,
+            LocalDate dateFrom,
+            LocalDate dateTo,
             String search,
             Integer pageNumber,
             Integer pageSize
@@ -134,10 +138,12 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         int safeSize = pageSize != null && pageSize > 0 ? pageSize : 10;
         Sort.Direction direction = "ASC".equalsIgnoreCase(sort) ? Sort.Direction.ASC : Sort.Direction.DESC;
         String resolvedContentKeyword = StringUtils.hasText(contentKeyword) ? contentKeyword : search;
+        LocalDate resolvedDateFrom = dateFrom != null ? dateFrom : date;
+        LocalDate resolvedDateTo = dateTo != null ? dateTo : date;
 
         Specification<Announcement> spec = Specification
                 .where(AnnouncementSpecification.inClassSections(accessibleIds))
-                .and(AnnouncementSpecification.createdOn(date));
+                .and(AnnouncementSpecification.createdBetween(resolvedDateFrom, resolvedDateTo));
         if (subjectId != null) {
             spec = spec.and(AnnouncementSpecification.hasSubjectId(subjectId));
         }
@@ -204,6 +210,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     }
 
     private void requireManagePermission(ClassSection classSection) {
+        ensureClassSectionInteractive(classSection);
         User currentUser = requireCurrentUser();
         if (classMemberAuthorizationService.canPostAnnouncements(classSection, currentUser)) {
             return;
@@ -253,5 +260,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             throw new UnauthorizedException("Unauthorized");
         }
         return currentUser;
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
     }
 }

@@ -28,7 +28,7 @@ public class AssignmentTemplate extends BaseEntity {
     @Column(nullable = false)
     private String title;
 
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String description;
 
     @Column(columnDefinition = "LONGTEXT")

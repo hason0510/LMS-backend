@@ -13,6 +13,7 @@ import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
+import com.example.backend.dto.response.classsection.ClassContentCompletionRowResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
 import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
@@ -73,6 +74,8 @@ public interface ClassSectionService {
     List<ClassChapterResponse> getClassChapters(Integer classSectionId);
 
     List<ClassContentItemResponse> getClassContentItems(Integer classSectionId, Integer classChapterId);
+
+    List<ClassContentCompletionRowResponse> getClassContentCompletion(Integer classSectionId, Integer classContentItemId);
 
     ClassSectionResponse updateClassSectionStatus(Integer id, ClassSectionStatus status);
 

@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.RoleType;
@@ -434,6 +435,9 @@ public class SubmissionServiceImpl implements SubmissionService {
     }
 
     private void ensureStudentEnrollment(User student, Integer classSectionId) {
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        ensureClassSectionInteractive(classSection);
         boolean isApproved = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 student.getId(),
                 classSectionId,
@@ -511,11 +515,18 @@ public class SubmissionServiceImpl implements SubmissionService {
     }
 
     private User requireTeachingPermission(ClassSection classSection, String capability) {
+        ensureClassSectionInteractive(classSection);
         User currentUser = requireCurrentUser();
         if (classMemberAuthorizationService.hasCapability(classSection, currentUser, capability)) {
             return currentUser;
         }
         throw new UnauthorizedException("You do not have teaching permission in this class section");
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
     }
 
     private void preventSelfReview(Submission submission, User currentUser) {

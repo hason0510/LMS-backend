@@ -20,7 +20,7 @@ public interface CurriculumTemplateService {
 
     CurriculumTemplateResponse getTemplateById(Integer id);
 
-    List<CurriculumTemplateResponse> getTemplates(Integer subjectId, boolean includeChapters);
+    List<CurriculumTemplateResponse> getTemplates(String keyword, Integer categoryId, Integer subjectId, boolean includeChapters);
 
     ChapterTemplateResponse createChapter(Integer templateId, ChapterTemplateUpsertRequest request);
 

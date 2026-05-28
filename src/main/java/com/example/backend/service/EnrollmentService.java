@@ -40,7 +40,7 @@ public interface EnrollmentService {
 
     PageResponse<EnrollmentResponse> getStudentsApprovedInEnrollment(Integer courseId, Pageable pageable);
 
-    PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, Pageable pageable);
+    PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, String keyword, Pageable pageable);
 
     PageResponse<EnrollmentResponse> getStudentsPendingEnrollment(Integer courseId, Pageable pageable);
 

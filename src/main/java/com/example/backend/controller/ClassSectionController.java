@@ -13,6 +13,7 @@ import com.example.backend.dto.request.classsection.ClassSectionSearchRequest;
 import com.example.backend.dto.request.classsection.ClassSectionUpdateRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.classsection.ClassChapterResponse;
+import com.example.backend.dto.response.classsection.ClassContentCompletionRowResponse;
 import com.example.backend.dto.response.classsection.ClassContentItemResponse;
 import com.example.backend.dto.response.classsection.ClassSectionJoinPreviewResponse;
 import com.example.backend.dto.response.classsection.ClassMemberResponse;
@@ -93,6 +94,16 @@ public class ClassSectionController {
         return ResponseEntity.ok(
                 classSectionService.getClassSections(teacherId, subjectId, curriculumTemplateId, includeChapters)
         );
+    }
+
+    @Operation(summary = "Get lesson completion status by class content item")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @GetMapping("/{classSectionId}/content-items/{classContentItemId}/completion")
+    public ResponseEntity<List<ClassContentCompletionRowResponse>> getClassContentCompletion(
+            @PathVariable Integer classSectionId,
+            @PathVariable Integer classContentItemId
+    ) {
+        return ResponseEntity.ok(classSectionService.getClassContentCompletion(classSectionId, classContentItemId));
     }
 
     @Operation(summary = "Preview class section by join code")

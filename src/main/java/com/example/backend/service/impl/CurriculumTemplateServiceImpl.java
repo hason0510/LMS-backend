@@ -56,9 +56,11 @@ import com.example.backend.repository.QuizTemplateRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.repository.SubjectRepository;
 import com.example.backend.service.CurriculumTemplateService;
+import com.example.backend.specification.CurriculumTemplateSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -137,10 +139,18 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<CurriculumTemplateResponse> getTemplates(Integer subjectId, boolean includeChapters) {
-        List<CurriculumTemplate> templates = subjectId != null
-                ? curriculumTemplateRepository.findBySubject_Id(subjectId)
-                : curriculumTemplateRepository.findAll();
+    public List<CurriculumTemplateResponse> getTemplates(
+            String keyword,
+            Integer categoryId,
+            Integer subjectId,
+            boolean includeChapters
+    ) {
+        Specification<CurriculumTemplate> specification = Specification
+                .where(CurriculumTemplateSpecification.nameContains(keyword))
+                .and(CurriculumTemplateSpecification.hasCategoryId(categoryId))
+                .and(CurriculumTemplateSpecification.hasSubjectId(subjectId));
+
+        List<CurriculumTemplate> templates = curriculumTemplateRepository.findAll(specification);
 
         return templates.stream()
                 .map(template -> convertToResponse(template, includeChapters))

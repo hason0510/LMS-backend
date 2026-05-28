@@ -27,13 +27,13 @@ public class LessonTemplate extends BaseEntity {
     @Column(nullable = false)
     private String title;
 
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(name = "video_url")
     private String videoUrl;
 
-    @Column(name = "notes", columnDefinition = "MEDIUMTEXT")
+    @Column(name = "notes", columnDefinition = "LONGTEXT")
     private String notes;
 
     @OneToMany(mappedBy = "lessonTemplate")

@@ -180,6 +180,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             throw new ResourceNotFoundException("Quiz khong ton tai");
         }
 
+        ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection());
         Integer classSectionId = classContentItem.getClassChapter().getClassSection().getId();
         boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
@@ -563,6 +564,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         QuizAttempt attempt = quizAttemptRepository.findById((attemptId))
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        ensureClassSectionInteractive(resolveClassSection(attempt));
 
         User currentUser = userService.getCurrentUser();
         if (!attempt.getStudent().getId().equals(currentUser.getId())) {
@@ -849,6 +851,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         log.info("Submitting quiz attempt {}", attemptId);
         QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        ensureClassSectionInteractive(resolveClassSection(attempt));
 
         User currentUser = userService.getCurrentUser();
         if (!attempt.getStudent().getId().equals(currentUser.getId())) {
@@ -903,6 +906,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     @Override
     public QuizAttemptDetailResponse getCurrentAttempt(Integer chapterItemId) {
         User currentUser = userService.getCurrentUser();
+        classContentItemRepository.findById(chapterItemId)
+                .ifPresent(classContentItem -> ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection()));
         Optional<QuizAttempt> classContentAttempt = quizAttemptRepository
                 .findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(
                         chapterItemId,
@@ -932,6 +937,9 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     @Override
     public QuizAttemptDetailResponse getCurrentAttemptForClassContentItem(Integer classContentItemId) {
         User currentUser = userService.getCurrentUser();
+        ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
+        ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection());
         QuizAttempt attempt = quizAttemptRepository
                 .findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(
                         classContentItemId,
@@ -1012,6 +1020,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     public QuizAttemptDetailResponse reviewAttempt(Integer attemptId, QuizAttemptReviewRequest request) {
         QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        ensureClassSectionInteractive(resolveClassSection(attempt));
         User currentUser = userService.getCurrentUser();
         if (!canReviewAttempt(attempt, currentUser)) {
             throw new UnauthorizedException("Ban khong co quyen cham bai nay");
@@ -1799,6 +1808,23 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             throw new ResourceNotFoundException("Quiz chua duoc gan vao class content item");
         }
         return quiz;
+    }
+
+    private ClassSection resolveClassSection(QuizAttempt attempt) {
+        if (attempt == null) {
+            return null;
+        }
+        if (attempt.getClassContentItem() != null
+                && attempt.getClassContentItem().getClassChapter() != null) {
+            return attempt.getClassContentItem().getClassChapter().getClassSection();
+        }
+        return null;
+    }
+
+    private void ensureClassSectionInteractive(ClassSection classSection) {
+        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Class section is archived and only supports read-only access");
+        }
     }
 
     private void markProgressIfPassed(QuizAttempt attempt) {

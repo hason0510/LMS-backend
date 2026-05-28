@@ -12,6 +12,7 @@ public class ClassSectionUpdateRequest {
     private String title;
     private String description;
     private String imageUrl;
+    private Integer imageResourceId;
     private LocalDate startDate;
     private LocalDate endDate;
 }

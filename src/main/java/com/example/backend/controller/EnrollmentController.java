@@ -119,15 +119,16 @@ public class EnrollmentController {
     }
 
     @Operation(summary = "Get approved enrollments by class section")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
     @GetMapping("/class-sections/{classSectionId}/enrollments/approved")
     public ResponseEntity<PageResponse<EnrollmentResponse>> getStudentsApprovedInClassSection(
             @PathVariable Integer classSectionId,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
             @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize
     ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, Sort.by("id").descending());
-        PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsApprovedInClassSection(classSectionId, pageable);
+        PageResponse<EnrollmentResponse> response = enrollmentService.getStudentsApprovedInClassSection(classSectionId, keyword, pageable);
         return ResponseEntity.ok(response);
     }
 

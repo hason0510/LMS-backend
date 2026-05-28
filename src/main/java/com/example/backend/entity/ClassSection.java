@@ -39,6 +39,10 @@ public class ClassSection extends BaseEntity {
     @Column(name = "image_url", length = 1000)
     private String imageUrl;
 
+    @ManyToOne
+    @JoinColumn(name = "image_resource_id")
+    private Resource imageResource;
+
     @Enumerated(EnumType.STRING)
     private ClassSectionStatus status;
 

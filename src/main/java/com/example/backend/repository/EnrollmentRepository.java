@@ -48,6 +48,25 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     Page<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus, Pageable pageable);
 
+    @Query("""
+            SELECT e
+            FROM Enrollment e
+            JOIN e.student s
+            WHERE e.classSection.id = :classSectionId
+              AND e.approvalStatus = :approvalStatus
+              AND (
+                :keyword IS NULL
+                OR LOWER(COALESCE(s.fullName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                OR LOWER(COALESCE(s.studentNumber, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            """)
+    Page<Enrollment> searchByClassSection_IdAndApprovalStatus(
+            @Param("classSectionId") Integer classSectionId,
+            @Param("approvalStatus") EnrollmentStatus approvalStatus,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
     List<Enrollment> findByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus approvalStatus);
 
     List<Enrollment> findByStudent_IdAndApprovalStatus(Integer studentId, EnrollmentStatus approvalStatus);

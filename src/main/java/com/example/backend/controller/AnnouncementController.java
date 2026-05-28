@@ -56,6 +56,8 @@ public class AnnouncementController {
             @RequestParam(value = "contentKeyword", required = false) String contentKeyword,
             @RequestParam(value = "sort", defaultValue = "DESC", required = false) String sort,
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(value = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "pageNumber", defaultValue = "1", required = false) Integer pageNumber,
             @RequestParam(value = "pageSize", defaultValue = "10", required = false) Integer pageSize
@@ -68,6 +70,8 @@ public class AnnouncementController {
                 contentKeyword,
                 sort,
                 date,
+                dateFrom,
+                dateTo,
                 search,
                 pageNumber,
                 pageSize
