@@ -58,6 +58,20 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Khóa người dùng (Admin)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/users/{id}/lock")
+    public ResponseEntity<UserInfoResponse> lockUser(@PathVariable Integer id) {
+        return ResponseEntity.ok(userService.lockUser(id));
+    }
+
+    @Operation(summary = "Mở khóa người dùng (Admin)")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/users/{id}/unlock")
+    public ResponseEntity<UserInfoResponse> unlockUser(@PathVariable Integer id) {
+        return ResponseEntity.ok(userService.unlockUser(id));
+    }
+
     @Operation(summary = "Tạo người dùng Google")
     @PreAuthorize("permitAll()")
     @PostMapping("/users/google")

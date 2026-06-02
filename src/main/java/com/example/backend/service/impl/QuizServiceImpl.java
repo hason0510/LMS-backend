@@ -646,7 +646,7 @@ public class QuizServiceImpl implements QuizService {
         response.setId(answer.getId());
         response.setContent(answer.getContent());
         response.setIsCorrect(showCorrectAnswer ? answer.getIsCorrect() : null);
-        response.setExplanation(answer.getExplanation());
+        response.setExplanation(showCorrectAnswer ? answer.getExplanation() : null);
         response.setResourceId(answer.getResource() != null ? answer.getResource().getId() : null);
         response.setResource(convertResourceToDTO(answer.getResource()));
         return response;
@@ -671,6 +671,7 @@ public class QuizServiceImpl implements QuizService {
                     QuizAnswer answer = new QuizAnswer();
                     answer.setContent(answerRequest.getContent());
                     answer.setIsCorrect(answerRequest.getIsCorrect() != null ? answerRequest.getIsCorrect() : false);
+                    answer.setExplanation(answerRequest.getExplanation());
                     if (answerRequest.getResourceId() != null) {
                         answer.setResource(resolveUsableQuizResource(quiz, answerRequest.getResourceId()));
                     }
@@ -1047,6 +1048,7 @@ public class QuizServiceImpl implements QuizService {
         QuizAnswerResponse response = new QuizAnswerResponse();
         response.setId(answer.getId());
         response.setContent(answer.getContent());
+        response.setExplanation(showCorrectAnswer ? answer.getExplanation() : null);
         response.setIsCorrect(showCorrectAnswer ? answer.getIsCorrect() : null);
         response.setResourceId(answer.getResource() != null ? answer.getResource().getId() : null);
         response.setResource(convertResourceToDTO(answer.getResource()));

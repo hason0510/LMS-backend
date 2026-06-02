@@ -18,6 +18,7 @@ public class UserInfoResponse implements Serializable {
     private String address;
     private String gmail;
     private String roleName;
+    private boolean active;
     private String imageUrl;
     private String cloudinaryImageId;
     private String workPlace;

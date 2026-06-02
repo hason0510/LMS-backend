@@ -146,7 +146,8 @@ public class ResourceAuthorizationService {
         }
         if (scopeType == ResourceScopeType.CLASS_SECTION) {
             ClassSection classSection = scopeId == null ? null : classSectionRepository.findById(scopeId).orElse(null);
-            return classMemberAuthorizationService.canEditContent(classSection, currentUser);
+            return classMemberAuthorizationService.canEditContent(classSection, currentUser)
+                    || classMemberAuthorizationService.canManageAssignments(classSection, currentUser);
         }
         return false;
     }

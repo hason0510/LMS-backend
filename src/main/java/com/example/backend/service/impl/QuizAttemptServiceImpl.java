@@ -69,10 +69,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final ClassContentAccessService classContentAccessService;
 
 
-    // =========================================================================
-    // MAIN LOGIC
-    // =========================================================================
-
     @Override
     @Transactional
     public QuizAttemptDetailResponse startQuizAttempt(Integer quizId, Integer chapterItemId) {
@@ -336,6 +332,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                     option.setSourceQuizAnswer(sourceAnswer);
                     option.setContent(sourceAnswer.getContent());
                     option.setIsCorrect(sourceAnswer.getIsCorrect());
+                    option.setExplanation(sourceAnswer.getExplanation());
                     option.setResource(sourceAnswer.getResource());
                     options.add(option);
                 }
@@ -392,6 +389,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                     option.setSourceBankQuestionOption(sourceOption);
                     option.setContent(sourceOption.getContent());
                     option.setIsCorrect(sourceOption.getIsCorrect());
+                    option.setExplanation(sourceOption.getExplanation());
                     option.setResource(sourceOption.getResource());
                     options.add(option);
                 }
@@ -915,7 +913,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                         AttemptStatus.IN_PROGRESS
                 );
         if (classContentAttempt.isPresent()) {
-            return convertToDetailResponse(classContentAttempt.get());
+            QuizAttempt attempt = expireAttemptIfTimedOut(classContentAttempt.get());
+            return convertToDetailResponse(attempt);
         }
 
         Optional<QuizAttempt> legacyAttempt = Optional.empty();
@@ -928,7 +927,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         }
 
         if (legacyAttempt.isPresent()) {
-            return convertToDetailResponse(legacyAttempt.get());
+            QuizAttempt attempt = expireAttemptIfTimedOut(legacyAttempt.get());
+            return convertToDetailResponse(attempt);
         }
 
         throw new ResourceNotFoundException("KhÃ´ng cÃ³ bÃ i lÃ m nÃ o Ä‘ang diá»…n ra");
@@ -948,6 +948,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 )
                 .orElseThrow(() -> new ResourceNotFoundException("Khong co bai lam nao dang dien ra"));
 
+        attempt = expireAttemptIfTimedOut(attempt);
         return convertToDetailResponse(attempt);
     }
 
@@ -970,6 +971,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             throw new UnauthorizedException("Báº¡n khÃ´ng cÃ³ quyá»n xem bÃ i lÃ m nÃ y");
         }
 
+        attempt = expireAttemptIfTimedOut(attempt);
         // Gá»i hÃ m convert chung (nÃ³ sáº½ tá»± check quyá»n xem Ä‘Ã¡p Ã¡n bÃªn trong)
         return convertToDetailResponse(attempt);
     }
@@ -1575,6 +1577,16 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         return LocalDateTime.now().isAfter(expirationTime);
     }
 
+    private QuizAttempt expireAttemptIfTimedOut(QuizAttempt attempt) {
+        if (attempt == null) {
+            return null;
+        }
+        if (attempt.getStatus() == AttemptStatus.IN_PROGRESS && isAttemptExpired(attempt)) {
+            expireAttempt(attempt);
+        }
+        return attempt;
+    }
+
     private Long calculateRemainingTimeSeconds(QuizAttempt attempt) {
         // If no time limit, return null
         if (attempt.getQuiz().getTimeLimitMinutes() == null || attempt.getQuiz().getTimeLimitMinutes() <= 0) {
@@ -2168,6 +2180,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizAnswerResponse response = new QuizAnswerResponse();
         response.setId(option.getId());
         response.setContent(option.getContent());
+        response.setExplanation(showCorrectAnswer ? option.getExplanation() : null);
         response.setResourceId(option.getResource() != null ? option.getResource().getId() : null);
         response.setResource(convertResourceToDTO(option.getResource()));
         response.setIsCorrect(showCorrectAnswer ? option.getIsCorrect() : null);
@@ -2243,6 +2256,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         QuizAnswerResponse response = new QuizAnswerResponse();
         response.setId(quizAnswer.getId());
         response.setContent(quizAnswer.getContent());
+        response.setExplanation(showCorrectAnswer ? quizAnswer.getExplanation() : null);
         response.setResourceId(quizAnswer.getResource() != null ? quizAnswer.getResource().getId() : null);
         response.setResource(convertResourceToDTO(quizAnswer.getResource()));
 

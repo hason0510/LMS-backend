@@ -5,6 +5,7 @@ import com.example.backend.dto.request.*;
 import com.example.backend.dto.response.LoginResponse;
 import com.example.backend.dto.response.user.UserInfoResponse;
 import com.example.backend.entity.User;
+import com.example.backend.exception.AccountLockedException;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
@@ -47,7 +48,8 @@ public class AuthServiceImpl implements AuthService {
         UsernamePasswordAuthenticationToken authenticationToken =
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword());
         Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-        User currentUser = userService.handleGetUserByUserName(request.getUsername());
+        User currentUser = userService.handleGetUserByLoginIdentifier(request.getUsername());
+        ensureAccountActive(currentUser);
         LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin();
         userLogin.setId(currentUser.getId());
         userLogin.setUsername(currentUser.getUserName());
@@ -96,6 +98,7 @@ public class AuthServiceImpl implements AuthService {
         // 3. Tìm user theo ID
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("User not found"));
+        ensureAccountActive(user);
 
         // 4. So sánh refresh token trong DB
         if (user.getRefreshToken() == null || !user.getRefreshToken().equals(oldRefreshToken)) {
@@ -142,6 +145,7 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse verifyOtp(OtpVerificationRequest request) {
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+        ensureAccountActive(user);
         boolean valid = otpService.validateOtp(
                 user,
                 request.getCode(),
@@ -226,6 +230,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private LoginResponse buildLoginResponse(Authentication authentication, User user) {
+        ensureAccountActive(user);
         LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin();
         userLogin.setId(user.getId());
         userLogin.setUsername(user.getUserName());
@@ -274,6 +279,7 @@ public class AuthServiceImpl implements AuthService {
                 // User doesn't exist, create new user automatically
                 googleUser = userService.createGoogleUser(email, name != null ? name : email.split("@")[0]);
             }
+            ensureAccountActive(googleUser);
             
             // Build response
             LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin(
@@ -298,6 +304,12 @@ public class AuthServiceImpl implements AuthService {
             return response;
         } catch (Exception e) {
             throw new RuntimeException("Google login failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void ensureAccountActive(User user) {
+        if (user != null && !user.isActive()) {
+            throw new AccountLockedException();
         }
     }
 

@@ -37,6 +37,7 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
         response.setId(quizAnswer.getId());
         response.setIsCorrect(quizAnswer.getIsCorrect());
         response.setContent(quizAnswer.getContent());
+        response.setExplanation(quizAnswer.getExplanation());
         response.setResourceId(quizAnswer.getResource() != null ? quizAnswer.getResource().getId() : null);
         return response;
     }
@@ -73,6 +74,7 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
                 || question.getType().equals(QuestionType.MULTIPLE_CHOICE)){
             answer.setContent(request.getContent());
             answer.setIsCorrect(request.getIsCorrect());
+            answer.setExplanation(request.getExplanation());
             if (request.getResourceId() != null) {
                 answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
             }
@@ -84,6 +86,7 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
             }
             answer.setContent(request.getContent());
             answer.setIsCorrect(true);
+            answer.setExplanation(request.getExplanation());
             if (request.getResourceId() != null) {
                 answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
             }
@@ -106,6 +109,9 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
             if(request.getIsCorrect() != null){
                 answer.setIsCorrect(request.getIsCorrect());
             }
+            if(request.getExplanation() != null){
+                answer.setExplanation(request.getExplanation());
+            }
             if(request.getResourceId() != null){
                 answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
             }
@@ -115,6 +121,9 @@ public class QuizAnswerServiceImpl implements QuizAnswerService{
                 answer.setContent(request.getContent());
             }
             answer.setIsCorrect(true);
+            if(request.getExplanation() != null){
+                answer.setExplanation(request.getExplanation());
+            }
             if(request.getResourceId() != null){
                 answer.setResource(resourceRepository.findById(request.getResourceId()).orElse(null));
             }

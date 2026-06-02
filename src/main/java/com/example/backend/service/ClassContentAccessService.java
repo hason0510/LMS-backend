@@ -163,7 +163,7 @@ public class ClassContentAccessService {
             return classMemberAuthorizationService.canReviewQuizzes(classSection, user);
         }
         if (classContentItem.getItemType() == ContentItemType.ASSIGNMENT) {
-            return classMemberAuthorizationService.canGradeAssignments(classSection, user);
+            return classMemberAuthorizationService.canManageAssignments(classSection, user);
         }
         return true;
     }

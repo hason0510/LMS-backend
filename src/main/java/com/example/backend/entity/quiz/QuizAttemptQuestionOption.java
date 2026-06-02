@@ -36,6 +36,9 @@ public class QuizAttemptQuestionOption extends BaseEntity {
     @Column(name = "order_index")
     private Integer orderIndex;
 
+    @Column(columnDefinition = "LONGTEXT")
+    private String explanation;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "attempt_question_id", nullable = false)
     private QuizAttemptQuestion attemptQuestion;

@@ -4,6 +4,7 @@ import com.example.backend.dto.response.ApiResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -13,10 +14,25 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(value = AccountLockedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccountLockedException(AccountLockedException e) {
+        ApiResponse<Object> res = new ApiResponse<>();
+        res.setCode(HttpStatus.FORBIDDEN.value());
+        res.setMessage(AccountLockedException.ERROR_KEY);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(res);
+    }
+
+    @ExceptionHandler(value = AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAuthenticationException(AuthenticationException e) {
+        ApiResponse<Object> res = new ApiResponse<>();
+        res.setCode(HttpStatus.UNAUTHORIZED.value());
+        res.setMessage("Incorrect username or password");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(res);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleAllException(Exception ex) {
-        if (ex instanceof org.springframework.security.core.AuthenticationException
-                || ex instanceof org.springframework.security.access.AccessDeniedException) {
+        if (ex instanceof org.springframework.security.access.AccessDeniedException) {
             throw (RuntimeException) ex;
         }
         ApiResponse<Object> res = new ApiResponse<>();

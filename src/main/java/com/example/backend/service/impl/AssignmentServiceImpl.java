@@ -74,7 +74,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     public AssignmentResponse createAssignment(AssignmentRequest request) {
         ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireTeacherOrTaPermission(classSection);
+        requireAssignmentManagementPermission(classSection);
 
         Assignment assignment = new Assignment();
         applyRequest(assignment, request, classSection, true);
@@ -106,9 +106,9 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         if (assignment.getClassSection() != null
                 && !assignment.getClassSection().getId().equals(classSection.getId())) {
-            requireTeacherPermission(assignment.getClassSection());
+            requireAssignmentManagementPermission(assignment.getClassSection());
         }
-        requireTeacherPermission(classSection);
+        requireAssignmentManagementPermission(classSection);
 
         applyRequest(assignment, request, classSection, false);
         Assignment savedAssignment = assignmentRepository.save(assignment);
@@ -280,6 +280,13 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (classSectionId != null && !classSectionIds.contains(classSectionId)) {
             throw new UnauthorizedException("You do not manage this class section");
         }
+        classSectionIds = filterManagedAssignmentClassSectionIds(classSectionIds, currentUser);
+        if (classSectionIds.isEmpty()) {
+            return new PageResponse<>(1, 0, 0, List.of());
+        }
+        if (classSectionId != null && !classSectionIds.contains(classSectionId)) {
+            throw new UnauthorizedException("You do not manage assignments in this class section");
+        }
 
         Specification<Assignment> spec = Specification.where(AssignmentSpecification.inClassSections(classSectionIds))
                 .and(AssignmentSpecification.titleContains(keyword));
@@ -355,7 +362,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (classSection == null) {
             throw new BusinessException("Assignment is not linked to any class section");
         }
-        requireTeacherPermission(classSection);
+        requireAssignmentManagementPermission(classSection);
         assignmentRepository.delete(assignment);
     }
 
@@ -582,6 +589,28 @@ public class AssignmentServiceImpl implements AssignmentService {
             return;
         }
         throw new UnauthorizedException("You do not have teaching permission in this class section");
+    }
+
+    private void requireAssignmentManagementPermission(ClassSection classSection) {
+        ensureClassSectionInteractive(classSection);
+        User currentUser = requireCurrentUser();
+        if (classMemberAuthorizationService.canManageAssignments(classSection, currentUser)
+                || classMemberAuthorizationService.isTeacher(classSection, currentUser)) {
+            return;
+        }
+        throw new UnauthorizedException("You do not have permission to manage assignments in this class section");
+    }
+
+    private Set<Integer> filterManagedAssignmentClassSectionIds(Set<Integer> classSectionIds, User currentUser) {
+        Set<Integer> filtered = new LinkedHashSet<>();
+        for (Integer classSectionId : classSectionIds) {
+            ClassSection classSection = classSectionRepository.findById(classSectionId).orElse(null);
+            if (classMemberAuthorizationService.canManageAssignments(classSection, currentUser)
+                    || classMemberAuthorizationService.isTeacher(classSection, currentUser)) {
+                filtered.add(classSectionId);
+            }
+        }
+        return filtered;
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {

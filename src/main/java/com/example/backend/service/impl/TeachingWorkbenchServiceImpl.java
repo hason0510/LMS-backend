@@ -160,7 +160,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
         for (Integer classId : classIds) {
             ClassSection classSection = classSectionRepository.findById(classId)
                     .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-            if (classMemberAuthorizationService.canGradeAssignments(classSection, currentUser)) {
+            if (classMemberAuthorizationService.canManageAssignments(classSection, currentUser)) {
                 addAssignmentReviewItems(items, currentUser, classSection);
             }
             if (classMemberAuthorizationService.canReviewQuizzes(classSection, currentUser)) {
@@ -380,7 +380,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     private boolean canReviewClassSection(ClassSection classSection, User currentUser) {
-        return classMemberAuthorizationService.canGradeAssignments(classSection, currentUser)
+        return classMemberAuthorizationService.canManageAssignments(classSection, currentUser)
                 || classMemberAuthorizationService.canReviewQuizzes(classSection, currentUser);
     }
 

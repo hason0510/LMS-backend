@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import javax.crypto.SecretKey;
@@ -37,7 +38,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RestAccessDeniedHandler restAccessDeniedHandler, RestAuthenticationEntryPoint restAuthenticationEntryPoint, GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, RestAccessDeniedHandler restAccessDeniedHandler, RestAuthenticationEntryPoint restAuthenticationEntryPoint, GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler, AccountStatusFilter accountStatusFilter) throws Exception {
         http.setSharedObject(RestAccessDeniedHandler.class, restAccessDeniedHandler);
         http.setSharedObject(RestAuthenticationEntryPoint.class, restAuthenticationEntryPoint);
         http
@@ -61,7 +62,8 @@ public class SecurityConfig {
                 //.formLogin(f -> f.disable())
                 .formLogin(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e.authenticationEntryPoint(restAuthenticationEntryPoint).accessDeniedHandler(restAccessDeniedHandler))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterAfter(accountStatusFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }

@@ -77,6 +77,14 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public User handleGetUserByLoginIdentifier(String identifier) {
+        if (identifier != null && identifier.contains("@")) {
+            return handleGetUserByGmail(identifier);
+        }
+        return handleGetUserByUserName(identifier);
+    }
+
+    @Override
     public boolean isCurrentUser(Integer userId) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         if (principal instanceof Jwt jwt) {
@@ -124,6 +132,56 @@ public class UserServiceImpl implements UserService {
         if (isCurrentUser(id) || getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
             userRepository.deleteById(id);
         }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "user", key = "#id"),
+            @CacheEvict(value = "user_page", allEntries = true)
+    })
+    public UserInfoResponse lockUser(Integer id) {
+        User currentUser = getCurrentUser();
+        User targetUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (currentUser == null || currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+            throw new UnauthorizedException("You have no permission");
+        }
+        if (currentUser.getId().equals(id)) {
+            throw new BusinessException("Ban khong the tu khoa tai khoan cua minh");
+        }
+        if (targetUser.getRole() != null && targetUser.getRole().getRoleName() == RoleType.ADMIN) {
+            throw new BusinessException("Khong the khoa tai khoan quan tri vien trong phien ban nay");
+        }
+
+        targetUser.setActive(false);
+        targetUser.setRefreshToken(null);
+        userRepository.save(targetUser);
+        return convertUserInfoToDTO(targetUser);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "user", key = "#id"),
+            @CacheEvict(value = "user_page", allEntries = true)
+    })
+    public UserInfoResponse unlockUser(Integer id) {
+        User currentUser = getCurrentUser();
+        User targetUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (currentUser == null || currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+            throw new UnauthorizedException("You have no permission");
+        }
+        if (targetUser.getRole() != null && targetUser.getRole().getRoleName() == RoleType.ADMIN) {
+            throw new BusinessException("Khong the mo khoa tai khoan quan tri vien trong phien ban nay");
+        }
+
+        targetUser.setActive(true);
+        userRepository.save(targetUser);
+        return convertUserInfoToDTO(targetUser);
     }
 
     @Override
@@ -469,6 +527,7 @@ public class UserServiceImpl implements UserService {
         userDTO.setFullName(user.getFullName());
         userDTO.setGmail(user.getGmail());
         userDTO.setRoleName(user.getRole().getRoleName().toString());
+        userDTO.setActive(user.isActive());
         userDTO.setImageUrl(user.getImageUrl());
         userDTO.setCloudinaryImageId(user.getCloudinaryImageId());
         userDTO.setWorkPlace(user.getWorkPlace());

@@ -1,6 +1,7 @@
 package com.example.backend.config;
 
 import com.example.backend.entity.User;
+import com.example.backend.exception.AccountLockedException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.service.UserService;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,6 +38,9 @@ public class UserDetailCustom implements UserDetailsService {
         }
         if (!user.isVerified()) {
             throw new UnauthorizedException("Chưa xác thực OTP");
+        }
+        if (!user.isActive()) {
+            throw new AccountLockedException();
         }
 
         String roleName = user.getRole().getRoleName().name();

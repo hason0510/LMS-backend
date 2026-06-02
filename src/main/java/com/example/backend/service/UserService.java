@@ -24,7 +24,13 @@ public interface UserService {
 
     void updateUserToken(String refreshToken, String userName);
 
+    User handleGetUserByLoginIdentifier(String identifier);
+
     void deleteUserById(Integer id);
+
+    UserInfoResponse lockUser(Integer id);
+
+    UserInfoResponse unlockUser(Integer id);
 
     User createGoogleUser(String email, String name);
 

@@ -144,6 +144,7 @@ public class AuthController {
                 .maxAge(refreshTokenExpiration)
                 .path("/")
                 .build();
+        response.setRefreshToken(null);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(response);

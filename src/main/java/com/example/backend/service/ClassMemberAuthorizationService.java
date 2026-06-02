@@ -22,6 +22,8 @@ public class ClassMemberAuthorizationService {
     public static final String CAP_VIEW_CLASS = "VIEW_CLASS";
     public static final String CAP_VIEW_PEOPLE = "VIEW_PEOPLE";
     public static final String CAP_VIEW_PROGRESS = "VIEW_PROGRESS";
+    public static final String CAP_MANAGE_ASSIGNMENTS = "MANAGE_ASSIGNMENTS";
+    @Deprecated
     public static final String CAP_GRADE_ASSIGNMENTS = "GRADE_ASSIGNMENTS";
     public static final String CAP_REVIEW_QUIZZES = "REVIEW_QUIZZES";
     public static final String CAP_POST_ANNOUNCEMENTS = "POST_ANNOUNCEMENTS";
@@ -35,7 +37,7 @@ public class ClassMemberAuthorizationService {
             CAP_VIEW_CLASS,
             CAP_VIEW_PEOPLE,
             CAP_VIEW_PROGRESS,
-            CAP_GRADE_ASSIGNMENTS,
+            CAP_MANAGE_ASSIGNMENTS,
             CAP_REVIEW_QUIZZES,
             CAP_POST_ANNOUNCEMENTS,
             CAP_REPLY_COMMENTS,
@@ -49,7 +51,7 @@ public class ClassMemberAuthorizationService {
             CAP_VIEW_CLASS,
             CAP_VIEW_PEOPLE,
             CAP_VIEW_PROGRESS,
-            CAP_GRADE_ASSIGNMENTS,
+            CAP_MANAGE_ASSIGNMENTS,
             CAP_REVIEW_QUIZZES,
             CAP_POST_ANNOUNCEMENTS,
             CAP_REPLY_COMMENTS
@@ -216,7 +218,11 @@ public class ClassMemberAuthorizationService {
     }
 
     public boolean canGradeAssignments(ClassSection classSection, User user) {
-        return hasCapability(classSection, user, CAP_GRADE_ASSIGNMENTS);
+        return canManageAssignments(classSection, user);
+    }
+
+    public boolean canManageAssignments(ClassSection classSection, User user) {
+        return hasCapability(classSection, user, CAP_MANAGE_ASSIGNMENTS);
     }
 
     public boolean canReviewQuizzes(ClassSection classSection, User user) {
@@ -241,7 +247,7 @@ public class ClassMemberAuthorizationService {
 
     public boolean canReview(ClassSection classSection, User user) {
         return hasCapability(classSection, user, CAP_REVIEW_QUIZZES)
-                || hasCapability(classSection, user, CAP_GRADE_ASSIGNMENTS);
+                || hasCapability(classSection, user, CAP_MANAGE_ASSIGNMENTS);
     }
 
     public boolean canViewTeachingWorkspace(ClassSection classSection, User user) {
@@ -273,7 +279,14 @@ public class ClassMemberAuthorizationService {
         if (capabilities == null || capabilities.isEmpty()) {
             return List.of();
         }
-        Set<String> requested = new LinkedHashSet<>(capabilities);
+        Set<String> requested = new LinkedHashSet<>();
+        for (String capability : capabilities) {
+            if (CAP_GRADE_ASSIGNMENTS.equals(capability)) {
+                requested.add(CAP_MANAGE_ASSIGNMENTS);
+                continue;
+            }
+            requested.add(capability);
+        }
         return allowedCapabilities.stream()
                 .filter(requested::contains)
                 .toList();

@@ -180,7 +180,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         Assignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
         ClassSection classSection = resolveClassSection(assignment, classSectionId);
-        requireTeachingPermission(classSection, ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS);
+        requireTeachingPermission(classSection, ClassMemberAuthorizationService.CAP_MANAGE_ASSIGNMENTS);
 
         boolean onlyNotSubmitted = status == SubmissionStatus.NOT_SUBMITTED;
         Specification<Submission> baseSpec = Specification
@@ -278,7 +278,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
         User currentUser = requireTeachingPermission(
                 submission.getClassSection(),
-                ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS
+                ClassMemberAuthorizationService.CAP_MANAGE_ASSIGNMENTS
         );
         preventSelfReview(submission, currentUser);
         if (submission.getSubmissionTime() == null || submission.getStatus() == SubmissionStatus.NOT_SUBMITTED) {
@@ -305,7 +305,7 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
         User currentUser = requireTeachingPermission(
                 submission.getClassSection(),
-                ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS
+                ClassMemberAuthorizationService.CAP_MANAGE_ASSIGNMENTS
         );
         preventSelfReview(submission, currentUser);
         if (submission.getSubmissionTime() == null || submission.getStatus() == SubmissionStatus.NOT_SUBMITTED) {
@@ -336,7 +336,7 @@ public class SubmissionServiceImpl implements SubmissionService {
             return convertToResponse(submission);
         }
 
-        requireTeachingPermission(submission.getClassSection(), ClassMemberAuthorizationService.CAP_GRADE_ASSIGNMENTS);
+        requireTeachingPermission(submission.getClassSection(), ClassMemberAuthorizationService.CAP_MANAGE_ASSIGNMENTS);
         return convertToResponse(submission);
     }
 

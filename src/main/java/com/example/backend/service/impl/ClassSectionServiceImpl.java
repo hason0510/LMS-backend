@@ -490,7 +490,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     ) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
+        requireContentMutationPermission(classSection, request.getItemType());
 
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
@@ -538,11 +538,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     ) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassContentItem classContentItem = classContentItemRepository
                 .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
+        requireContentMutationPermission(classSection, classContentItem.getItemType());
         if (request.getLessonId() != null || request.getQuizId() != null || request.getAssignmentId() != null) {
             applyContentReferenceByIds(
                     classContentItem,
@@ -584,11 +584,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public void deleteClassContentItem(Integer classSectionId, Integer classContentItemId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
 
         ClassContentItem classContentItem = classContentItemRepository
                 .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
+        requireContentMutationPermission(classSection, classContentItem.getItemType());
         classContentItemRepository.delete(classContentItem);
         recalculateLearningProgressForApprovedStudents(classSectionId);
     }
@@ -1611,6 +1611,14 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (!classMemberAuthorizationService.hasCapability(classSection, currentUser, capability)) {
             throw new UnauthorizedException("You do not have permission in this class section");
         }
+    }
+
+    private void requireContentMutationPermission(ClassSection classSection, ContentItemType itemType) {
+        if (itemType == ContentItemType.ASSIGNMENT) {
+            requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_ASSIGNMENTS);
+            return;
+        }
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_EDIT_CONTENT);
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
