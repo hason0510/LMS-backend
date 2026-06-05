@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
+import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.*;
 import com.example.backend.dto.request.classsection.ClassChapterCreateRequest;
 import com.example.backend.dto.request.classsection.ClassChapterOverrideRequest;
@@ -21,7 +23,6 @@ import com.example.backend.dto.response.classsection.ClassSectionResponse;
 import com.example.backend.entity.Progress;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.assignment.Submission;
-import com.example.backend.entity.template.AssignmentTemplate;
 import com.example.backend.entity.template.ChapterTemplate;
 import com.example.backend.entity.ClassChapter;
 import com.example.backend.entity.ClassContentItem;
@@ -48,7 +49,6 @@ import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.AssignmentRepository;
-import com.example.backend.repository.AssignmentTemplateRepository;
 import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ChapterTemplateRepository;
 import com.example.backend.repository.ClassChapterRepository;
@@ -76,9 +76,11 @@ import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassSectionService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.ResourceAuthorizationService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.ClassSectionSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -117,7 +119,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
     private final ResourceRepository resourceRepository;
     private final AssignmentRepository assignmentRepository;
-    private final AssignmentTemplateRepository assignmentTemplateRepository;
     private final SubmissionRepository submissionRepository;
     private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
@@ -126,6 +127,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final ClassContentAccessService classContentAccessService;
     private final EnrollmentService enrollmentService;
     private final ResourceAuthorizationService resourceAuthorizationService;
+    private final ResourceService resourceService;
+    private final RedisCacheInvalidationService cacheInvalidationService;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -179,10 +182,12 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             }
         }
 
+        cacheInvalidationService.evictAllRedisReadCaches();
         return getClassSectionById(classSection.getId());
     }
 
     @Override
+    @Cacheable(value = CacheNames.CLASS_SECTION_DETAIL, key = "@cacheKeyBuilder.classSectionDetailKey(#id)", sync = true)
     public ClassSectionResponse getClassSectionById(Integer id) {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
@@ -190,6 +195,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.CLASS_SECTION_LIST, key = "@cacheKeyBuilder.classSectionListKey(#teacherId, #subjectId, #curriculumTemplateId, #includeChapters)", sync = true)
     public List<ClassSectionResponse> getClassSections(
             Integer teacherId,
             Integer subjectId,
@@ -223,6 +229,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.CLASS_SECTION_SEARCH, key = "@cacheKeyBuilder.classSectionSearchKey(#request)", sync = true)
     public PageResponse<ClassSectionResponse> searchClassSections(ClassSectionSearchRequest request) {
         ClassSectionSearchRequest safeRequest = request != null ? request : new ClassSectionSearchRequest();
         User currentUser = userService.getCurrentUser();
@@ -324,6 +331,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (request.getRole() == ClassMemberRole.TEACHER) {
             ensureUserIsNotEnrolledInClassSection(user, classSection);
             transferTeacherOwnership(classSection, user);
+            cacheInvalidationService.evictAllRedisReadCaches();
             return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, user.getId())
                     .map(this::convertClassMember)
                     .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
@@ -331,6 +339,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         ensureUserIsNotEnrolledInClassSection(user, classSection);
         ClassMember saved = createOrUpdateMembership(classSection, user, ClassMemberRole.TA);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertClassMember(saved);
     }
 
@@ -347,6 +356,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (request.getRole() == ClassMemberRole.TEACHER) {
             ensureUserIsNotEnrolledInClassSection(member.getUser(), classSection);
             transferTeacherOwnership(classSection, member.getUser());
+            cacheInvalidationService.evictAllRedisReadCaches();
             return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
                     .map(this::convertClassMember)
                     .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
@@ -357,7 +367,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
         member.setRole(ClassMemberRole.TA);
         applyDefaultPermissions(member, ClassMemberRole.TA);
-        return convertClassMember(classMemberRepository.save(member));
+        ClassMemberResponse response = convertClassMember(classMemberRepository.save(member));
+        cacheInvalidationService.evictAllRedisReadCaches();
+        return response;
     }
 
     @Override
@@ -382,7 +394,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         List<String> normalizedPermissions = normalizeTaPermissions(request.getPermissions());
         member.setPermissions(normalizedPermissions);
-        return convertClassMember(classMemberRepository.save(member));
+        ClassMemberResponse response = convertClassMember(classMemberRepository.save(member));
+        cacheInvalidationService.evictAllRedisReadCaches();
+        return response;
     }
 
     @Override
@@ -398,6 +412,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             throw new BusinessException("Cannot remove TEACHER from class section");
         }
         classMemberRepository.delete(member);
+        cacheInvalidationService.evictAllRedisReadCaches();
     }
 
     @Override
@@ -423,6 +438,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         classChapter.setIsLocked(false);
 
         ClassChapter created = classChapterRepository.save(classChapter);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertChapterToResponse(created);
     }
 
@@ -466,7 +482,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             throw new BusinessException("Class chapter must have a title");
         }
 
-        return convertChapterToResponse(classChapterRepository.save(classChapter));
+        ClassChapterResponse response = convertChapterToResponse(classChapterRepository.save(classChapter));
+        cacheInvalidationService.evictAllRedisReadCaches();
+        return response;
     }
 
     @Override
@@ -479,6 +497,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
         classChapterRepository.delete(classChapter);
+        cacheInvalidationService.evictAllRedisReadCaches();
     }
 
     @Override
@@ -526,6 +545,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         );
         ClassContentItem savedItem = classContentItemRepository.save(classContentItem);
         recalculateLearningProgressForApprovedStudents(classSectionId);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertContentItemToResponse(savedItem);
     }
 
@@ -576,6 +596,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
         ClassContentItem savedItem = classContentItemRepository.save(classContentItem);
         recalculateLearningProgressForApprovedStudents(classSectionId);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertContentItemToResponse(savedItem);
     }
 
@@ -591,9 +612,11 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         requireContentMutationPermission(classSection, classContentItem.getItemType());
         classContentItemRepository.delete(classContentItem);
         recalculateLearningProgressForApprovedStudents(classSectionId);
+        cacheInvalidationService.evictAllRedisReadCaches();
     }
 
     @Override
+    @Cacheable(value = CacheNames.STUDENT_CLASS_SECTION_LIST, key = "@cacheKeyBuilder.studentClassSectionListKey('approved')", sync = true)
     public List<ClassSectionResponse> getApprovedClassSectionsForStudent() {
         User currentUser = userService.getCurrentUser();
         List<Enrollment> enrollments = enrollmentRepository.findByStudent_IdAndApprovalStatus(
@@ -608,6 +631,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.STUDENT_CLASS_SECTION_LIST, key = "@cacheKeyBuilder.studentClassSectionListKey('pending')", sync = true)
     public List<ClassSectionResponse> getPendingClassSectionsForStudent() {
         User currentUser = userService.getCurrentUser();
         List<Enrollment> enrollments = enrollmentRepository.findByStudent_IdAndApprovalStatus(
@@ -622,6 +646,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.STUDENT_CLASS_SECTION_LIST, key = "@cacheKeyBuilder.studentClassSectionListKey('all')", sync = true)
     public List<ClassSectionResponse> getAllClassSectionsForStudent() {
         User currentUser = userService.getCurrentUser();
         List<Enrollment> enrollments = enrollmentRepository.findByStudent_IdAndClassSection_IdIsNotNull(currentUser.getId());
@@ -740,7 +765,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
         requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS, false);
         classSection.setStatus(status);
-        return convertToResponse(classSectionRepository.save(classSection), false);
+        ClassSectionResponse response = convertToResponse(classSectionRepository.save(classSection), false);
+        cacheInvalidationService.evictAllRedisReadCaches();
+        return response;
     }
 
     private ClassSectionResponse convertToResponse(ClassSection classSection, boolean includeChapters) {
@@ -1122,11 +1149,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             return;
         }
 
-        if (templateItem.getAssignmentTemplate() != null) {
-            Assignment assignment = cloneAssignmentTemplate(templateItem.getAssignmentTemplate(), classSection);
-            classContentItem.setAssignment(assignment);
-            classContentItem.setTitle(assignment.getTitle());
-            return;
+        if (templateItem.getItemType() == ContentItemType.ASSIGNMENT) {
+            throw new BusinessException("Assignment template is no longer supported");
         }
 
         classContentItem.setTitle(resolveTemplateContentPlaceholderTitle(templateItem.getItemType()));
@@ -1147,7 +1171,13 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         lesson.setVideoUrl(template.getVideoUrl());
         lesson.setNotes(template.getNotes());
         lesson.setIsFinished(false);
-        return lessonRepository.save(lesson);
+        Lesson savedLesson = lessonRepository.save(lesson);
+        List<Integer> templateResourceIds = resourceService.getResourcesByLessonTemplateId(template.getId()).stream()
+                .map(resource -> resource.getId())
+                .filter(Objects::nonNull)
+                .toList();
+        resourceService.replaceAttachedResources("LESSON", savedLesson.getId(), templateResourceIds);
+        return savedLesson;
     }
 
     private Quiz cloneQuizTemplate(QuizTemplate template, ClassSection classSection) {
@@ -1260,19 +1290,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             items.add(item);
         }
         return items;
-    }
-
-    private Assignment cloneAssignmentTemplate(AssignmentTemplate template, ClassSection classSection) {
-        Assignment assignment = new Assignment();
-        assignment.setTitle(template.getTitle());
-        assignment.setDescription(template.getDescription());
-        assignment.setInstruction(template.getInstruction());
-        assignment.setMaxScore(template.getMaxScore());
-        assignment.setDueAt(template.getDueAt());
-        assignment.setCloseAt(template.getCloseAt());
-        assignment.setAllowLateSubmission(template.isAllowLateSubmission());
-        assignment.setClassSection(classSection);
-        return assignmentRepository.save(assignment);
     }
 
    /* private ChapterTemplate resolveChapterTemplateForClassSection(ClassSection classSection, Integer chapterTemplateId) {
@@ -1482,6 +1499,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSection.setClassCode(resolveClassCode());
         classSectionRepository.save(classSection);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return getClassSectionById(id);
     }
 
@@ -1493,6 +1511,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSection.setClassCode(null);
         classSectionRepository.save(classSection);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return getClassSectionById(id);
     }
 
@@ -1503,6 +1522,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
         requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
         classSectionRepository.delete(classSection);
+        cacheInvalidationService.evictAllRedisReadCaches();
     }
 
     @Override
@@ -1527,6 +1547,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             classSection.setEndDate(request.getEndDate());
         }
         classSectionRepository.save(classSection);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return getClassSectionById(id);
     }
 

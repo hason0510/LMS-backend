@@ -40,6 +40,7 @@ public interface ResourceService {
     List<ResourceAuditLogResponse> getResourceAuditLogs(Integer resourceId);
 
     List<ResourceResponse> getResourcesByLessonId(Integer lessonId);
+    List<ResourceResponse> getResourcesByLessonTemplateId(Integer lessonTemplateId);
     List<ResourceResponse> getResourcesByAssignmentId(Integer assignmentId);
     List<ResourceResponse> getResourcesBySubmissionId(Integer submissionId);
     void attachResourceToLesson(Integer lessonId, Integer resourceId);

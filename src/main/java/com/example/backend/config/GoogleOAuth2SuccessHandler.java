@@ -28,6 +28,12 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
     @Value("${hayson.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
 
+    @Value("${hayson.jwt.refresh-cookie-secure:true}")
+    private boolean refreshTokenCookieSecure;
+
+    @Value("${hayson.jwt.refresh-cookie-same-site:None}")
+    private String refreshTokenCookieSameSite;
+
     public GoogleOAuth2SuccessHandler(UserServiceImpl userService, SecurityUtil securityUtil) {
         this.userService = userService;
         this.securityUtil = securityUtil;
@@ -61,7 +67,8 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
 
         ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
                 .httpOnly(true)
-                .secure(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
                 .path("/")
                 .maxAge(refreshTokenExpiration)
                 .build();

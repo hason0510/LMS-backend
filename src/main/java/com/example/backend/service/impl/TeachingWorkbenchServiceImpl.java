@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
 import com.example.backend.constant.AttemptStatus;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.EnrollmentStatus;
@@ -30,6 +31,7 @@ import com.example.backend.service.ClassSectionService;
 import com.example.backend.service.TeachingWorkbenchService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +60,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     private final UserService userService;
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_CONTEXT, key = "@cacheKeyBuilder.teachingContextKey()", sync = true)
     @Transactional(readOnly = true)
     public TeachingContextResponse getTeachingContext() {
         Set<Integer> classIds = resolveTeachingClassSectionIds(requireCurrentUser());
@@ -65,6 +68,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_CLASSES, key = "@cacheKeyBuilder.teachingClassesKey()", sync = true)
     @Transactional(readOnly = true)
     public List<ClassSectionResponse> getMyTeachingClasses() {
         return resolveTeachingClassSectionIds(requireCurrentUser()).stream()
@@ -73,6 +77,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_WORKBENCH_SUMMARY, key = "@cacheKeyBuilder.teachingSummaryKey(#classSectionId)", sync = true)
     @Transactional(readOnly = true)
     public TeachingWorkbenchSummaryResponse getSummary(Integer classSectionId) {
         User currentUser = requireCurrentUser();
@@ -117,6 +122,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_REVIEW_QUEUE, key = "@cacheKeyBuilder.teachingReviewQueueKey(null)", sync = true)
     @Transactional(readOnly = true)
     public List<TeachingReviewQueueItemResponse> getReviewQueue() {
         User currentUser = requireCurrentUser();
@@ -128,6 +134,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_REVIEW_QUEUE, key = "@cacheKeyBuilder.teachingReviewQueueKey(#classSectionId)", sync = true)
     @Transactional(readOnly = true)
     public List<TeachingReviewQueueItemResponse> getReviewQueue(Integer classSectionId) {
         User currentUser = requireCurrentUser();
@@ -142,6 +149,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.TEACHING_CLASS_PEOPLE, key = "@cacheKeyBuilder.classPeopleKey(#classSectionId, #status)", sync = true)
     @Transactional(readOnly = true)
     public List<ClassPeopleRowResponse> getClassPeople(Integer classSectionId, String status) {
         User currentUser = requireCurrentUser();

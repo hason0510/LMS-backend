@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
 import com.example.backend.constant.OtpType;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.RoleType;
@@ -121,8 +122,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Caching(evict = {
-            @CacheEvict(value = "user", key = "#id"),
-            @CacheEvict(value = "user_page", allEntries = true)
+            @CacheEvict(value = CacheNames.USER, key = "#id"),
+            @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public void deleteUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
@@ -137,8 +138,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = "user", key = "#id"),
-            @CacheEvict(value = "user_page", allEntries = true)
+            @CacheEvict(value = CacheNames.USER, key = "#id"),
+            @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public UserInfoResponse lockUser(Integer id) {
         User currentUser = getCurrentUser();
@@ -164,8 +165,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = "user", key = "#id"),
-            @CacheEvict(value = "user_page", allEntries = true)
+            @CacheEvict(value = CacheNames.USER, key = "#id"),
+            @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public UserInfoResponse unlockUser(Integer id) {
         User currentUser = getCurrentUser();
@@ -185,7 +186,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @CacheEvict(value = "user_page", allEntries = true)
+    @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     public User createGoogleUser(String email, String username) {
         User googleUser = User.builder()
                 .userName(email)
@@ -201,8 +202,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = "user", key = "#id"),
-            @CacheEvict(value = "user_page", allEntries = true)
+            @CacheEvict(value = CacheNames.USER, key = "#id"),
+            @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public UserInfoResponse updateUser(Integer id, RegisterRequest request) {
         User updatedUser = userRepository.findById(id).orElse(null);
@@ -304,7 +305,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Cacheable(value = "user", key = "#id")
+    @Cacheable(value = CacheNames.USER, key = "#id")
     public Object getUserById(Integer id) {
         User user = userRepository.findById(id).orElse(null);
         if (user == null) {
@@ -316,8 +317,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = "user", key = "#id"),
-            @CacheEvict(value = "user_page", allEntries = true)
+            @CacheEvict(value = CacheNames.USER, key = "#id"),
+            @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public CloudinaryResponse uploadImage(final Integer id, final MultipartFile file) {
         final User avatarUser = userRepository.findById(id)
@@ -339,7 +340,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Cacheable(value = "user_page", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
+    @Cacheable(value = CacheNames.USER_PAGE, key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     public PageResponse<UserInfoResponse> getUserPage(Pageable pageable) {
         Page<User> userPage = userRepository.findAll(pageable);
         Page<UserInfoResponse> userResponse = userPage.map(this::convertUserInfoToDTO);
@@ -353,8 +354,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Caching(
-            put = @CachePut(value = "user", key = "#result.id"),
-            evict = @CacheEvict(value = "user_page", allEntries = true)
+            put = @CachePut(value = CacheNames.USER, key = "#result.id"),
+            evict = @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     )
     public UserInfoResponse registerUser(RegisterRequest request) {
         User user = new User();
@@ -402,8 +403,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Caching(
-            put = @CachePut(value = "user", key = "#result.id"),
-            evict = @CacheEvict(value = "user_page", allEntries = true)
+            put = @CachePut(value = CacheNames.USER, key = "#result.id"),
+            evict = @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     )
     public UserInfoResponse createUser(UserCreateRequest request) {
         User user = new User();

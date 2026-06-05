@@ -72,8 +72,9 @@ public class NotificationServiceImpl implements NotificationService {
 
         NotificationResponse response = convertEntityToDTO(notification);
 
-        messagingTemplate.convertAndSend(
-                "/topic/notifications/" + recipient.getId(),
+        messagingTemplate.convertAndSendToUser(
+                String.valueOf(recipient.getId()),
+                "/queue/notifications",
                 response
         );
     }

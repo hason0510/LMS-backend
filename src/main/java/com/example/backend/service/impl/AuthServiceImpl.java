@@ -170,15 +170,30 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void changePassWord(ChangePasswordRequest request){
         User user = userService.getCurrentUser();
-        if(passwordEncoder.matches(request.getOldPassword(), user.getPassword())){
-            if(request.getConfirmNewPassword().equals(request.getNewPassword())){
-                user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-                userRepository.save(user);
-            }
-            else throw new BusinessException("Hai mật khẩu không trùng khớp");
-        }
-        else throw new BusinessException("Mật khẩu bạn nhập không chính xác");
+        validatePasswordChangeRequest(user, request.getOldPassword(), request.getNewPassword(), request.getConfirmNewPassword());
+        otpService.resendOtp(user, OtpType.PASSWORD_CHANGE);
+    }
 
+    @Override
+    public void confirmChangePassWord(ChangePasswordOtpRequest request) {
+        User user = userService.getCurrentUser();
+        validatePasswordChangeRequest(user, request.getOldPassword(), request.getNewPassword(), request.getConfirmNewPassword());
+        boolean validOtp = otpService.validateOtp(
+                user,
+                request.getOtp(),
+                OtpType.PASSWORD_CHANGE
+        );
+        if (!validOtp) {
+            throw new BusinessException("OTP không hợp lệ hoặc đã hết hạn");
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+    }
+
+    @Override
+    public void resendChangePasswordOtp() {
+        User user = userService.getCurrentUser();
+        otpService.resendOtp(user, OtpType.PASSWORD_CHANGE);
     }
 
     @Override
@@ -310,6 +325,15 @@ public class AuthServiceImpl implements AuthService {
     private void ensureAccountActive(User user) {
         if (user != null && !user.isActive()) {
             throw new AccountLockedException();
+        }
+    }
+
+    private void validatePasswordChangeRequest(User user, String oldPassword, String newPassword, String confirmNewPassword) {
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new BusinessException("Mật khẩu bạn nhập không chính xác");
+        }
+        if (!confirmNewPassword.equals(newPassword)) {
+            throw new BusinessException("Hai mật khẩu không trùng khớp");
         }
     }
 

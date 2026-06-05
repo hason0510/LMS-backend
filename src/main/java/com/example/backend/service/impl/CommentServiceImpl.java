@@ -4,6 +4,7 @@ import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.CommentRequest;
+import com.example.backend.dto.response.CommentRealtimeEventResponse;
 import com.example.backend.dto.response.CommentResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.entity.*;
@@ -11,15 +12,20 @@ import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.*;
+import com.example.backend.service.CommentAccessService;
 import com.example.backend.service.CommentService;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.NotificationService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -34,6 +40,8 @@ public class CommentServiceImpl implements CommentService {
     private final NotificationService notificationService;
     private final EnrollmentRepository enrollmentRepository;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final CommentAccessService commentAccessService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     @Override
@@ -82,8 +90,9 @@ public class CommentServiceImpl implements CommentService {
         Comment savedComment = commentRepository.save(comment);
 
         processNotification(savedComment, classSection, lesson, currentUser);
-
-        return convertEntityToDTO(savedComment);
+        CommentResponse response = convertEntityToDTO(savedComment);
+        publishCommentEventAfterCommit("CREATED", lessonId, response);
+        return response;
     }
 
     private void processNotification(Comment comment, ClassSection classSection, Lesson lesson, User currentUser) {
@@ -145,7 +154,9 @@ public class CommentServiceImpl implements CommentService {
             comment.setContent(request.getContent());
         }
         commentRepository.save(comment);
-        return convertEntityToDTO(comment);
+        CommentResponse response = convertEntityToDTO(comment);
+        publishCommentEventAfterCommit("UPDATED", comment.getLesson().getId(), response);
+        return response;
     }
 
     @Override
@@ -153,8 +164,8 @@ public class CommentServiceImpl implements CommentService {
             Integer lessonId,
             Pageable pageable
     ) {
-        lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài giảng!"));
+        User currentUser = userService.getCurrentUser();
+        commentAccessService.assertCanAccessLesson(lessonId, currentUser);
 
         List<Comment> comments = commentRepository.findAllByLesson_Id(lessonId);
         if (comments.isEmpty()) {
@@ -207,6 +218,8 @@ public class CommentServiceImpl implements CommentService {
     public CommentResponse getComment(Integer id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+        User currentUser = userService.getCurrentUser();
+        commentAccessService.assertCanAccessLesson(comment.getLesson().getId(), currentUser);
         return convertEntityToDTO(comment);
     }
 
@@ -216,7 +229,10 @@ public class CommentServiceImpl implements CommentService {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
         validateActionComment(comment);
+        CommentResponse response = convertEntityToDTO(comment);
+        Integer lessonId = comment.getLesson().getId();
         commentRepository.delete(comment);
+        publishCommentEventAfterCommit("DELETED", lessonId, response);
     }
 
     private void validateActionComment(Comment comment) {
@@ -261,5 +277,34 @@ public class CommentServiceImpl implements CommentService {
         if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
             throw new BusinessException("Class section is archived and only supports read-only access");
         }
+    }
+
+    private void publishCommentEventAfterCommit(String type, Integer lessonId, CommentResponse comment) {
+        CommentRealtimeEventResponse event = new CommentRealtimeEventResponse(
+                type,
+                lessonId,
+                comment != null ? comment.getCommentId() : null,
+                comment != null ? comment.getParentId() : null,
+                comment != null ? comment.getUserId() : null,
+                comment,
+                LocalDateTime.now()
+        );
+
+        Runnable publishAction = () -> messagingTemplate.convertAndSend(
+                "/topic/lessons/" + lessonId + "/comments",
+                event
+        );
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publishAction.run();
+                }
+            });
+            return;
+        }
+
+        publishAction.run();
     }
 }

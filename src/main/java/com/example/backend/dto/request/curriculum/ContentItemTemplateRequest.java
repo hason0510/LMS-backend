@@ -17,5 +17,4 @@ public class ContentItemTemplateRequest {
     private Integer orderIndex;
     private Integer lessonTemplateId;
     private Integer quizTemplateId;
-    private Integer assignmentTemplateId;
 }

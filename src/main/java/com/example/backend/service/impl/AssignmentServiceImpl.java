@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
+import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ClassContentAvailabilityStatus;
@@ -38,6 +40,7 @@ import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.AssignmentSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +71,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final ClassContentAccessService classContentAccessService;
     private final ResourceService resourceService;
     private final ClassNotificationService classNotificationService;
+    private final RedisCacheInvalidationService cacheInvalidationService;
 
     @Override
     @Transactional
@@ -91,6 +95,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                 saved.getId(),
                 "assignment-created"
         );
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertToResponse(saved);
     }
 
@@ -114,6 +119,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         Assignment savedAssignment = assignmentRepository.save(assignment);
         syncAssignmentAttachedResources(savedAssignment, request);
         syncLinkedClassContentItemTitle(savedAssignment, previousTitle);
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertToResponse(savedAssignment);
     }
 
@@ -270,6 +276,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.ASSIGNMENT_TEACHING_OVERVIEW, key = "@cacheKeyBuilder.teachingAssignmentsKey(#tab, #keyword, #classSectionId)", sync = true)
     @Transactional(readOnly = true)
     public PageResponse<TeacherAssignmentOverviewResponse> getTeachingAssignments(String tab, String keyword, Integer classSectionId) {
         User currentUser = requireCurrentUser();
@@ -364,6 +371,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         requireAssignmentManagementPermission(classSection);
         assignmentRepository.delete(assignment);
+        cacheInvalidationService.evictAllRedisReadCaches();
     }
 
     private void applyRequest(Assignment assignment, AssignmentRequest request, ClassSection classSection, boolean createMode) {

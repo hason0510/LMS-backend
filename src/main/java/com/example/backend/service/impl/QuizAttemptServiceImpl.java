@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
+import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.*;
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerItemRequest;
 import com.example.backend.dto.request.quiz.QuizAttemptAnswerRequest;
@@ -25,6 +27,7 @@ import com.example.backend.service.QuizAttemptService;
 import com.example.backend.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -67,6 +70,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final CourseRepository courseRepository;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
+    private final RedisCacheInvalidationService cacheInvalidationService;
 
 
     @Override
@@ -898,6 +902,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             }
         }
 
+        cacheInvalidationService.evictTeachingAndReportCaches();
         return convertQuizAttemptToDTO(attempt);
     }
 
@@ -949,6 +954,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong co bai lam nao dang dien ra"));
 
         attempt = expireAttemptIfTimedOut(attempt);
+        cacheInvalidationService.evictTeachingAndReportCaches();
         return convertToDetailResponse(attempt);
     }
 
@@ -1778,6 +1784,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_COURSE, key = "@cacheKeyBuilder.courseGradeBookKey(#courseId)", sync = true)
     public List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId) {
         User currentUser = userService.getCurrentUser();
 
@@ -1797,6 +1804,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_CLASS_SECTION, key = "@cacheKeyBuilder.classSectionGradeBookKey(#classSectionId)", sync = true)
     public List<ClassSectionQuizGradeResponse> getClassSectionGradeBook(Integer classSectionId) {
         User currentUser = userService.getCurrentUser();
         ClassSection classSection = classSectionRepository.findById(classSectionId)

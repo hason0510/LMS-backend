@@ -1,5 +1,6 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.ResourceType;
@@ -57,6 +58,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final UserService userService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ResourceService resourceService;
+    private final RedisCacheInvalidationService cacheInvalidationService;
 
     @Override
     @Transactional
@@ -108,6 +110,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setGradedAt(null);
 
         Submission saved = submissionRepository.save(submission);
+        cacheInvalidationService.evictTeachingAndReportCaches();
         return convertToResponse(saved);
     }
 
@@ -295,7 +298,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setGradedAt(LocalDateTime.now());
         submission.setStatus(SubmissionStatus.GRADED);
 
-        return convertToResponse(submissionRepository.save(submission));
+        SubmissionResponse response = convertToResponse(submissionRepository.save(submission));
+        cacheInvalidationService.evictTeachingAndReportCaches();
+        return response;
     }
 
     @Override
@@ -315,7 +320,9 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setFeedback(request.getFeedback());
         submission.setStatus(SubmissionStatus.RETURNED);
         submission.setGradedAt(LocalDateTime.now());
-        return convertToResponse(submissionRepository.save(submission));
+        SubmissionResponse response = convertToResponse(submissionRepository.save(submission));
+        cacheInvalidationService.evictTeachingAndReportCaches();
+        return response;
     }
 
     @Override

@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.cache.CacheNames;
+import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.ClassSectionStatus;
@@ -38,6 +40,7 @@ import com.example.backend.service.NotificationService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.UserSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -63,6 +66,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     private final ClassContentItemRepository classContentItemRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final RedisCacheInvalidationService cacheInvalidationService;
 
     @Transactional
     @Override
@@ -101,9 +105,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                         .classSection(classSection)
                         .progress(0)
                         .approvalStatus(EnrollmentStatus.APPROVED)
-                        .build())
+                .build())
                 .toList();
         enrollmentRepository.saveAll(enrollments);
+        cacheInvalidationService.evictAllRedisReadCaches();
 
         for (User user : users) {
             String message = "Ban da duoc them vao lop hoc " + classSection.getTitle();
@@ -142,6 +147,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         List<User> users = userRepository.findAllById(request.getStudentIds());
         List<Enrollment> enrollments = enrollmentRepository.findByClassSection_IdAndStudent_IdIn(classSectionId, request.getStudentIds());
         enrollmentRepository.deleteAll(enrollments);
+        cacheInvalidationService.evictAllRedisReadCaches();
 
         for (User user : users) {
             String message = "Ban da bi xoa khoi danh sach lop " + classSection.getTitle();
@@ -243,6 +249,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                     );
                 }
             }
+            cacheInvalidationService.evictAllRedisReadCaches();
             return convertEnrollmentToDTO(newEnrollment);
         }
 
@@ -296,6 +303,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                         : EnrollmentStatus.PENDING)
                 .build();
         enrollmentRepository.save(newEnrollment);
+        cacheInvalidationService.evictAllRedisReadCaches();
 
         if (newEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
             User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
@@ -305,6 +313,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             }
         }
 
+        cacheInvalidationService.evictAllRedisReadCaches();
         return convertEnrollmentToDTO(newEnrollment);
     }
 
@@ -376,6 +385,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             progress.setCompletedAt(LocalDateTime.now());
             progressRepository.save(progress);
             recalculateAndSaveProgressForClassSection(currentUser.getId(), classSectionId);
+            cacheInvalidationService.evictAllRedisReadCaches();
         }
     }
 
@@ -397,6 +407,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
         enrollment.setApprovalStatus(EnrollmentStatus.APPROVED);
         enrollmentRepository.save(enrollment);
+        cacheInvalidationService.evictAllRedisReadCaches();
 
         String message = "Ban da duoc phe duyet tham gia: " + resolveEnrollmentTargetTitle(enrollment);
         notificationService.createNotification(student, "Yeu cau da duoc phe duyet", message, "ENROLLMENT", null, null);
@@ -420,6 +431,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
         String title = resolveEnrollmentTargetTitle(enrollment);
         enrollmentRepository.delete(enrollment);
+        cacheInvalidationService.evictAllRedisReadCaches();
         String message = "Yeu cau tham gia cua ban da bi tu choi: " + title;
         notificationService.createNotification(student, "Yeu cau bi tu choi", message, "ENROLLMENT_REJECTED", null, null);
     }
@@ -437,6 +449,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         return getStudentsApprovedInClassSection(classSectionId, null, pageable);
     }
 
+    @Cacheable(value = CacheNames.ENROLLMENT_APPROVED_CLASS_SECTION, key = "@cacheKeyBuilder.approvedClassSectionEnrollmentKey(#classSectionId, #keyword, #pageable)", sync = true)
     @Override
     public PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, String keyword, Pageable pageable) {
         if (!classSectionRepository.existsById(classSectionId)) {
@@ -473,6 +486,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.ENROLLMENT_PENDING_CLASS_SECTION, key = "@cacheKeyBuilder.pendingClassSectionEnrollmentKey(#classSectionId, #pageable)", sync = true)
     public PageResponse<EnrollmentResponse> getStudentsPendingInClassSection(Integer classSectionId, Pageable pageable) {
         if (!classSectionRepository.existsById(classSectionId)) {
             throw new ResourceNotFoundException("Khong tim thay lop hoc");
@@ -656,6 +670,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     @Override
+    @Cacheable(value = CacheNames.ENROLLMENT_TEACHER, key = "@cacheKeyBuilder.teacherEnrollmentsKey(#classSectionId, #approvalStatus, #pageable)", sync = true)
     public PageResponse<EnrollmentResponse> getTeacherEnrollments(Integer classSectionId, String approvalStatus, Pageable pageable) {
         Integer teacherId = userService.getCurrentUser().getId();
 

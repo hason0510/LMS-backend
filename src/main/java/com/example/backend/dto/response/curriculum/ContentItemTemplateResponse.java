@@ -18,6 +18,4 @@ public class ContentItemTemplateResponse {
     private String lessonTemplateTitle;
     private Integer quizTemplateId;
     private String quizTemplateTitle;
-    private Integer assignmentTemplateId;
-    private String assignmentTemplateTitle;
 }

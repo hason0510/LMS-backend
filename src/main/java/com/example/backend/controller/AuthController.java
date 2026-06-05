@@ -85,10 +85,24 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "Đổi mật khẩu")
+    @Operation(summary = "Yêu cầu OTP đổi mật khẩu")
     @PostMapping("/auth/change-password")
     public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest request) {
         authService.changePassWord(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Xác nhận đổi mật khẩu bằng OTP")
+    @PostMapping("/auth/change-password/confirm")
+    public ResponseEntity<Void> confirmChangePassword(@RequestBody ChangePasswordOtpRequest request) {
+        authService.confirmChangePassWord(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Gửi lại OTP đổi mật khẩu")
+    @PostMapping("/auth/resend-change-password-otp")
+    public ResponseEntity<Void> resendChangePasswordOtp() {
+        authService.resendChangePasswordOtp();
         return ResponseEntity.ok().build();
     }
 

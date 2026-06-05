@@ -8,8 +8,6 @@ import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
-import java.util.List;
-
 @Entity
 @Table(name = "content_item_templates")
 @Getter
@@ -41,9 +39,4 @@ public class ContentItemTemplate extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "quiz_template_id")
     private QuizTemplate quizTemplate;
-
-    @ManyToOne
-    @JoinColumn(name = "assignment_template_id")
-    private AssignmentTemplate assignmentTemplate;
-
 }

@@ -25,6 +25,7 @@ import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.repository.AssignmentRepository;
 import com.example.backend.repository.ClassSectionRepository;
+import com.example.backend.repository.CurriculumTemplateRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.ResourceAuditLogRepository;
@@ -63,12 +64,14 @@ import java.util.stream.Collectors;
 public class ResourceServiceImpl implements ResourceService {
     private static final String ATTACHED_FIELD_NAME = "attached.resource";
     private static final String ENTITY_LESSON = "LESSON";
+    private static final String ENTITY_LESSON_TEMPLATE = "LESSON_TEMPLATE";
     private static final String ENTITY_ASSIGNMENT = "ASSIGNMENT";
     private static final String ENTITY_SUBMISSION = "SUBMISSION";
 
     private final ResourceRepository resourceRepository;
     private final LessonRepository lessonRepository;
     private final ClassSectionRepository classSectionRepository;
+    private final CurriculumTemplateRepository curriculumTemplateRepository;
     private final AssignmentRepository assignmentRepository;
     private final SubmissionRepository submissionRepository;
     private final QuestionBankRepository questionBankRepository;
@@ -319,6 +322,12 @@ public class ResourceServiceImpl implements ResourceService {
                 SELECT 'LESSON' AS entity_type, lesson_id AS entity_id, 'lesson.resources' AS field_name
                 FROM resource WHERE id = ? AND lesson_id IS NOT NULL AND is_deleted = false
                 UNION ALL
+                SELECT 'LESSON_TEMPLATE' AS entity_type, entity_id, field_name
+                FROM resource_references
+                WHERE resource_id = ?
+                  AND entity_type = 'LESSON_TEMPLATE'
+                  AND is_deleted = false
+                UNION ALL
                 SELECT 'ASSIGNMENT' AS entity_type, assignment_id AS entity_id, 'assignment.resources' AS field_name
                 FROM resource WHERE id = ? AND assignment_id IS NOT NULL AND is_deleted = false
                 UNION ALL
@@ -330,14 +339,14 @@ public class ResourceServiceImpl implements ResourceService {
                 WHERE resource_id = ?
                   AND is_deleted = false
                   AND field_name = 'attached.resource'
-                  AND entity_type IN ('LESSON', 'ASSIGNMENT', 'SUBMISSION')
+                  AND entity_type IN ('LESSON', 'LESSON_TEMPLATE', 'ASSIGNMENT', 'SUBMISSION')
                 """;
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> new ResourceReferenceSeed(
                 rs.getString("entity_type"),
                 rs.getInt("entity_id"),
                 rs.getString("field_name")
-        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId);
+        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId);
     }
 
     private List<ResourceReferenceResponse> loadEnrichedResourceReferences(Integer resourceId) {
@@ -511,6 +520,37 @@ public class ResourceServiceImpl implements ResourceService {
                     rr.entity_type,
                     rr.entity_id,
                     rr.field_name,
+                    COALESCE(NULLIF(TRIM(lt.title), ''), CONCAT('Bài giảng mẫu #', lt.id)) AS label,
+                    CONCAT('Khung chương trình: ', COALESCE(tx.template_names, '-')) AS context_path,
+                    NULL AS class_section_id,
+                    NULL AS class_section_title,
+                    NULL AS quiz_id,
+                    NULL AS quiz_title,
+                    NULL AS question_bank_id,
+                    NULL AS question_bank_name,
+                    tx.subject_id,
+                    tx.subject_title
+                FROM resource_references rr
+                JOIN lesson_templates lt ON rr.entity_type = 'LESSON_TEMPLATE' AND rr.entity_id = lt.id AND lt.is_deleted = false
+                LEFT JOIN (
+                    SELECT
+                        cit.lesson_template_id,
+                        MIN(s.id) AS subject_id,
+                        MIN(s.title) AS subject_title,
+                        GROUP_CONCAT(DISTINCT ct.name ORDER BY ct.name SEPARATOR ', ') AS template_names
+                    FROM content_item_templates cit
+                    JOIN chapter_templates cht ON cht.id = cit.chapter_template_id AND cht.is_deleted = false
+                    JOIN curriculum_templates ct ON ct.id = cht.curriculum_template_id AND ct.is_deleted = false
+                    LEFT JOIN subjects s ON s.id = ct.subject_id AND s.is_deleted = false
+                    WHERE cit.is_deleted = false AND cit.lesson_template_id IS NOT NULL
+                    GROUP BY cit.lesson_template_id
+                ) tx ON tx.lesson_template_id = lt.id
+                WHERE rr.resource_id = ? AND rr.is_deleted = false
+                UNION ALL
+                SELECT
+                    rr.entity_type,
+                    rr.entity_id,
+                    rr.field_name,
                     COALESCE(NULLIF(TRIM(a.title), ''), CONCAT('Bài tập #', a.id)) AS label,
                     CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Lớp: ', COALESCE(cs.title, '-')) AS context_path,
                     cs.id AS class_section_id,
@@ -567,7 +607,7 @@ public class ResourceServiceImpl implements ResourceService {
                         nullableInt(rs, "subject_id"),
                         rs.getString("subject_title")
                 ),
-                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
+                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
         );
     }
 
@@ -595,6 +635,19 @@ public class ResourceServiceImpl implements ResourceService {
                 resourceReferenceRepository.findByEntityTypeAndEntityIdAndFieldNameOrderByIdDesc(
                         ENTITY_LESSON,
                         lessonId,
+                        ATTACHED_FIELD_NAME
+                )
+        );
+        return resources.stream().map(this::convertEntityToDTO).toList();
+    }
+
+    @Override
+    public List<ResourceResponse> getResourcesByLessonTemplateId(Integer lessonTemplateId) {
+        List<Resource> resources = mergeLegacyAndAttachedResources(
+                List.of(),
+                resourceReferenceRepository.findByEntityTypeAndEntityIdAndFieldNameOrderByIdDesc(
+                        ENTITY_LESSON_TEMPLATE,
+                        lessonTemplateId,
                         ATTACHED_FIELD_NAME
                 )
         );
@@ -732,6 +785,9 @@ public class ResourceServiceImpl implements ResourceService {
         return switch (scopeType) {
             case CLASS_SECTION -> classSectionRepository.findById(scopeId)
                     .map(classSection -> StringUtils.hasText(classSection.getTitle()) ? classSection.getTitle() : classSection.getClassCode())
+                    .orElse(null);
+            case CURRICULUM_TEMPLATE -> curriculumTemplateRepository.findById(scopeId)
+                    .map(template -> template.getName())
                     .orElse(null);
             case QUESTION_BANK -> questionBankRepository.findById(scopeId)
                     .map(questionBank -> questionBank.getName())

@@ -113,6 +113,10 @@ public class ResourceAuthorizationService {
             ClassSection classSection = classSectionRepository.findById(scopeId).orElse(null);
             return classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser);
         }
+        if (scopeType == ResourceScopeType.CURRICULUM_TEMPLATE) {
+            return currentUser != null && currentUser.getRole() != null
+                    && currentUser.getRole().getRoleName() == RoleType.TEACHER;
+        }
         return false;
     }
 
@@ -148,6 +152,10 @@ public class ResourceAuthorizationService {
             ClassSection classSection = scopeId == null ? null : classSectionRepository.findById(scopeId).orElse(null);
             return classMemberAuthorizationService.canEditContent(classSection, currentUser)
                     || classMemberAuthorizationService.canManageAssignments(classSection, currentUser);
+        }
+        if (scopeType == ResourceScopeType.CURRICULUM_TEMPLATE) {
+            return currentUser.getRole() != null
+                    && currentUser.getRole().getRoleName() == RoleType.TEACHER;
         }
         return false;
     }

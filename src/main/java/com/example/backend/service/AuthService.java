@@ -16,6 +16,10 @@ public interface AuthService {
 
     void changePassWord(ChangePasswordRequest request);
 
+    void confirmChangePassWord(ChangePasswordOtpRequest request);
+
+    void resendChangePasswordOtp();
+
     void resetPassword(ResetPasswordRequest request);
 
     void resetPasswordVerification(String gmail);

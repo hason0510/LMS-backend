@@ -40,7 +40,6 @@ import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.repository.AssignmentRepository;
-import com.example.backend.repository.AssignmentTemplateRepository;
 import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ChapterTemplateRepository;
 import com.example.backend.repository.ContentItemTemplateRepository;
@@ -56,6 +55,7 @@ import com.example.backend.repository.QuizTemplateRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.repository.SubjectRepository;
 import com.example.backend.service.CurriculumTemplateService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.specification.CurriculumTemplateSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -80,6 +80,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class CurriculumTemplateServiceImpl implements CurriculumTemplateService {
+    private static final String ENTITY_LESSON_TEMPLATE = "LESSON_TEMPLATE";
+
     private final CurriculumTemplateRepository curriculumTemplateRepository;
     private final SubjectRepository subjectRepository;
     private final ChapterTemplateRepository chapterTemplateRepository;
@@ -91,11 +93,11 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     private final QuizTemplateQuestionRepository quizTemplateQuestionRepository;
     private final QuizTemplateBankSourceRepository quizTemplateBankSourceRepository;
     private final AssignmentRepository assignmentRepository;
-    private final AssignmentTemplateRepository assignmentTemplateRepository;
     private final QuestionBankRepository questionBankRepository;
     private final QuestionTagRepository questionTagRepository;
     private final BankQuestionRepository bankQuestionRepository;
     private final ResourceRepository resourceRepository;
+    private final ResourceService resourceService;
 
     @Override
     @Transactional
@@ -291,7 +293,6 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     private void applyContentReference(ContentItemTemplate item, ContentItemTemplateRequest request) {
         item.setLessonTemplate(null);
         item.setQuizTemplate(null);
-        item.setAssignmentTemplate(null);
 
         if (request.getItemType() == ContentItemType.LESSON) {
             if (request.getLessonTemplateId() != null) {
@@ -308,11 +309,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             return;
         }
         if (request.getItemType() == ContentItemType.ASSIGNMENT) {
-            if (request.getAssignmentTemplateId() != null) {
-                item.setAssignmentTemplate(assignmentTemplateRepository.findById(request.getAssignmentTemplateId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Assignment template not found")));
-            }
-            return;
+            throw new BusinessException("Assignment template is no longer supported");
         }
         throw new BusinessException("Unsupported content item type");
     }
@@ -358,8 +355,6 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         response.setLessonTemplateTitle(item.getLessonTemplate() != null ? item.getLessonTemplate().getTitle() : null);
         response.setQuizTemplateId(item.getQuizTemplate() != null ? item.getQuizTemplate().getId() : null);
         response.setQuizTemplateTitle(item.getQuizTemplate() != null ? item.getQuizTemplate().getTitle() : null);
-        response.setAssignmentTemplateId(item.getAssignmentTemplate() != null ? item.getAssignmentTemplate().getId() : null);
-        response.setAssignmentTemplateTitle(item.getAssignmentTemplate() != null ? item.getAssignmentTemplate().getTitle() : null);
         return response;
     }
 
@@ -373,7 +368,11 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         lessonTemplate.setContent(request.getContent());
         lessonTemplate.setVideoUrl(request.getVideoUrl());
         lessonTemplate.setNotes(request.getNotes());
-        return convertLessonTemplateToResponse(lessonTemplateRepository.save(lessonTemplate));
+        LessonTemplate savedTemplate = lessonTemplateRepository.save(lessonTemplate);
+        if (request.getResourceIds() != null) {
+            resourceService.replaceAttachedResources(ENTITY_LESSON_TEMPLATE, savedTemplate.getId(), request.getResourceIds());
+        }
+        return convertLessonTemplateToResponse(savedTemplate);
     }
 
     @Override
@@ -392,7 +391,11 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         lessonTemplate.setContent(request.getContent());
         lessonTemplate.setVideoUrl(request.getVideoUrl());
         lessonTemplate.setNotes(request.getNotes());
-        return convertLessonTemplateToResponse(lessonTemplateRepository.save(lessonTemplate));
+        LessonTemplate savedTemplate = lessonTemplateRepository.save(lessonTemplate);
+        if (request.getResourceIds() != null) {
+            resourceService.replaceAttachedResources(ENTITY_LESSON_TEMPLATE, savedTemplate.getId(), request.getResourceIds());
+        }
+        return convertLessonTemplateToResponse(savedTemplate);
     }
 
     private LessonTemplateResponse convertLessonTemplateToResponse(LessonTemplate lessonTemplate) {
@@ -402,6 +405,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         response.setContent(lessonTemplate.getContent());
         response.setVideoUrl(lessonTemplate.getVideoUrl());
         response.setNotes(lessonTemplate.getNotes());
+        response.setResources(resourceService.getResourcesByLessonTemplateId(lessonTemplate.getId()));
         return response;
     }
 
