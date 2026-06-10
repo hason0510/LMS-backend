@@ -409,7 +409,9 @@ public class ResourceServiceImpl implements ResourceService {
                 FROM resource_references rr
                 JOIN quiz_question qq ON rr.entity_type = 'QUIZ_QUESTION' AND rr.entity_id = qq.id AND qq.is_deleted = false
                 JOIN quiz q ON q.id = qq.quiz_id AND q.is_deleted = false
-                LEFT JOIN class_sections cs ON cs.id = q.class_section_id AND cs.is_deleted = false
+                LEFT JOIN class_content_items q_cci ON q_cci.quiz_id = q.id AND q_cci.is_deleted = false
+                LEFT JOIN class_chapters q_cch ON q_cch.id = q_cci.class_chapter_id AND q_cch.is_deleted = false
+                LEFT JOIN class_sections cs ON cs.id = q_cch.class_section_id AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 WHERE rr.resource_id = ? AND rr.is_deleted = false
                 UNION ALL
@@ -431,7 +433,9 @@ public class ResourceServiceImpl implements ResourceService {
                 JOIN quiz_answer qa ON rr.entity_type = 'QUIZ_ANSWER' AND rr.entity_id = qa.id AND qa.is_deleted = false
                 JOIN quiz_question qq ON qq.id = qa.quiz_question_id AND qq.is_deleted = false
                 JOIN quiz q ON q.id = qq.quiz_id AND q.is_deleted = false
-                LEFT JOIN class_sections cs ON cs.id = q.class_section_id AND cs.is_deleted = false
+                LEFT JOIN class_content_items q_cci ON q_cci.quiz_id = q.id AND q_cci.is_deleted = false
+                LEFT JOIN class_chapters q_cch ON q_cch.id = q_cci.class_chapter_id AND q_cch.is_deleted = false
+                LEFT JOIN class_sections cs ON cs.id = q_cch.class_section_id AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 WHERE rr.resource_id = ? AND rr.is_deleted = false
                 UNION ALL
@@ -457,7 +461,9 @@ public class ResourceServiceImpl implements ResourceService {
                 JOIN question_interaction_items qii ON rr.entity_type = 'INTERACTION_ITEM' AND rr.entity_id = qii.id AND qii.is_deleted = false
                 LEFT JOIN quiz_question qq ON qq.id = qii.quiz_question_id AND qq.is_deleted = false
                 LEFT JOIN quiz q ON q.id = qq.quiz_id AND q.is_deleted = false
-                LEFT JOIN class_sections cs ON cs.id = q.class_section_id AND cs.is_deleted = false
+                LEFT JOIN class_content_items q_cci ON q_cci.quiz_id = q.id AND q_cci.is_deleted = false
+                LEFT JOIN class_chapters q_cch ON q_cch.id = q_cci.class_chapter_id AND q_cch.is_deleted = false
+                LEFT JOIN class_sections cs ON cs.id = q_cch.class_section_id AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 LEFT JOIN bank_questions bq ON bq.id = qii.bank_question_id AND bq.is_deleted = false
                 LEFT JOIN question_banks qb2 ON qb2.id = bq.question_bank_id AND qb2.is_deleted = false
@@ -563,7 +569,9 @@ public class ResourceServiceImpl implements ResourceService {
                     s.title AS subject_title
                 FROM resource_references rr
                 JOIN assignments a ON rr.entity_type = 'ASSIGNMENT' AND rr.entity_id = a.id AND a.is_deleted = false
-                LEFT JOIN class_sections cs ON cs.id = a.class_section_id AND cs.is_deleted = false
+                LEFT JOIN class_content_items a_cci ON a_cci.assignment_id = a.id AND a_cci.is_deleted = false
+                LEFT JOIN class_chapters a_cch ON a_cch.id = a_cci.class_chapter_id AND a_cch.is_deleted = false
+                LEFT JOIN class_sections cs ON cs.id = a_cch.class_section_id AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 WHERE rr.resource_id = ? AND rr.is_deleted = false
                 UNION ALL
@@ -584,7 +592,9 @@ public class ResourceServiceImpl implements ResourceService {
                 FROM resource_references rr
                 JOIN submission sub ON rr.entity_type = 'SUBMISSION' AND rr.entity_id = sub.id AND sub.is_deleted = false
                 LEFT JOIN assignments a ON a.id = sub.assignment_id AND a.is_deleted = false
-                LEFT JOIN class_sections cs ON cs.id = COALESCE(sub.class_section_id, a.class_section_id) AND cs.is_deleted = false
+                LEFT JOIN class_content_items a_cci ON a_cci.assignment_id = a.id AND a_cci.is_deleted = false
+                LEFT JOIN class_chapters a_cch ON a_cch.id = a_cci.class_chapter_id AND a_cch.is_deleted = false
+                LEFT JOIN class_sections cs ON cs.id = COALESCE(sub.class_section_id, a_cch.class_section_id) AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 WHERE rr.resource_id = ? AND rr.is_deleted = false
                 ORDER BY entity_type, entity_id

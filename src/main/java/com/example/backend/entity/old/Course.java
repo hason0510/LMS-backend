@@ -39,8 +39,6 @@ public class Course extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "teacher_id")
     private User teacher;
-    @OneToMany(mappedBy = "course")
-    private List<Meeting> meetings;
     @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;

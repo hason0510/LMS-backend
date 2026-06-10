@@ -42,6 +42,10 @@ public class User extends BaseEntity {
     private String refreshToken;
     @Column(name = "gmail", unique = true)
     private String gmail;
+    @Column(name = "google_linked", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private boolean googleLinked = false;
+    @Column(name = "local_auth_enabled", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
+    private boolean localAuthEnabled = true;
     @Column(name = "is_verified", nullable = false, columnDefinition = "TINYINT(1)")
     private boolean isVerified = false;
     @Column(name = "image_url", columnDefinition = "MEDIUMTEXT")

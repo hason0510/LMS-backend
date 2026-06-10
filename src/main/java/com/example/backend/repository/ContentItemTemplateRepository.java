@@ -12,4 +12,8 @@ public interface ContentItemTemplateRepository extends JpaRepository<ContentItem
     List<ContentItemTemplate> findByChapterTemplate_IdOrderByOrderIndexAsc(Integer chapterTemplateId);
 
     Optional<ContentItemTemplate> findByIdAndChapterTemplate_Id(Integer contentItemId, Integer chapterTemplateId);
+
+    Optional<ContentItemTemplate> findByLessonTemplate_Id(Integer lessonTemplateId);
+
+    Optional<ContentItemTemplate> findByQuizTemplate_Id(Integer quizTemplateId);
 }

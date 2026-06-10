@@ -45,6 +45,7 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.QuestionBankRepository;
 import com.example.backend.repository.QuestionTagRepository;
+import com.example.backend.repository.QuizAttemptRepository;
 import com.example.backend.repository.QuizBankSourceRepository;
 import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
@@ -84,6 +85,7 @@ public class QuizServiceImpl implements QuizService {
 
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
     private final QuizBankSourceRepository quizBankSourceRepository;
     private final QuestionBankRepository questionBankRepository;
     private final BankQuestionRepository bankQuestionRepository;
@@ -101,6 +103,7 @@ public class QuizServiceImpl implements QuizService {
     public QuizServiceImpl(
             QuizRepository quizRepository,
             QuizQuestionRepository quizQuestionRepository,
+            QuizAttemptRepository quizAttemptRepository,
             QuizBankSourceRepository quizBankSourceRepository,
             QuestionBankRepository questionBankRepository,
             BankQuestionRepository bankQuestionRepository,
@@ -117,6 +120,7 @@ public class QuizServiceImpl implements QuizService {
     ) {
         this.quizRepository = quizRepository;
         this.quizQuestionRepository = quizQuestionRepository;
+        this.quizAttemptRepository = quizAttemptRepository;
         this.quizBankSourceRepository = quizBankSourceRepository;
         this.questionBankRepository = questionBankRepository;
         this.bankQuestionRepository = bankQuestionRepository;
@@ -136,6 +140,10 @@ public class QuizServiceImpl implements QuizService {
     public QuizResponse convertQuizToDTO(Quiz quiz) {
         List<QuizQuestion> questions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
         List<QuizBankSource> bankSources = quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(quiz.getId());
+        ClassContentItem classContentItem = classContentItemRepository.findByQuiz_Id(quiz.getId()).orElse(null);
+        ClassSection classSection = classContentItem != null && classContentItem.getClassChapter() != null
+                ? classContentItem.getClassChapter().getClassSection()
+                : resolveClassSectionForQuiz(quiz);
         boolean showCorrectAnswer = shouldShowCorrectAnswersForCurrentUser();
 
         QuizResponse response = new QuizResponse();
@@ -153,12 +161,8 @@ public class QuizServiceImpl implements QuizService {
         response.setDisplayMode(quiz.getDisplayMode());
         response.setShowCorrectAnswer(quiz.isShowCorrectAnswer());
         response.setQuestionCount(resolveQuizQuestionCount(quiz, questions, bankSources));
-        response.setClassSectionId(quiz.getClassSection() != null ? quiz.getClassSection().getId() : null);
-        response.setClassContentItemId(
-                classContentItemRepository.findByQuiz_Id(quiz.getId())
-                        .map(ClassContentItem::getId)
-                        .orElse(null)
-        );
+        response.setClassSectionId(classSection != null ? classSection.getId() : null);
+        response.setClassContentItemId(classContentItem != null ? classContentItem.getId() : null);
         response.setBankSources(bankSources.stream().map(this::convertBankSourceToDTO).toList());
         response.setQuestions(questions.stream()
                 .map(question -> convertQuestionToDTO(question, showCorrectAnswer))
@@ -225,14 +229,15 @@ public class QuizServiceImpl implements QuizService {
     @Transactional
     public QuizResponse createQuiz(QuizRequest request) {
         validateQuizStructureRequest(request);
-        requireEditContentPermission(resolveTargetClassSection(request));
+        ClassSection targetClassSection = resolveTargetClassSection(request);
+        requireEditContentPermission(targetClassSection);
 
         Quiz quiz = new Quiz();
         applyQuizMetadata(quiz, request, true);
         Quiz savedQuiz = quizRepository.save(quiz);
         syncQuizPlacement(savedQuiz, request);
         syncQuizContent(savedQuiz, request);
-        notifyStudentsAboutNewQuiz(savedQuiz);
+        notifyStudentsAboutNewQuiz(savedQuiz, targetClassSection);
         return convertQuizToDTO(savedQuiz);
     }
 
@@ -246,6 +251,7 @@ public class QuizServiceImpl implements QuizService {
         ClassSection currentClassSection = resolveClassSectionForQuiz(quiz);
         ClassSection requestedClassSection = resolveTargetClassSection(request);
         requireEditContentPermission(requestedClassSection != null ? requestedClassSection : currentClassSection);
+        ensureQuizHasNoAttempts(quiz);
         String previousTitle = quiz.getTitle();
         applyQuizMetadata(quiz, request, false);
         Quiz savedQuiz = quizRepository.save(quiz);
@@ -308,24 +314,20 @@ public class QuizServiceImpl implements QuizService {
         if (isCreate || request.getShowCorrectAnswer() != null) {
             quiz.setShowCorrectAnswer(Boolean.TRUE.equals(request.getShowCorrectAnswer()));
         }
-        if (request.getClassSectionId() != null) {
-            ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-            quiz.setClassSection(classSection);
-        }
     }
 
-    private void notifyStudentsAboutNewQuiz(Quiz quiz) {
-        if (quiz.getClassSection() == null) {
+    private void notifyStudentsAboutNewQuiz(Quiz quiz, ClassSection targetClassSection) {
+        ClassSection classSection = targetClassSection != null ? targetClassSection : resolveClassSectionForQuiz(quiz);
+        if (classSection == null) {
             return;
         }
         classNotificationService.notifyApprovedStudents(
-                quiz.getClassSection(),
+                classSection,
                 "Quiz mới: " + quiz.getTitle(),
-                "Lớp " + quiz.getClassSection().getTitle() + " vừa có quiz mới.",
+                "Lớp " + classSection.getTitle() + " vừa có quiz mới.",
                 "QUIZ_CREATED",
                 quiz.getDescription(),
-                "/class-sections/" + quiz.getClassSection().getId() + "/quizzes/" + quiz.getId() + "/detail",
+                "/class-sections/" + classSection.getId() + "/quizzes/" + quiz.getId() + "/detail",
                 "QUIZ",
                 quiz.getId(),
                 "quiz-created"
@@ -344,23 +346,19 @@ public class QuizServiceImpl implements QuizService {
         }
 
         ClassSection classSection = classContentItem.getClassChapter().getClassSection();
-        if (quiz.getClassSection() == null) {
-            quiz.setClassSection(classSection);
-            quizRepository.save(quiz);
-        }
-        if (!Objects.equals(
-                quiz.getClassSection() != null ? quiz.getClassSection().getId() : null,
-                classSection.getId()
-        )) {
+        ClassSection currentClassSection = resolveClassSectionForQuiz(quiz);
+        if (currentClassSection != null && !Objects.equals(currentClassSection.getId(), classSection.getId())) {
             throw new BusinessException("Quiz classSection does not match the target class content item");
         }
 
         classContentItemRepository.findByQuiz_Id(quiz.getId())
                 .filter(existing -> !existing.getId().equals(classContentItem.getId()))
                 .ifPresent(existing -> {
-                    existing.setQuiz(null);
-                    classContentItemRepository.save(existing);
+                    throw new BusinessException("Quiz is already linked to another class content item");
                 });
+        if (classContentItem.getQuiz() != null && !classContentItem.getQuiz().getId().equals(quiz.getId())) {
+            throw new BusinessException("Class content item is already linked to another quiz");
+        }
 
         classContentItem.setQuiz(quiz);
         if (!StringUtils.hasText(classContentItem.getTitle())) {
@@ -428,6 +426,12 @@ public class QuizServiceImpl implements QuizService {
         }
     }
 
+    private void ensureQuizHasNoAttempts(Quiz quiz) {
+        if (quiz != null && quiz.getId() != null && quizAttemptRepository.existsByQuiz_Id(quiz.getId())) {
+            throw new BusinessException("Đã có người dùng làm bài, bạn không thể sửa Quiz.");
+        }
+    }
+
     private void clearQuizSourcesAndQuestions(Quiz quiz) {
         quizBankSourceRepository.deleteAll(quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(quiz.getId()));
 
@@ -491,9 +495,10 @@ public class QuizServiceImpl implements QuizService {
             }
         }
 
-        if (quiz.getClassSection() != null
-                && quiz.getClassSection().getSubject() != null
-                && !Objects.equals(quiz.getClassSection().getSubject().getId(), questionBank.getSubject().getId())) {
+        ClassSection classSection = resolveClassSectionForQuiz(quiz);
+        if (classSection != null
+                && classSection.getSubject() != null
+                && !Objects.equals(classSection.getSubject().getId(), questionBank.getSubject().getId())) {
             throw new BusinessException("Question bank subject does not match the quiz class section subject");
         }
     }
@@ -657,6 +662,11 @@ public class QuizServiceImpl implements QuizService {
             validateInteractionItems(questionRequest.getType(), questionRequest.getItems());
 
             QuizQuestion question = new QuizQuestion();
+            if (questionRequest.getSourceBankQuestionId() != null) {
+                BankQuestion sourceQuestion = bankQuestionRepository.findById(questionRequest.getSourceBankQuestionId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Source bank question not found"));
+                question.setSourceBankQuestion(sourceQuestion);
+            }
             question.setContent(questionRequest.getContent());
             question.setType(questionRequest.getType());
             question.setPoints(questionRequest.getPoints() != null ? questionRequest.getPoints() : BigDecimal.ONE);
@@ -720,9 +730,8 @@ public class QuizServiceImpl implements QuizService {
     private Resource resolveUsableQuizResource(Quiz quiz, Integer resourceId) {
         Resource resource = resourceRepository.findById(resourceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
-        Integer classSectionId = quiz != null && quiz.getClassSection() != null
-                ? quiz.getClassSection().getId()
-                : null;
+        ClassSection classSection = resolveClassSectionForQuiz(quiz);
+        Integer classSectionId = classSection != null ? classSection.getId() : null;
         ResourceScopeType expectedScope = classSectionId != null ? ResourceScopeType.CLASS_SECTION : null;
         resourceAuthorizationService.assertCanUse(resource, expectedScope, classSectionId);
         resource.setLastUsedAt(LocalDateTime.now());
@@ -875,27 +884,25 @@ public class QuizServiceImpl implements QuizService {
         if (request == null) {
             return null;
         }
-        if (request.getClassSectionId() != null) {
-            return classSectionRepository.findById(request.getClassSectionId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        }
         if (request.getClassContentItemId() != null) {
             ClassContentItem classContentItem = classContentItemRepository.findById(request.getClassContentItemId())
                     .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
             return classContentItem.getClassChapter() != null ? classContentItem.getClassChapter().getClassSection() : null;
         }
+        if (request.getClassSectionId() != null) {
+            return classSectionRepository.findById(request.getClassSectionId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+        }
         return null;
     }
 
     private ClassSection resolveClassSectionForQuiz(Quiz quiz) {
-        if (quiz == null) {
+        if (quiz == null || quiz.getId() == null) {
             return null;
         }
-        if (quiz.getClassSection() != null) {
-            return quiz.getClassSection();
-        }
         return classContentItemRepository.findByQuiz_Id(quiz.getId())
-                .map(item -> item.getClassChapter() != null ? item.getClassChapter().getClassSection() : null)
+                .map(ClassContentItem::getClassChapter)
+                .map(classChapter -> classChapter.getClassSection())
                 .orElse(null);
     }
 

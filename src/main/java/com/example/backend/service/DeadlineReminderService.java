@@ -1,8 +1,11 @@
 package com.example.backend.service;
 
+import com.example.backend.entity.ClassContentItem;
+import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.quiz.Quiz;
 import com.example.backend.repository.AssignmentRepository;
+import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.QuizRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,6 +19,7 @@ import java.time.LocalDateTime;
 public class DeadlineReminderService {
     private final AssignmentRepository assignmentRepository;
     private final QuizRepository quizRepository;
+    private final ClassContentItemRepository classContentItemRepository;
     private final ClassNotificationService classNotificationService;
 
     @Scheduled(cron = "0 0 * * * *")
@@ -43,19 +47,22 @@ public class DeadlineReminderService {
                 ));
 
         quizRepository.findByAvailableUntilBetween(targetStart, targetEnd)
-                .forEach(quiz -> classNotificationService.notifyApprovedStudents(
-                        quiz.getClassSection(),
-                        "Quiz sắp hết hạn: " + quiz.getTitle(),
-                        "Quiz còn khoảng 1 ngày nữa là hết hạn.",
-                        "QUIZ_DUE_SOON",
-                        quiz.getDescription(),
-                        quiz.getClassSection() != null
-                                ? "/class-sections/" + quiz.getClassSection().getId() + "/quizzes/" + quiz.getId() + "/detail"
-                                : null,
-                        "QUIZ",
-                        quiz.getId(),
-                        "quiz-due-soon"
-                ));
+                .forEach(quiz -> {
+                    ClassSection classSection = resolveClassSectionForQuiz(quiz);
+                    classNotificationService.notifyApprovedStudents(
+                            classSection,
+                            "Quiz sắp hết hạn: " + quiz.getTitle(),
+                            "Quiz còn khoảng 1 ngày nữa là hết hạn.",
+                            "QUIZ_DUE_SOON",
+                            quiz.getDescription(),
+                            classSection != null
+                                    ? "/class-sections/" + classSection.getId() + "/quizzes/" + quiz.getId() + "/detail"
+                                    : null,
+                            "QUIZ",
+                            quiz.getId(),
+                            "quiz-due-soon"
+                    );
+                });
     }
 
     private void notifyAssignmentDeadline(
@@ -65,18 +72,39 @@ public class DeadlineReminderService {
             String title,
             String message
     ) {
+        ClassSection classSection = resolveClassSectionForAssignment(assignment);
         classNotificationService.notifyApprovedStudents(
-                assignment.getClassSection(),
+                classSection,
                 title,
                 message,
                 type,
                 assignment.getDescription(),
-                assignment.getClassSection() != null
-                        ? "/class-sections/" + assignment.getClassSection().getId() + "/assignments/" + assignment.getId()
+                classSection != null
+                        ? "/class-sections/" + classSection.getId() + "/assignments/" + assignment.getId()
                         : null,
                 "ASSIGNMENT",
                 assignment.getId(),
                 dedupePrefix
         );
+    }
+
+    private ClassSection resolveClassSectionForQuiz(Quiz quiz) {
+        if (quiz == null || quiz.getId() == null) {
+            return null;
+        }
+        return classContentItemRepository.findByQuiz_Id(quiz.getId())
+                .map(ClassContentItem::getClassChapter)
+                .map(classChapter -> classChapter.getClassSection())
+                .orElse(null);
+    }
+
+    private ClassSection resolveClassSectionForAssignment(Assignment assignment) {
+        if (assignment == null || assignment.getId() == null) {
+            return null;
+        }
+        return classContentItemRepository.findByAssignment_Id(assignment.getId())
+                .map(ClassContentItem::getClassChapter)
+                .map(classChapter -> classChapter.getClassSection())
+                .orElse(null);
     }
 }

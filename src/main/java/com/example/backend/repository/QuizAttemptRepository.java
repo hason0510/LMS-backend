@@ -40,6 +40,8 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
 
     int countByClassContentItem_IdAndStudent_Id(Integer classContentItemId, Integer studentId);
 
+    boolean existsByQuiz_Id(Integer quizId);
+
     Page<QuizAttempt> findByChapterItem_IdAndStatusIn(
             Integer chapterItemId,
             List<AttemptStatus> statuses,

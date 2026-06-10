@@ -1050,14 +1050,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         question.setDifficultyLevel(request.getDifficultyLevel());
         question.setDefaultPoints(request.getDefaultPoints());
 
-        if (request.getParentQuestionId() != null) {
-            BankQuestion parentQuestion = bankQuestionRepository.findById(request.getParentQuestionId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Parent question not found"));
-            question.setParentQuestion(parentQuestion);
-        } else {
-            question.setParentQuestion(null);
-        }
-
         List<BankQuestionOption> incomingOptions = new ArrayList<>();
         int orderIndex = 1;
         if (!isInteractionQuestionType(request.getType()) && request.getOptions() != null) {
@@ -1603,7 +1595,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         BankQuestionResponse response = new BankQuestionResponse();
         response.setId(question.getId());
         response.setQuestionBankId(question.getQuestionBank() != null ? question.getQuestionBank().getId() : null);
-        response.setParentQuestionId(question.getParentQuestion() != null ? question.getParentQuestion().getId() : null);
         response.setContent(question.getContent());
         response.setExplanation(question.getExplanation());
         response.setResource(convertResourceToDTO(question.getResource()));

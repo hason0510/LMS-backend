@@ -12,6 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 public class QuizQuestionRequest {
     private Integer id;
+    private Integer sourceBankQuestionId;
     private String content;
     private QuestionType type;
     private BigDecimal points;

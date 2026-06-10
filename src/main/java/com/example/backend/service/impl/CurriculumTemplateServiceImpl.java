@@ -71,6 +71,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -291,27 +292,79 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     }
 
     private void applyContentReference(ContentItemTemplate item, ContentItemTemplateRequest request) {
-        item.setLessonTemplate(null);
-        item.setQuizTemplate(null);
+        if (request.getItemType() == null) {
+            throw new BusinessException("Item type is required");
+        }
+
+        int referenceCount = countNotNull(request.getLessonTemplateId(), request.getQuizTemplateId());
+        if (referenceCount == 0) {
+            throw new BusinessException("lessonTemplateId/quizTemplateId is required for content item template");
+        }
+        if (referenceCount > 1) {
+            throw new BusinessException("Only one template reference can be set at a time");
+        }
 
         if (request.getItemType() == ContentItemType.LESSON) {
-            if (request.getLessonTemplateId() != null) {
-                item.setLessonTemplate(lessonTemplateRepository.findById(request.getLessonTemplateId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Lesson template not found")));
+            if (request.getLessonTemplateId() == null) {
+                throw new BusinessException("lessonTemplateId is required for LESSON content item templates");
             }
+            LessonTemplate lessonTemplate = lessonTemplateRepository.findById(request.getLessonTemplateId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Lesson template not found"));
+            assertTemplateReferenceAvailable(
+                    contentItemTemplateRepository.findByLessonTemplate_Id(request.getLessonTemplateId()),
+                    item,
+                    "Lesson template is already linked to another content item template"
+            );
+            clearTemplateReferences(item);
+            item.setLessonTemplate(lessonTemplate);
             return;
         }
         if (request.getItemType() == ContentItemType.QUIZ) {
-            if (request.getQuizTemplateId() != null) {
-                item.setQuizTemplate(quizTemplateRepository.findById(request.getQuizTemplateId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Quiz template not found")));
+            if (request.getQuizTemplateId() == null) {
+                throw new BusinessException("quizTemplateId is required for QUIZ content item templates");
             }
+            QuizTemplate quizTemplate = quizTemplateRepository.findById(request.getQuizTemplateId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Quiz template not found"));
+            assertTemplateReferenceAvailable(
+                    contentItemTemplateRepository.findByQuizTemplate_Id(request.getQuizTemplateId()),
+                    item,
+                    "Quiz template is already linked to another content item template"
+            );
+            clearTemplateReferences(item);
+            item.setQuizTemplate(quizTemplate);
             return;
         }
         if (request.getItemType() == ContentItemType.ASSIGNMENT) {
             throw new BusinessException("Assignment template is no longer supported");
         }
         throw new BusinessException("Unsupported content item type");
+    }
+
+    private void assertTemplateReferenceAvailable(
+            Optional<ContentItemTemplate> existing,
+            ContentItemTemplate target,
+            String message
+    ) {
+        existing
+                .filter(item -> target.getId() == null || !item.getId().equals(target.getId()))
+                .ifPresent(item -> {
+                    throw new BusinessException(message);
+                });
+    }
+
+    private void clearTemplateReferences(ContentItemTemplate item) {
+        item.setLessonTemplate(null);
+        item.setQuizTemplate(null);
+    }
+
+    private int countNotNull(Object... values) {
+        int count = 0;
+        for (Object value : values) {
+            if (value != null) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private CurriculumTemplateResponse convertToResponse(CurriculumTemplate template, boolean includeChapters) {
@@ -555,6 +608,11 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             QuizTemplateQuestion question = new QuizTemplateQuestion();
             question.setQuizTemplate(quizTemplate);
             question.setOrderIndex(questionOrder++);
+            if (questionRequest.getSourceBankQuestionId() != null) {
+                BankQuestion sourceQuestion = bankQuestionRepository.findById(questionRequest.getSourceBankQuestionId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Source bank question not found"));
+                question.setSourceBankQuestion(sourceQuestion);
+            }
             question.setContent(questionRequest.getContent());
             question.setType(questionRequest.getType());
             question.setPoints(questionRequest.getPoints() != null ? questionRequest.getPoints() : BigDecimal.ONE);

@@ -12,6 +12,8 @@ public class UserViewResponse {
     private String fullName;
     private String studentNumber;
     private String gmail;
+    private boolean googleLinked;
+    private boolean localAuthEnabled;
     private String imageUrl;
     private String cloudinaryImageId;
     private String workPlace;

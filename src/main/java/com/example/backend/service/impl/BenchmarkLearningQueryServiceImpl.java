@@ -59,8 +59,16 @@ public class BenchmarkLearningQueryServiceImpl implements BenchmarkLearningQuery
                         ON q.id = qa.quiz_id
                        AND q.is_deleted = 0
                        AND q.is_active = 1
+                INNER JOIN class_content_items cci
+                        ON cci.quiz_id = q.id
+                       AND cci.is_deleted = 0
+                       AND cci.is_active = 1
+                INNER JOIN class_chapters cch
+                        ON cch.id = cci.class_chapter_id
+                       AND cch.is_deleted = 0
+                       AND cch.is_active = 1
                 INNER JOIN class_sections cs
-                        ON cs.id = q.class_section_id
+                        ON cs.id = cch.class_section_id
                        AND cs.is_deleted = 0
                        AND cs.is_active = 1
                        AND cs.status = ?
@@ -108,9 +116,9 @@ public class BenchmarkLearningQueryServiceImpl implements BenchmarkLearningQuery
                     "CREATE INDEX `idx_bench_class_sections_subject_status` ON `class_sections` (`subject_id`, `status`, `is_deleted`, `is_active`, `id`)"
             ),
             new IndexDefinition(
-                    "idx_bench_quiz_class_active",
-                    "quiz",
-                    "CREATE INDEX `idx_bench_quiz_class_active` ON `quiz` (`class_section_id`, `is_deleted`, `is_active`, `id`)"
+                    "idx_bench_class_content_quiz_active",
+                    "class_content_items",
+                    "CREATE INDEX `idx_bench_class_content_quiz_active` ON `class_content_items` (`quiz_id`, `class_chapter_id`, `is_deleted`, `is_active`)"
             ),
             new IndexDefinition(
                     "idx_bench_quiz_attempt_report_time",
@@ -366,12 +374,12 @@ public class BenchmarkLearningQueryServiceImpl implements BenchmarkLearningQuery
                     definition.name(),
                     "idx_class_sections_teacher_fk_support"
             );
-        } else if ("idx_bench_quiz_class_active".equals(definition.name())) {
+        } else if ("idx_bench_class_content_quiz_active".equals(definition.name())) {
             ensureLeadingColumnIndex(
-                    "quiz",
-                    "class_section_id",
+                    "class_content_items",
+                    "quiz_id",
                     definition.name(),
-                    "idx_quiz_class_section_fk_support"
+                    "idx_class_content_items_quiz_fk_support"
             );
         } else if ("idx_bench_quiz_attempt_report_time".equals(definition.name())) {
             ensureLeadingColumnIndex(
@@ -401,7 +409,8 @@ public class BenchmarkLearningQueryServiceImpl implements BenchmarkLearningQuery
         ensureLeadingColumnIndex("enrollment", "class_section_id", "", "idx_enrollment_class_section_fk_support");
         ensureLeadingColumnIndex("class_sections", "subject_id", "", "idx_class_sections_subject_fk_support");
         ensureLeadingColumnIndex("class_sections", "teacher_id", "", "idx_class_sections_teacher_fk_support");
-        ensureLeadingColumnIndex("quiz", "class_section_id", "", "idx_quiz_class_section_fk_support");
+        ensureLeadingColumnIndex("class_content_items", "quiz_id", "", "idx_class_content_items_quiz_fk_support");
+        ensureLeadingColumnIndex("class_content_items", "class_chapter_id", "", "idx_class_content_items_chapter_fk_support");
         ensureLeadingColumnIndex("quiz_attempt", "quiz_id", "", "idx_quiz_attempt_quiz_fk_support");
         ensureLeadingColumnIndex("quiz_attempt", "student_id", "", "idx_quiz_attempt_student_fk_support");
         ensureLeadingColumnIndex("users", "role_id", "", "idx_users_role_fk_support");

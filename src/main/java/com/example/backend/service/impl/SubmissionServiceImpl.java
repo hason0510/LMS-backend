@@ -422,15 +422,8 @@ public class SubmissionServiceImpl implements SubmissionService {
     }
 
     private ClassSection resolveClassSection(Assignment assignment, Integer classSectionId) {
-        if (assignment.getClassSection() != null) {
-            if (classSectionId != null && !assignment.getClassSection().getId().equals(classSectionId)) {
-                throw new BusinessException("assignment does not belong to the provided classSectionId");
-            }
-            return assignment.getClassSection();
-        }
-
         if (classSectionId == null) {
-            throw new BusinessException("classSectionId is required for template-shared assignments");
+            throw new BusinessException("classSectionId is required for assignments");
         }
 
         ClassSection classSection = classSectionRepository.findById(classSectionId)

@@ -1069,16 +1069,18 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             throw new BusinessException("Only one reference can be set at a time");
         }
 
-        classContentItem.setLesson(null);
-        classContentItem.setQuiz(null);
-        classContentItem.setAssignment(null);
-
         if (lessonId != null) {
             if (classContentItem.getItemType() != ContentItemType.LESSON) {
                 throw new BusinessException("lessonId is only valid for LESSON content items");
             }
             Lesson lesson = lessonRepository.findById(lessonId)
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+            assertRuntimeReferenceAvailable(
+                    classContentItemRepository.findByLesson_Id(lessonId),
+                    classContentItem,
+                    "Lesson is already linked to another class content item"
+            );
+            clearContentReferences(classContentItem);
             classContentItem.setLesson(lesson);
             syncContentItemTitleFromReference(classContentItem);
             return;
@@ -1090,13 +1092,12 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             }
             Quiz quiz = quizRepository.findById(quizId)
                     .orElseThrow(() -> new ResourceNotFoundException("Quiz not found"));
-            if (quiz.getClassSection() != null && !quiz.getClassSection().getId().equals(classSection.getId())) {
-                throw new BusinessException("Quiz belongs to a different class section");
-            }
-            if (quiz.getClassSection() == null) {
-                quiz.setClassSection(classSection);
-                quizRepository.save(quiz);
-            }
+            assertRuntimeReferenceAvailable(
+                    classContentItemRepository.findByQuiz_Id(quizId),
+                    classContentItem,
+                    "Quiz is already linked to another class content item"
+            );
+            clearContentReferences(classContentItem);
             classContentItem.setQuiz(quiz);
             syncContentItemTitleFromReference(classContentItem);
             return;
@@ -1108,12 +1109,33 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             }
             Assignment assignment = assignmentRepository.findById(assignmentId)
                     .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
-            if (assignment.getClassSection() != null && !assignment.getClassSection().getId().equals(classSection.getId())) {
-                throw new BusinessException("Assignment belongs to a different class section");
-            }
+            assertRuntimeReferenceAvailable(
+                    classContentItemRepository.findByAssignment_Id(assignmentId),
+                    classContentItem,
+                    "Assignment is already linked to another class content item"
+            );
+            clearContentReferences(classContentItem);
             classContentItem.setAssignment(assignment);
             syncContentItemTitleFromReference(classContentItem);
         }
+    }
+
+    private void assertRuntimeReferenceAvailable(
+            Optional<ClassContentItem> existing,
+            ClassContentItem target,
+            String message
+    ) {
+        existing
+                .filter(item -> target.getId() == null || !item.getId().equals(target.getId()))
+                .ifPresent(item -> {
+                    throw new BusinessException(message);
+                });
+    }
+
+    private void clearContentReferences(ClassContentItem classContentItem) {
+        classContentItem.setLesson(null);
+        classContentItem.setQuiz(null);
+        classContentItem.setAssignment(null);
     }
 
     private void syncContentItemTitleFromReference(ClassContentItem classContentItem) {
@@ -1194,7 +1216,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         quiz.setShuffleAnswers(template.isShuffleAnswers());
         quiz.setDisplayMode(StringUtils.hasText(template.getDisplayMode()) ? template.getDisplayMode() : "PAGINATION");
         quiz.setShowCorrectAnswer(template.isShowCorrectAnswer());
-        quiz.setClassSection(classSection);
         Quiz savedQuiz = quizRepository.save(quiz);
 
         List<QuizTemplateBankSource> templateSources =

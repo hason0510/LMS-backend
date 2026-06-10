@@ -38,10 +38,8 @@ import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassNotificationService;
 import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
-import com.example.backend.specification.AssignmentSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -109,9 +107,9 @@ public class AssignmentServiceImpl implements AssignmentService {
         ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
 
-        if (assignment.getClassSection() != null
-                && !assignment.getClassSection().getId().equals(classSection.getId())) {
-            requireAssignmentManagementPermission(assignment.getClassSection());
+        ClassSection currentClassSection = resolvePrimaryClassSection(assignment);
+        if (currentClassSection != null && !currentClassSection.getId().equals(classSection.getId())) {
+            throw new BusinessException("Assignment does not belong to the provided classSectionId");
         }
         requireAssignmentManagementPermission(classSection);
 
@@ -141,20 +139,16 @@ public class AssignmentServiceImpl implements AssignmentService {
             return convertToResponse(assignment);
         }
 
-        if (assignment.getClassSection() != null) {
-            requireViewPermission(assignment.getClassSection());
+        List<ClassSection> classSections = classContentItemRepository.findClassSectionsByAssignmentId(assignment.getId());
+        if (classSections.isEmpty()) {
+            if (currentUser.getRole().getRoleName() == RoleType.STUDENT) {
+                throw new UnauthorizedException("You do not have permission to access this assignment");
+            }
         } else {
-            List<ClassSection> classSections = classContentItemRepository.findClassSectionsByAssignmentId(assignment.getId());
-            if (classSections.isEmpty()) {
-                if (currentUser.getRole().getRoleName() == RoleType.STUDENT) {
-                    throw new UnauthorizedException("You do not have permission to access this assignment");
-                }
-            } else {
-                boolean canViewAnySection = classSections.stream()
-                        .anyMatch(classSection -> canViewClassSection(classSection, currentUser));
-                if (!canViewAnySection) {
-                    throw new UnauthorizedException("You do not have permission to access this assignment");
-                }
+            boolean canViewAnySection = classSections.stream()
+                    .anyMatch(classSection -> canViewClassSection(classSection, currentUser));
+            if (!canViewAnySection) {
+                throw new UnauthorizedException("You do not have permission to access this assignment");
             }
         }
         return convertToResponse(assignment);
@@ -167,20 +161,7 @@ public class AssignmentServiceImpl implements AssignmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
         requireViewPermission(classSection);
 
-        Map<Integer, Assignment> assignmentMap = new LinkedHashMap<>();
-        for (Assignment assignment : assignmentRepository.findByClassSection_IdOrderByDueAtAsc(classSectionId)) {
-            assignmentMap.put(assignment.getId(), assignment);
-        }
-
-        for (ClassContentItem item : classContentItemRepository.findAssignmentItemsByClassSectionId(classSectionId)) {
-            Assignment assignment = resolveAssignment(item);
-            if (assignment != null) {
-                assignmentMap.putIfAbsent(assignment.getId(), assignment);
-            }
-        }
-
-        List<Assignment> assignments = new ArrayList<>(assignmentMap.values());
-        assignments.sort(Comparator.comparing(Assignment::getDueAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        List<Assignment> assignments = findAssignmentsByClassSectionIds(Set.of(classSectionId), null, classSectionId);
         List<AssignmentResponse> responses = assignments.stream().map(this::convertToResponse).toList();
         return new PageResponse<>(1, responses.isEmpty() ? 0 : 1, responses.size(), responses);
     }
@@ -214,13 +195,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new UnauthorizedException("You do not have permission to access this class section");
         }
 
-        Specification<Assignment> spec = Specification.where(AssignmentSpecification.inClassSections(classSectionIds))
-                .and(AssignmentSpecification.titleContains(keyword));
-        if (classSectionId != null) {
-            spec = spec.and(AssignmentSpecification.hasClassSectionId(classSectionId));
-        }
-
-        List<Assignment> assignments = assignmentRepository.findAll(spec);
+        List<Assignment> assignments = findAssignmentsByClassSectionIds(classSectionIds, keyword, classSectionId);
         if (assignments.isEmpty()) {
             return new PageResponse<>(1, 0, 0, List.of());
         }
@@ -295,13 +270,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new UnauthorizedException("You do not manage assignments in this class section");
         }
 
-        Specification<Assignment> spec = Specification.where(AssignmentSpecification.inClassSections(classSectionIds))
-                .and(AssignmentSpecification.titleContains(keyword));
-        if (classSectionId != null) {
-            spec = spec.and(AssignmentSpecification.hasClassSectionId(classSectionId));
-        }
-
-        List<Assignment> assignments = assignmentRepository.findAll(spec);
+        List<Assignment> assignments = findAssignmentsByClassSectionIds(classSectionIds, keyword, classSectionId);
         if (assignments.isEmpty()) {
             return new PageResponse<>(1, 0, 0, List.of());
         }
@@ -385,7 +354,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setDueAt(request.getDueAt());
         assignment.setCloseAt(request.getCloseAt());
         assignment.setAllowLateSubmission(Boolean.TRUE.equals(request.getAllowLateSubmission()));
-        assignment.setClassSection(classSection);
 
         if ((request.getResourceIds() == null || request.getResourceIds().isEmpty())
                 && (createMode || request.getResources() != null)) {
@@ -442,6 +410,41 @@ public class AssignmentServiceImpl implements AssignmentService {
             return null;
         }*/
         return null;
+    }
+
+    private List<Assignment> findAssignmentsByClassSectionIds(
+            Set<Integer> classSectionIds,
+            String keyword,
+            Integer requestedClassSectionId
+    ) {
+        Set<Integer> targetClassSectionIds = requestedClassSectionId != null
+                ? Set.of(requestedClassSectionId)
+                : classSectionIds;
+        Map<Integer, Assignment> assignmentMap = new LinkedHashMap<>();
+        for (Integer targetClassSectionId : targetClassSectionIds) {
+            if (targetClassSectionId == null || !classSectionIds.contains(targetClassSectionId)) {
+                continue;
+            }
+            for (ClassContentItem item : classContentItemRepository.findAssignmentItemsByClassSectionId(targetClassSectionId)) {
+                Assignment assignment = resolveAssignment(item);
+                if (assignment != null && matchesAssignmentKeyword(assignment, keyword)) {
+                    assignmentMap.putIfAbsent(assignment.getId(), assignment);
+                }
+            }
+        }
+
+        List<Assignment> assignments = new ArrayList<>(assignmentMap.values());
+        assignments.sort(Comparator.comparing(Assignment::getDueAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        return assignments;
+    }
+
+    private boolean matchesAssignmentKeyword(Assignment assignment, String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return true;
+        }
+        return assignment != null
+                && assignment.getTitle() != null
+                && assignment.getTitle().toLowerCase().contains(keyword.trim().toLowerCase());
     }
 
     private void syncLinkedClassContentItemTitle(Assignment assignment, String previousAssignmentTitle) {
@@ -558,8 +561,8 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     private ClassSection resolvePrimaryClassSection(Assignment assignment) {
-        if (assignment.getClassSection() != null) {
-            return assignment.getClassSection();
+        if (assignment == null || assignment.getId() == null) {
+            return null;
         }
         return classContentItemRepository.findClassSectionsByAssignmentId(assignment.getId()).stream()
                 .findFirst()
@@ -576,7 +579,8 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setDueAt(assignment.getDueAt());
         response.setCloseAt(assignment.getCloseAt());
         response.setAllowLateSubmission(assignment.isAllowLateSubmission());
-        response.setClassSectionId(assignment.getClassSection() != null ? assignment.getClassSection().getId() : null);
+        ClassSection classSection = resolvePrimaryClassSection(assignment);
+        response.setClassSectionId(classSection != null ? classSection.getId() : null);
         response.setResources(resourceService.getResourcesByAssignmentId(assignment.getId()));
         return response;
     }

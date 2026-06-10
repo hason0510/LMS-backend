@@ -7,7 +7,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "student_chapter_item_progress")
+@Table(name = "progress")
 @Getter
 @Setter
 @NoArgsConstructor

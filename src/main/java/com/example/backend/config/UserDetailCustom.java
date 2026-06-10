@@ -23,18 +23,12 @@ public class UserDetailCustom implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        System.out.println("Trying to find user with username: " + username);
-
-        User user;
-
-        if(username.contains("@")){
-            user = userService.handleGetUserByGmail(username);
-        }
-        else{
-            user = userService.handleGetUserByUserName(username);
-        }
+        User user = userService.handleGetUserByUserName(username);
         if (user == null) {
             throw new UsernameNotFoundException("User not found: " + username);
+        }
+        if (!user.isLocalAuthEnabled() || user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new UnauthorizedException("Tai khoan nay chi ho tro dang nhap bang Google");
         }
         if (!user.isVerified()) {
             throw new UnauthorizedException("Chưa xác thực OTP");

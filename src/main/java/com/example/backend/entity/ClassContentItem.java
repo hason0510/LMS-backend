@@ -11,7 +11,14 @@ import org.hibernate.annotations.SQLRestriction;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "class_content_items")
+@Table(
+        name = "class_content_items",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_class_content_items_lesson", columnNames = "lesson_id"),
+                @UniqueConstraint(name = "uk_class_content_items_quiz", columnNames = "quiz_id"),
+                @UniqueConstraint(name = "uk_class_content_items_assignment", columnNames = "assignment_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -49,15 +56,15 @@ public class ClassContentItem extends BaseEntity {
     @Column(name = "available_to")
     private LocalDateTime availableTo;
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "lesson_id")
     private Lesson lesson;
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "quiz_id")
     private Quiz quiz;
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "assignment_id")
     private Assignment assignment;
 

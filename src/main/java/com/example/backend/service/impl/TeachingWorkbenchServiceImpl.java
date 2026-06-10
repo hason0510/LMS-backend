@@ -12,6 +12,7 @@ import com.example.backend.dto.response.teaching.ClassPeopleRowResponse;
 import com.example.backend.dto.response.teaching.TeachingContextResponse;
 import com.example.backend.dto.response.teaching.TeachingReviewQueueItemResponse;
 import com.example.backend.dto.response.teaching.TeachingWorkbenchSummaryResponse;
+import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.User;
@@ -20,7 +21,7 @@ import com.example.backend.entity.assignment.Submission;
 import com.example.backend.entity.quiz.QuizAttempt;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
-import com.example.backend.repository.AssignmentRepository;
+import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassMemberRepository;
 import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.EnrollmentRepository;
@@ -52,7 +53,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     private final ClassSectionRepository classSectionRepository;
     private final ClassMemberRepository classMemberRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final AssignmentRepository assignmentRepository;
+    private final ClassContentItemRepository classContentItemRepository;
     private final SubmissionRepository submissionRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final ClassSectionService classSectionService;
@@ -187,7 +188,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
             User currentUser,
             ClassSection classSection
     ) {
-        for (Assignment assignment : assignmentRepository.findByClassSection_IdOrderByDueAtAsc(classSection.getId())) {
+        for (Assignment assignment : findAssignmentsByClassSection(classSection.getId())) {
             Map<Integer, Submission> latestByStudent = new LinkedHashMap<>();
             for (Submission submission : submissionRepository.findByAssignment_IdAndClassSection_IdOrderBySubmissionTimeDesc(
                     assignment.getId(),
@@ -269,7 +270,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
                 ? enrollmentRepository.findByClassSection_Id(classSectionId, Pageable.unpaged()).getContent()
                 : enrollmentRepository.findByClassSection_IdAndApprovalStatus(classSectionId, requestedStatus);
 
-        List<Assignment> assignments = assignmentRepository.findByClassSection_IdOrderByDueAtAsc(classSectionId);
+        List<Assignment> assignments = findAssignmentsByClassSection(classSectionId);
         LocalDateTime now = LocalDateTime.now();
         List<ClassPeopleRowResponse> rows = new ArrayList<>();
         for (Enrollment enrollment : enrollments) {
@@ -332,10 +333,19 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime nextWeek = now.plusDays(7);
         return classIds.stream()
-                .flatMap(classId -> assignmentRepository.findByClassSection_IdOrderByDueAtAsc(classId).stream())
+                .flatMap(classId -> findAssignmentsByClassSection(classId).stream())
                 .filter(assignment -> assignment.getDueAt() != null)
                 .filter(assignment -> !assignment.getDueAt().isBefore(now) && !assignment.getDueAt().isAfter(nextWeek))
                 .count();
+    }
+
+    private List<Assignment> findAssignmentsByClassSection(Integer classSectionId) {
+        return classContentItemRepository.findAssignmentItemsByClassSectionId(classSectionId).stream()
+                .map(ClassContentItem::getAssignment)
+                .filter(assignment -> assignment != null && assignment.getId() != null)
+                .distinct()
+                .sorted(Comparator.comparing(Assignment::getDueAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     private EnrollmentStatus parseEnrollmentStatus(String status) {

@@ -19,7 +19,6 @@ import java.util.List;
 public class BankQuestionResponse {
     private Integer id;
     private Integer questionBankId;
-    private Integer parentQuestionId;
     private String content;
     private String explanation;
     private ResourceResponse resource;

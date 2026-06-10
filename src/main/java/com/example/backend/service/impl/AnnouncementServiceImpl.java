@@ -55,12 +55,10 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
         requireManagePermission(classSection);
 
-        User currentUser = requireCurrentUser();
         Announcement announcement = new Announcement();
         announcement.setClassSection(classSection);
         announcement.setTitle(request.getTitle().trim());
         announcement.setSummary(request.getSummary());
-        announcement.setCreatedByUser(currentUser);
         Announcement saved = announcementRepository.save(announcement);
 
         classNotificationService.notifyApprovedStudents(
@@ -237,7 +235,6 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     private AnnouncementResponse convertToResponse(Announcement announcement) {
         ClassSection classSection = announcement.getClassSection();
         Subject subject = classSection != null ? classSection.getSubject() : null;
-        User createdBy = announcement.getCreatedByUser();
         return new AnnouncementResponse(
                 announcement.getId(),
                 classSection != null ? classSection.getId() : null,
@@ -247,8 +244,6 @@ public class AnnouncementServiceImpl implements AnnouncementService {
                 subject != null ? subject.getTitle() : null,
                 announcement.getTitle(),
                 announcement.getSummary(),
-                createdBy != null ? createdBy.getId() : null,
-                createdBy != null ? createdBy.getFullName() : null,
                 announcement.getCreatedAt(),
                 announcement.getUpdatedAt()
         );

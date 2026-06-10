@@ -15,15 +15,26 @@ import com.example.backend.service.OtpService;
 import com.example.backend.service.UserService;
 import com.example.backend.utils.SecurityUtil;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class AuthServiceImpl implements AuthService {
+    private static final String GOOGLE_JWK_SET_URI = "https://www.googleapis.com/oauth2/v3/certs";
     private final AuthenticationManagerBuilder authenticationManagerBuilder;
     private final SecurityUtil securityUtil;
     private final UserService userService;
@@ -48,7 +59,7 @@ public class AuthServiceImpl implements AuthService {
         UsernamePasswordAuthenticationToken authenticationToken =
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword());
         Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-        User currentUser = userService.handleGetUserByLoginIdentifier(request.getUsername());
+        User currentUser = userService.handleGetUserByUserName(request.getUsername());
         ensureAccountActive(currentUser);
         LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin();
         userLogin.setId(currentUser.getId());
@@ -60,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = securityUtil.createAccessToken(authentication.getName(), response);
         String refreshToken = securityUtil.createRefreshToken(request.getUsername(), response);
         // Update refresh token in DB
-        userService.updateUserToken(refreshToken, request.getUsername());
+        userService.updateUserToken(refreshToken, currentUser.getUserName());
         // Set tokens in DTO
         response.setAccessToken(accessToken);
         response.setRefreshToken(refreshToken);
@@ -187,6 +198,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("OTP không hợp lệ hoặc đã hết hạn");
         }
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setLocalAuthEnabled(true);
         userRepository.save(user);
     }
 
@@ -214,6 +226,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("OTP không hợp lệ hoặc đã hết hạn");
         }
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setLocalAuthEnabled(true);
         userRepository.save(user);
     }
 
@@ -265,34 +278,21 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse googleLogin(GoogleLoginRequest request) {
         try {
-            // Parse Google token (simplified - in production should verify signature)
-            String[] parts = request.getToken().split("\\.");
-            if (parts.length != 3) {
-                throw new IllegalArgumentException("Invalid Google token format");
-            }
-            
-            // Decode payload (second part)
-            byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(parts[1]);
-            String payload = new String(decodedBytes);
-            
-            // Parse JSON payload
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            java.util.Map<String, Object> claims = mapper.readValue(payload, java.util.Map.class);
-            
-            String email = (String) claims.get("email");
-            String name = (String) claims.get("name");
-            
-            if (email == null) {
+            Jwt googleJwt = verifyGoogleIdToken(request.getToken());
+            String email = googleJwt.getClaimAsString("email");
+            String name = googleJwt.getClaimAsString("name");
+
+            if (email == null || email.isBlank()) {
                 throw new IllegalArgumentException("Email not found in token");
             }
-            
-            // Check if user exists, if not create new user automatically
-            User googleUser = null;
-            try {
-                googleUser = userService.handleGetUserByGmail(email);
-            } catch (Exception e) {
-                // User doesn't exist, create new user automatically
+
+            User googleUser = userRepository.findFirstByGmailOrderByIdAsc(email).orElse(null);
+            if (googleUser == null) {
                 googleUser = userService.createGoogleUser(email, name != null ? name : email.split("@")[0]);
+            } else if (!googleUser.isGoogleLinked() || !googleUser.isVerified()) {
+                googleUser.setGoogleLinked(true);
+                googleUser.setVerified(true);
+                userRepository.save(googleUser);
             }
             ensureAccountActive(googleUser);
             
@@ -329,12 +329,63 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void validatePasswordChangeRequest(User user, String oldPassword, String newPassword, String confirmNewPassword) {
-        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-            throw new BusinessException("Mật khẩu bạn nhập không chính xác");
-        }
         if (!confirmNewPassword.equals(newPassword)) {
             throw new BusinessException("Hai mật khẩu không trùng khớp");
         }
+        if (user.isLocalAuthEnabled()) {
+            if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+                throw new BusinessException("Mật khẩu bạn nhập không chính xác");
+            }
+            return;
+        }
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new BusinessException("Mật khẩu mới không được để trống");
+        }
+    }
+
+    private Jwt verifyGoogleIdToken(String idToken) {
+        JwtDecoder jwtDecoder = buildGoogleJwtDecoder();
+        Jwt jwt = jwtDecoder.decode(idToken);
+        String email = jwt.getClaimAsString("email");
+        Boolean emailVerified = jwt.getClaimAsBoolean("email_verified");
+
+        if (email == null || email.isBlank()) {
+            throw new BadCredentialsException("Google token does not contain email");
+        }
+        if (!Boolean.TRUE.equals(emailVerified)) {
+            throw new BadCredentialsException("Google account email is not verified");
+        }
+        return jwt;
+    }
+
+    private JwtDecoder buildGoogleJwtDecoder() {
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(GOOGLE_JWK_SET_URI).build();
+        OAuth2TokenValidator<Jwt> audienceValidator = token -> {
+            List<String> audience = token.getAudience();
+            if (audience != null && audience.contains(googleClientId)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Invalid Google audience", null));
+        };
+        OAuth2TokenValidator<Jwt> issuerValidator = token -> {
+            String issuer = token.getIssuer() != null ? token.getIssuer().toString() : null;
+            if ("https://accounts.google.com".equals(issuer) || "accounts.google.com".equals(issuer)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Invalid Google issuer", null));
+        };
+        jwtDecoder.setJwtValidator(token -> {
+            OAuth2TokenValidatorResult defaults = JwtValidators.createDefault().validate(token);
+            if (defaults.hasErrors()) {
+                return defaults;
+            }
+            OAuth2TokenValidatorResult issuerResult = issuerValidator.validate(token);
+            if (issuerResult.hasErrors()) {
+                return issuerResult;
+            }
+            return audienceValidator.validate(token);
+        });
+        return jwtDecoder;
     }
 
 }

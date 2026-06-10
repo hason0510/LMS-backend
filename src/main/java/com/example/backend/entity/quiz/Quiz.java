@@ -1,7 +1,6 @@
 package com.example.backend.entity.quiz;
 
 import com.example.backend.entity.BaseEntity;
-import com.example.backend.entity.ClassSection;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -51,10 +50,6 @@ public class Quiz extends BaseEntity {
 
     @OneToMany(mappedBy = "quiz")
     private List<QuizAttempt> attempts;
-
-    @ManyToOne
-    @JoinColumn(name = "class_section_id")
-    private ClassSection classSection;
 
     @OneToMany(mappedBy = "quiz")
     @OrderBy("orderIndex ASC")

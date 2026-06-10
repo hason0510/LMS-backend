@@ -42,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Locale;
 import java.util.Random;
 
 @Service
@@ -120,6 +121,28 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private void assertValidUserName(String userName) {
+        if (!StringUtils.hasText(userName)) {
+            throw new BusinessException("Ten nguoi dung khong duoc de trong");
+        }
+        if (userName.trim().contains("@")) {
+            throw new BusinessException("Ten nguoi dung khong duoc chua ky tu @");
+        }
+    }
+
+    private String generateUniqueGoogleUserName(String email) {
+        String emailLocalPart = email.split("@")[0]
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9._-]", "");
+        String base = StringUtils.hasText(emailLocalPart) ? emailLocalPart : "googleuser";
+        String candidate = base;
+        int suffix = 1;
+        while (userRepository.existsByUserName(candidate)) {
+            candidate = base + suffix++;
+        }
+        return candidate;
+    }
+
     @Override
     @Caching(evict = {
             @CacheEvict(value = CacheNames.USER, key = "#id"),
@@ -188,12 +211,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     public User createGoogleUser(String email, String username) {
+        String generatedUserName = generateUniqueGoogleUserName(email);
         User googleUser = User.builder()
-                .userName(email)
-                .password("123")
+                .userName(generatedUserName)
+                .password(null)
                 .fullName(username)
                 .gmail(email)
                 .role(getRequiredRole(RoleType.STUDENT))
+                .googleLinked(true)
+                .localAuthEnabled(false)
                 .isVerified(true)
                 .build();
         return userRepository.save(googleUser);
@@ -218,6 +244,7 @@ public class UserServiceImpl implements UserService {
 
         if (request.getUserName() != null) {
             String nextUserName = request.getUserName().trim();
+            assertValidUserName(nextUserName);
             if (!nextUserName.equals(updatedUser.getUserName()) && userRepository.existsByUserName(nextUserName)) {
                 throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
             }
@@ -239,13 +266,17 @@ public class UserServiceImpl implements UserService {
         }
 
         if (request.getGmail() != null && !request.getGmail().equals(updatedUser.getGmail())) {
-            if (userRepository.existsByGmail(request.getGmail())) {
+            if (updatedUser.isVerified()) {
+                throw new BusinessException("Khong the thay doi email sau khi tai khoan da duoc xac thuc");
+            }
+            String nextGmail = request.getGmail().trim();
+            if (userRepository.existsByGmail(nextGmail)) {
                 throw new BusinessException("Gmail nay da duoc su dung");
             } else {
-                updatedUser.setGmail(request.getGmail());
+                updatedUser.setGmail(nextGmail);
             }
         } else if (request.getGmail() != null) {
-            updatedUser.setGmail(request.getGmail());
+            updatedUser.setGmail(request.getGmail().trim());
         }
 
         if (request.getImageUrl() != null) {
@@ -359,6 +390,7 @@ public class UserServiceImpl implements UserService {
     )
     public UserInfoResponse registerUser(RegisterRequest request) {
         User user = new User();
+        assertValidUserName(request.getUserName());
         if (userRepository.existsByUserName(request.getUserName())) {
             throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
         } else {
@@ -379,6 +411,8 @@ public class UserServiceImpl implements UserService {
 
         user.setRole(getRequiredRole(RoleType.valueOf(request.getRoleName())));
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setLocalAuthEnabled(true);
+        user.setGoogleLinked(false);
         user.setPhoneNumber(request.getPhoneNumber());
         user.setAddress(request.getAddress());
         user.setFullName(request.getFullName());
@@ -408,6 +442,7 @@ public class UserServiceImpl implements UserService {
     )
     public UserInfoResponse createUser(UserCreateRequest request) {
         User user = new User();
+        assertValidUserName(request.getUserName());
         if (userRepository.existsByUserName(request.getUserName())) {
             throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
         } else {
@@ -430,6 +465,8 @@ public class UserServiceImpl implements UserService {
 
         user.setRole(getRequiredRole(RoleType.valueOf(request.getRoleName())));
         user.setPassword(passwordEncoder.encode(generatedPassword));
+        user.setLocalAuthEnabled(true);
+        user.setGoogleLinked(false);
         user.setPhoneNumber(request.getPhoneNumber());
         user.setAddress(request.getAddress());
         user.setFullName(request.getFullName());
@@ -529,6 +566,8 @@ public class UserServiceImpl implements UserService {
         userDTO.setGmail(user.getGmail());
         userDTO.setRoleName(user.getRole().getRoleName().toString());
         userDTO.setActive(user.isActive());
+        userDTO.setGoogleLinked(user.isGoogleLinked());
+        userDTO.setLocalAuthEnabled(user.isLocalAuthEnabled());
         userDTO.setImageUrl(user.getImageUrl());
         userDTO.setCloudinaryImageId(user.getCloudinaryImageId());
         userDTO.setWorkPlace(user.getWorkPlace());
@@ -546,6 +585,8 @@ public class UserServiceImpl implements UserService {
         userDTO.setStudentNumber(user.getStudentNumber());
         userDTO.setFullName(user.getFullName());
         userDTO.setGmail(user.getGmail());
+        userDTO.setGoogleLinked(user.isGoogleLinked());
+        userDTO.setLocalAuthEnabled(user.isLocalAuthEnabled());
         userDTO.setImageUrl(user.getImageUrl());
         userDTO.setCloudinaryImageId(user.getCloudinaryImageId());
         userDTO.setWorkPlace(user.getWorkPlace());

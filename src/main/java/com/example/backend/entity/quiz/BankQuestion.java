@@ -53,10 +53,6 @@ public class BankQuestion extends BaseEntity {
     @JoinColumn(name = "question_bank_id", nullable = false)
     private QuestionBank questionBank;
 
-    @ManyToOne
-    @JoinColumn(name = "parent_question_id")
-    private BankQuestion parentQuestion;
-
     @OneToMany(mappedBy = "bankQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     private List<BankQuestionOption> options;

@@ -1,7 +1,6 @@
 package com.example.backend.entity.assignment;
 
 import com.example.backend.entity.BaseEntity;
-import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Resource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -48,10 +47,6 @@ public class Assignment extends BaseEntity {
 
     @Column(name = "allow_late_submission", nullable = false)
     private boolean allowLateSubmission = false;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_section_id")
-    private ClassSection classSection;
 
     @OneToMany(mappedBy = "assignment")
     private List<Submission> submissions;

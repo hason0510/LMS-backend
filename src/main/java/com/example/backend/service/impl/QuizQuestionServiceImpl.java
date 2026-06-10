@@ -6,6 +6,8 @@ import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizQuestionResponse;
 import com.example.backend.entity.quiz.Quiz;
 import com.example.backend.entity.quiz.QuizQuestion;
+import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
 import com.example.backend.service.QuizQuestionService;
@@ -22,16 +24,25 @@ import java.util.stream.Collectors;
 public class QuizQuestionServiceImpl implements QuizQuestionService{
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizRepository quizRepository;
+    private final BankQuestionRepository bankQuestionRepository;
 
-    public QuizQuestionServiceImpl(QuizQuestionRepository quizQuestionRepository, QuizRepository quizRepository) {
+    public QuizQuestionServiceImpl(
+            QuizQuestionRepository quizQuestionRepository,
+            QuizRepository quizRepository,
+            BankQuestionRepository bankQuestionRepository
+    ) {
         this.quizQuestionRepository = quizQuestionRepository;
         this.quizRepository = quizRepository;
+        this.bankQuestionRepository = bankQuestionRepository;
     }
 
     @Override
     public QuizQuestionResponse convertQuizQuestionToDTO(QuizQuestion question) {
         QuizQuestionResponse response = new QuizQuestionResponse();
         response.setId(question.getId());
+        response.setSourceBankQuestionId(question.getSourceBankQuestion() != null
+                ? question.getSourceBankQuestion().getId()
+                : null);
         response.setContent(question.getContent());
         response.setType(question.getType());
         response.setPoints(question.getPoints());
@@ -80,6 +91,10 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
         question.setContent(request.getContent());
         question.setType(request.getType());
         question.setPoints(request.getPoints() != null ? request.getPoints() : BigDecimal.ONE);
+        if (request.getSourceBankQuestionId() != null) {
+            question.setSourceBankQuestion(bankQuestionRepository.findById(request.getSourceBankQuestionId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Source bank question not found")));
+        }
         question.setQuiz(quiz);
 
         return convertQuizQuestionToDTO(quizQuestionRepository.save(question));
@@ -98,6 +113,10 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
         }
         if(request.getPoints() != null){
             question.setPoints(request.getPoints());
+        }
+        if(request.getSourceBankQuestionId() != null){
+            question.setSourceBankQuestion(bankQuestionRepository.findById(request.getSourceBankQuestionId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Source bank question not found")));
         }
         return convertQuizQuestionToDTO(quizQuestionRepository.save(question));
     }

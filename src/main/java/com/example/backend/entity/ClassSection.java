@@ -1,7 +1,6 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.ClassSectionStatus;
-import com.example.backend.entity.quiz.Quiz;
 import com.example.backend.entity.template.CurriculumTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -73,11 +72,5 @@ public class ClassSection extends BaseEntity {
 
     @OneToMany(mappedBy = "classSection")
     private List<Enrollment> enrollments;
-
-    @OneToMany(mappedBy = "classSection")
-    private List<Meeting> meetings;
-
-    @OneToMany(mappedBy = "classSection")
-    private List<Quiz> quizzes;
 
 }

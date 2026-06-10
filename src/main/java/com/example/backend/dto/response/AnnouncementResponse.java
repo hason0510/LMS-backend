@@ -20,8 +20,6 @@ public class AnnouncementResponse {
     private String subjectTitle;
     private String title;
     private String summary;
-    private Integer createdByUserId;
-    private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

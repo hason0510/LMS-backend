@@ -1,8 +1,8 @@
 package com.example.backend.config;
 
 import com.example.backend.dto.response.LoginResponse;
-import com.example.backend.dto.response.user.UserInfoResponse;
 import com.example.backend.entity.User;
+import com.example.backend.repository.UserRepository;
 import com.example.backend.service.UserService;
 import com.example.backend.service.impl.UserServiceImpl;
 import com.example.backend.utils.SecurityUtil;
@@ -24,6 +24,7 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
 
     private final UserService userService;
     private final SecurityUtil securityUtil;
+    private final UserRepository userRepository;
 
     @Value("${hayson.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
@@ -34,9 +35,10 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
     @Value("${hayson.jwt.refresh-cookie-same-site:None}")
     private String refreshTokenCookieSameSite;
 
-    public GoogleOAuth2SuccessHandler(UserServiceImpl userService, SecurityUtil securityUtil) {
+    public GoogleOAuth2SuccessHandler(UserServiceImpl userService, SecurityUtil securityUtil, UserRepository userRepository) {
         this.userService = userService;
         this.securityUtil = securityUtil;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -47,9 +49,13 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
         String email = (String) attributes.get("email");
         String name = (String) attributes.get("name");
 
-        User googleUser = userService.handleGetUserByGmail(email);
+        User googleUser = userRepository.findFirstByGmailOrderByIdAsc(email).orElse(null);
         if (googleUser == null) {
-            googleUser =  userService.createGoogleUser(email, name);
+            googleUser = userService.createGoogleUser(email, name);
+        } else if (!googleUser.isGoogleLinked() || !googleUser.isVerified()) {
+            googleUser.setGoogleLinked(true);
+            googleUser.setVerified(true);
+            googleUser = userRepository.save(googleUser);
         }
         // Build JWTs
         assert googleUser != null;
@@ -63,7 +69,7 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
 
         String accessToken = securityUtil.createAccessToken(email, responseDTO);
         String refreshToken = securityUtil.createRefreshToken(email, responseDTO);
-        userService.updateUserToken(refreshToken, email);
+        userService.updateUserToken(refreshToken, googleUser.getUserName());
 
         ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
                 .httpOnly(true)

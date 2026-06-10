@@ -26,7 +26,6 @@ public class BankQuestionRequest {
     private QuestionType type;
     private DifficultyLevel difficultyLevel;
     private BigDecimal defaultPoints;
-    private Integer parentQuestionId;
     private List<String> tagNames;
     private List<BankQuestionOptionRequest> options;
     private List<QuestionInteractionItemRequest> items;

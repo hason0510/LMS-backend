@@ -33,10 +33,6 @@ public class Announcement extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String summary;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id")
-    private User createdByUser;
-
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

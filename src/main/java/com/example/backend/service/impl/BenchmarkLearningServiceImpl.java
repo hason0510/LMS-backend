@@ -129,6 +129,7 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
         int firstClassSectionId = classSectionRange.minId();
         int lastClassSectionId = classSectionRange.maxId();
 
+        insertBenchmarkChapters(request, classSectionIds, resume);
         insertEnrollments(request, studentIds, classSectionIds, resume);
         IdRange enrollmentRange = fetchEnrollmentsByClassTitlePrefix(buildClassTitlePrefix(seedTag));
         ensureExpectedCount(enrollmentRange.count(), totalEnrollments, "enrollments", seedTag, resume);
@@ -621,8 +622,16 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
                                 ON q.id = qa.quiz_id
                                AND q.is_deleted = 0
                                AND q.is_active = 1
+                        INNER JOIN class_content_items cci
+                                ON cci.quiz_id = q.id
+                               AND cci.is_deleted = 0
+                               AND cci.is_active = 1
+                        INNER JOIN class_chapters cch
+                                ON cch.id = cci.class_chapter_id
+                               AND cch.is_deleted = 0
+                               AND cch.is_active = 1
                         INNER JOIN class_sections cs
-                                ON cs.id = q.class_section_id
+                                ON cs.id = cch.class_section_id
                                AND cs.is_deleted = 0
                                AND cs.is_active = 1
                                AND cs.status = ?
@@ -706,8 +715,16 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
                                         ON q.id = qa.quiz_id
                                        AND q.is_deleted = 0
                                        AND q.is_active = 1
+                                INNER JOIN class_content_items cci
+                                        ON cci.quiz_id = q.id
+                                       AND cci.is_deleted = 0
+                                       AND cci.is_active = 1
+                                INNER JOIN class_chapters cch
+                                        ON cch.id = cci.class_chapter_id
+                                       AND cch.is_deleted = 0
+                                       AND cch.is_active = 1
                                 INNER JOIN class_sections cs
-                                        ON cs.id = q.class_section_id
+                                        ON cs.id = cch.class_section_id
                                        AND cs.is_deleted = 0
                                        AND cs.is_active = 1
                                        AND cs.status = ?
@@ -1155,6 +1172,40 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
         );
     }
 
+    private void insertBenchmarkChapters(
+            BenchmarkLearningSeedRequest request,
+            List<Integer> classSectionIds,
+            boolean resume
+    ) {
+        batchInsert(
+                """
+                        INSERT INTO class_chapters (class_section_id, title, description, order_index, is_hidden, is_locked, is_deleted, is_active)
+                        SELECT ?, ?, ?, ?, ?, ?, ?, ?
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM class_chapters cch
+                            WHERE cch.class_section_id = ?
+                              AND cch.title = ?
+                              AND cch.is_deleted = 0
+                        )
+                        """,
+                classSectionIds.size(),
+                request.getBatchSize(),
+                (ps, index) -> {
+                    int classSectionId = classSectionIds.get(index);
+                    ps.setInt(1, classSectionId);
+                    ps.setString(2, "Benchmark Chapter");
+                    ps.setString(3, "Benchmark chapter for quiz content items");
+                    ps.setInt(4, 1);
+                    ps.setBoolean(5, false);
+                    ps.setBoolean(6, false);
+                    ps.setBoolean(7, false);
+                    ps.setBoolean(8, true);
+                    ps.setInt(9, classSectionId);
+                    ps.setString(10, "Benchmark Chapter");
+                }
+        );
+    }
+
     private void insertEnrollments(
             BenchmarkLearningSeedRequest request,
             List<Integer> studentIds,
@@ -1205,15 +1256,14 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
         LocalDateTime now = LocalDateTime.now();
         batchInsert(
                 """
-                        INSERT IGNORE INTO quiz (title, description, min_pass_score, time_limit_minutes, max_attempts, available_from, available_until, class_section_id, is_deleted, is_active)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT IGNORE INTO quiz (title, description, min_pass_score, time_limit_minutes, max_attempts, available_from, available_until, is_deleted, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                 totalQuizzes,
                 request.getBatchSize(),
                 (ps, index) -> {
                     int classIndex = index / request.getQuizzesPerClass();
                     int quizInClass = index % request.getQuizzesPerClass();
-                    int classSectionId = classSectionIds.get(classIndex % classSectionIds.size());
 
                     LocalDateTime availableFrom = now.minusDays(60L + (classIndex % 30));
                     LocalDateTime availableUntil = availableFrom.plusDays(120);
@@ -1224,9 +1274,42 @@ public class BenchmarkLearningServiceImpl implements BenchmarkLearningService {
                     ps.setInt(5, request.getAttemptsPerEnrollment() + 1);
                     ps.setTimestamp(6, Timestamp.valueOf(availableFrom));
                     ps.setTimestamp(7, Timestamp.valueOf(availableUntil));
-                    ps.setInt(8, classSectionId);
-                    ps.setBoolean(9, false);
-                    ps.setBoolean(10, true);
+                    ps.setBoolean(8, false);
+                    ps.setBoolean(9, true);
+                }
+        );
+
+        batchInsert(
+                """
+                        INSERT INTO class_content_items (class_chapter_id, title, item_type, order_index, is_hidden, is_locked, quiz_id, is_deleted, is_active)
+                        SELECT cch.id, q.title, 'QUIZ', ?, ?, ?, q.id, ?, ?
+                        FROM quiz q
+                        INNER JOIN class_chapters cch
+                                ON cch.class_section_id = ?
+                               AND cch.title = 'Benchmark Chapter'
+                               AND cch.is_deleted = 0
+                        WHERE q.title = ?
+                          AND q.is_deleted = 0
+                          AND NOT EXISTS (
+                              SELECT 1 FROM class_content_items cci
+                              WHERE cci.quiz_id = q.id
+                                AND cci.is_deleted = 0
+                          )
+                        LIMIT 1
+                        """,
+                totalQuizzes,
+                request.getBatchSize(),
+                (ps, index) -> {
+                    int classIndex = index / request.getQuizzesPerClass();
+                    int quizInClass = index % request.getQuizzesPerClass();
+                    int classSectionId = classSectionIds.get(classIndex % classSectionIds.size());
+                    ps.setInt(1, quizInClass + 1);
+                    ps.setBoolean(2, false);
+                    ps.setBoolean(3, false);
+                    ps.setBoolean(4, false);
+                    ps.setBoolean(5, true);
+                    ps.setInt(6, classSectionId);
+                    ps.setString(7, "Benchmark Quiz " + seedTag + "_" + classIndex + "_" + quizInClass);
                 }
         );
     }
