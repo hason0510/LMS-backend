@@ -163,7 +163,7 @@ public class QuizAttemptController {
     }
 
     @Operation(
-            summary = "Danh sách bài làm của học viên",
+            summary = "Danh sách bài làm của người học",
             description = "Teacher/Admin xem danh sách bài làm của quiz"
     )
     @PreAuthorize("isAuthenticated()")
@@ -175,7 +175,7 @@ public class QuizAttemptController {
         return ResponseEntity.status(HttpStatus.GONE).build();
     }
 
-    @Operation(summary = "Danh sách bài làm của học viên theo class content item")
+    @Operation(summary = "Danh sách bài làm của người học theo class content item")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/class-content-items/{classContentItemId}/attempts")
     public ResponseEntity<PageResponse<QuizAttemptResponse>> getAttemptsForTeacherOrAdminByClassContentItem(

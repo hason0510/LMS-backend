@@ -111,9 +111,9 @@ public class CommentServiceImpl implements CommentService {
         }
 
         if (currentRole == RoleType.STUDENT) {
-            String msg = String.format("Học viên %s đã bình luận bài giảng %s trong lớp %s",
+            String msg = String.format("Người học %s đã bình luận bài giảng %s trong lớp %s",
                     currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
-            notificationService.createNotification(teacher, "Có bình luận mới từ học viên", msg, "COMMENT", null, null);
+            notificationService.createNotification(teacher, "Có bình luận mới từ người học", msg, "COMMENT", null, null);
             return;
         }
 
@@ -136,7 +136,7 @@ public class CommentServiceImpl implements CommentService {
         return switch (role) {
             case ADMIN -> "Quản trị viên";
             case TEACHER -> "Giảng viên";
-            default -> "Học viên";
+            default -> "Người học";
         };
     }
 
