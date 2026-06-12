@@ -5,10 +5,8 @@ import com.example.backend.dto.request.quiz.QuizAttemptReviewRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
 import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
-import com.example.backend.dto.response.quiz.CourseQuizResultResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptDetailResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptResponse;
-import com.example.backend.dto.response.quiz.StudentQuizResultResponse;
 import com.example.backend.service.QuizAttemptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;  // ← ADD THIS IMPORT
@@ -193,15 +191,6 @@ public class QuizAttemptController {
     // API BẢNG ĐIỂM (GRADE BOOK)
     // =========================================================================
 
-    @Operation(summary = "Xem bảng điểm cá nhân trong 1 khóa học")
-    @PreAuthorize("hasRole('STUDENT')")
-    @GetMapping("/courses/{courseId}/my-grades") // Đổi endpoint để kèm courseId
-    public ResponseEntity<List<StudentQuizResultResponse>> getMyGradeBook(
-            @PathVariable Integer courseId
-    ) {
-        return ResponseEntity.ok(quizAttemptService.getMyGradeBook(courseId));
-    }
-
     @Operation(summary = "Xem bảng điểm cá nhân trong 1 class section")
     @PreAuthorize("hasRole('STUDENT')")
     @GetMapping("/class-sections/{classSectionId}/my-grades")
@@ -210,18 +199,6 @@ public class QuizAttemptController {
     ) {
         return ResponseEntity.ok(quizAttemptService.getMyGradeBookForClassSection(classSectionId));
     }
-    @Operation(
-            summary = "Xem bảng điểm khóa học (Giáo viên/Admin)",
-            description = "Xem tổng hợp kết quả làm bài Quiz của tất cả sinh viên trong một khóa học cụ thể."
-    )
-    @PreAuthorize("isAuthenticated()")
-    @GetMapping("/courses/{courseId}/quiz-grades")
-    public ResponseEntity<List<CourseQuizResultResponse>> getCourseGradeBook(
-            @PathVariable Integer courseId
-    ) {
-        return ResponseEntity.ok(quizAttemptService.getCourseGradeBook(courseId));
-    }
-
     @Operation(summary = "Xem bảng điểm class section")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/class-sections/{classSectionId}/quiz-grades")

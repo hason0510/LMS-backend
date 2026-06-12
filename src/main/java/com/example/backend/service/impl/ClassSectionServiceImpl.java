@@ -225,7 +225,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                         .comparing(ClassSection::getCreatedDate, Comparator.nullsLast(LocalDate::compareTo))
                         .thenComparing(ClassSection::getId, Comparator.nullsLast(Integer::compareTo)))
                 .map(classSection -> convertToResponse(classSection, includeChapters))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override
@@ -313,8 +313,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 : null);
         response.setJoinMode(classSection.getStatus() == ClassSectionStatus.PUBLIC ? "INSTANT" : "REQUEST");
         response.setJoinMessage(classSection.getStatus() == ClassSectionStatus.PUBLIC
-                ? "Lop hoc mo, bat ky ai co tai khoan deu co the tham gia ngay."
-                : "Lop hoc rieng tu. Yeu cau cua ban se duoc gui toi giang vien de phe duyet.");
+                ? "Bất kỳ ai cũng có thể tham gia."
+                : "Yêu cầu của bạn sẽ được giảng viên phê duyệt.");
         return response;
     }
 
@@ -627,7 +627,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         return enrollments.stream()
                 .map(enrollment -> convertToResponse(enrollment.getClassSection(), false))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override
@@ -642,9 +642,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         return enrollments.stream()
                 .map(enrollment -> convertToResponse(enrollment.getClassSection(), false))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
     }
-
     @Override
     @Cacheable(value = CacheNames.STUDENT_CLASS_SECTION_LIST, key = "@cacheKeyBuilder.studentClassSectionListKey('all')", sync = true)
     public List<ClassSectionResponse> getAllClassSectionsForStudent() {
@@ -653,7 +652,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         return enrollments.stream()
                 .map(enrollment -> convertToResponse(enrollment.getClassSection(), false))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override

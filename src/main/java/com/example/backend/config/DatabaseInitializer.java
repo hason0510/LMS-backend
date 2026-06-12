@@ -25,7 +25,6 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final SubjectRepository subjectRepository;
     private final CategoryRepository categoryRepository;
-    private final BenchmarkUserService benchmarkUserService;
 
     @Value("${benchmark.seed-users-on-startup:false}")
     private boolean seedUsersOnStartup;
@@ -45,7 +44,6 @@ public class DatabaseInitializer implements CommandLineRunner {
         this.roleRepository = roleRepository;
         this.subjectRepository = subjectRepository;
         this.categoryRepository = categoryRepository;
-        this.benchmarkUserService = benchmarkUserService;
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.example.backend.entity;
 
-import com.example.backend.entity.old.Course;
 import com.example.backend.entity.quiz.QuestionBankMember;
 import jakarta.persistence.*;
 import lombok.*;
@@ -65,8 +64,6 @@ public class User extends BaseEntity {
     private Role role;
     @OneToMany(mappedBy = "student")
     private List<Enrollment> enrollment;
-    @OneToMany(mappedBy = "teacher")
-    private List<Course> taughtCourses;
     @OneToMany(mappedBy = "teacher")
     private List<ClassSection> taughtClassSections;
     @OneToMany(mappedBy = "user")

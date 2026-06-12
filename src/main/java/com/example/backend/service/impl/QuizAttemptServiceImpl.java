@@ -10,15 +10,11 @@ import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.dto.response.quiz.*;
 import com.example.backend.entity.*;
-import com.example.backend.entity.old.ChapterItem;
-import com.example.backend.entity.old.Course;
 import com.example.backend.entity.quiz.*;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.*;
-import com.example.backend.repository.old.ChapterItemRepository;
-import com.example.backend.repository.old.CourseRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
@@ -62,12 +58,10 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final BankQuestionRepository bankQuestionRepository;
     private final UserRepository userRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final ChapterItemRepository chapterItemRepository;
     private final ClassContentItemRepository classContentItemRepository;
     private final ClassSectionRepository classSectionRepository;
     private final ProgressRepository progressRepository;
     private final EnrollmentService enrollmentService;
-    private final CourseRepository courseRepository;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
     private final RedisCacheInvalidationService cacheInvalidationService;
@@ -76,93 +70,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     @Override
     @Transactional
     public QuizAttemptDetailResponse startQuizAttempt(Integer quizId, Integer chapterItemId) {
-        User currentUser = userService.getCurrentUser();
-        if(!userService.isCurrentUser(currentUser.getId())) {
-            throw new UnauthorizedException("Chá»‰ há»c sinh Ä‘Äƒng kÃ½ khÃ³a há»c má»›i Ä‘Æ°á»£c truy cáº­p vÃ o ná»™i dung nÃ y");
-        }
-
-        Optional<ClassContentItem> directClassContentItem = classContentItemRepository.findById(chapterItemId);
-        if (directClassContentItem.isPresent()) {
-            ClassContentItem classContentItem = directClassContentItem.get();
-            if (classContentItem.getItemType() == ContentItemType.QUIZ
-                    && classContentItem.getQuiz() != null
-                    && classContentItem.getQuiz().getId().equals(quizId)) {
-                return startQuizAttemptForClassContentItem(quizId, chapterItemId);
-            }
-        }
-
-        Optional<ChapterItem> chapterItemOptional = chapterItemRepository.findById(chapterItemId);
-        if (chapterItemOptional.isEmpty()) {
-            return startQuizAttemptForClassContentItem(quizId, chapterItemId);
-        }
-
-        // Validate ChapterItem
-        ChapterItem chapterItem = chapterItemOptional.get();
-
-        if (chapterItem.getType() != ItemType.QUIZ || !chapterItem.getRefId().equals(quizId)) {
-            Optional<ClassContentItem> classContentItemOptional = classContentItemRepository.findById(chapterItemId);
-            if (classContentItemOptional.isPresent()) {
-                ClassContentItem classContentItem = classContentItemOptional.get();
-                if (classContentItem.getItemType() == ContentItemType.QUIZ
-                        && classContentItem.getQuiz() != null
-                        && classContentItem.getQuiz().getId().equals(quizId)) {
-                    return startQuizAttemptForClassContentItem(quizId, chapterItemId);
-                }
-            }
-            throw new ResourceNotFoundException("Quiz khÃ´ng tá»“n táº¡i");
-        }
-
-        boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), chapterItem.getChapter().getCourse().getId(), EnrollmentStatus.APPROVED);
-        if (!isEnrolled) {
-            throw new UnauthorizedException("Báº¡n khÃ´ng cÃ³ quyá»n truy cáº­p vÃ o tÃ i nguyÃªn nÃ y!");
-        }
-
-        // Validate Quiz
-        Quiz chosenQuiz = quizRepository.findById(quizId)
-                .orElseThrow(() -> new RuntimeException("Quiz khÃ´ng tá»“n táº¡i"));
-
-        checkQuizAvailability(chosenQuiz);
-        // Check if exists attempt in progress
-        Optional<QuizAttempt> inProgressAttempt = quizAttemptRepository.findLatestByChapterItem_IdAndStudent_IdAndStatus(
-                chapterItem.getId(), currentUser.getId(), AttemptStatus.IN_PROGRESS);
-
-        // Náº¿u Ä‘Ã£ cÃ³ bÃ i Ä‘ang lÃ m dá»Ÿ -> Tráº£ vá» chi tiáº¿t bÃ i Ä‘Ã³ luÃ´n (Ä‘á»ƒ FE render)
-        if(inProgressAttempt.isPresent()){
-            return convertToDetailResponse(inProgressAttempt.get());
-        }
-
-        // Check max attempts
-        int currentAttempt = quizAttemptRepository.countByChapterItem_IdAndStudent_Id(chapterItem.getId(), currentUser.getId());
-        if(chosenQuiz.getMaxAttempts() != null && currentAttempt >= chosenQuiz.getMaxAttempts()){
-            throw new BusinessException("ÄÃ£ vÆ°á»£t quÃ¡ sá»‘ láº§n lÃ m bÃ i!");
-        }
-
-        // Create new attempt
-        QuizAttempt attempt = QuizAttempt.builder()
-                .quiz(chosenQuiz)
-                .student(currentUser)
-                .chapterItem(chapterItem)
-                .attemptNumber(currentAttempt + 1)
-                .grade(0)
-                .isPassed(false)
-                .totalQuestions(0)
-                .unansweredQuestions(0)
-                .incorrectAnswers(0)
-                .correctAnswers(0)
-                .earnedPoints(BigDecimal.ZERO)
-                .totalPoints(BigDecimal.ZERO)
-                .gradingStatus(GradingStatus.AUTO_GRADED)
-                .startTime(LocalDateTime.now())
-                .status(AttemptStatus.IN_PROGRESS)
-                .build();
-
-        quizAttemptRepository.save(attempt);
-
-        initializeAttemptContent(attempt, chosenQuiz);
-
-        // Return detail response (bao gá»“m list cÃ¢u há»i vá»«a táº¡o)
-        return convertToDetailResponse(attempt);
+        throw new UnsupportedOperationException("Legacy chapter-item quiz flow has been removed");
     }
 
     @Override
@@ -878,29 +786,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (isPassed) {
             markProgressIfPassed(attempt);
         }
-        if (false) {
-            User student = attempt.getStudent();
-            ChapterItem chapterItem = attempt.getChapterItem();
-            Progress progress = progressRepository
-                    .findByStudent_IdAndChapterItem_Id(student.getId(), chapterItem.getId())
-                    .orElse(Progress.builder()
-                            .student(student)
-                            .chapterItem(chapterItem)
-                            .isCompleted(false) // Máº·c Ä‘á»‹nh false náº¿u chÆ°a cÃ³ báº£n ghi
-                            .build());
-            // CHá»ˆ cáº­p nháº­t vÃ  tÃ­nh toÃ¡n láº¡i náº¿u chÆ°a hoÃ n thÃ nh trÆ°á»›c Ä‘Ã³
-            if (Boolean.FALSE.equals(progress.getIsCompleted())) {
-                progress.setIsCompleted(true);
-                progress.setCompletedAt(LocalDateTime.now());
-                progressRepository.save(progress);
-
-                // Cáº­p nháº­t progress tá»•ng cá»§a Enrollment
-                if (chapterItem.getChapter() != null && chapterItem.getChapter().getCourse() != null) {
-                    Integer courseId = chapterItem.getChapter().getCourse().getId();
-                    enrollmentService.recalculateAndSaveProgress(student.getId(), courseId);
-                }
-            }
-        }
 
         cacheInvalidationService.evictTeachingAndReportCaches();
         return convertQuizAttemptToDTO(attempt);
@@ -908,35 +793,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     @Override
     public QuizAttemptDetailResponse getCurrentAttempt(Integer chapterItemId) {
-        User currentUser = userService.getCurrentUser();
-        classContentItemRepository.findById(chapterItemId)
-                .ifPresent(classContentItem -> ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection()));
-        Optional<QuizAttempt> classContentAttempt = quizAttemptRepository
-                .findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(
-                        chapterItemId,
-                        currentUser.getId(),
-                        AttemptStatus.IN_PROGRESS
-                );
-        if (classContentAttempt.isPresent()) {
-            QuizAttempt attempt = expireAttemptIfTimedOut(classContentAttempt.get());
-            return convertToDetailResponse(attempt);
-        }
-
-        Optional<QuizAttempt> legacyAttempt = Optional.empty();
-        if (chapterItemRepository.findById(chapterItemId).isPresent()) {
-            legacyAttempt = quizAttemptRepository.findLatestByChapterItem_IdAndStudent_IdAndStatus(
-                    chapterItemId,
-                    currentUser.getId(),
-                    AttemptStatus.IN_PROGRESS
-            );
-        }
-
-        if (legacyAttempt.isPresent()) {
-            QuizAttempt attempt = expireAttemptIfTimedOut(legacyAttempt.get());
-            return convertToDetailResponse(attempt);
-        }
-
-        throw new ResourceNotFoundException("KhÃ´ng cÃ³ bÃ i lÃ m nÃ o Ä‘ang diá»…n ra");
+        throw new UnsupportedOperationException("Legacy chapter-item quiz flow has been removed");
     }
 
     @Override
@@ -1632,12 +1489,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     // Láº¤Y Káº¾T QUáº¢ Cá»¦A Báº¢N THÃ‚N SINH VIÃŠN THEO 1 QUIZ
     @Override
     public List<QuizAttemptResponse> getStudentAttemptsHistory(Integer chapterItemId) {
-        User currentUser = userService.getCurrentUser();
-        return quizAttemptRepository.findByChapterItem_IdAndStudent_Id(chapterItemId, currentUser.getId())
-                .stream()
-                .filter(a -> a.getStatus() == AttemptStatus.COMPLETED || a.getStatus() == AttemptStatus.EXPIRED)
-                .map(this::convertQuizAttemptToDTO)
-                .toList();
+        throw new UnsupportedOperationException("Legacy chapter-item quiz flow has been removed");
     }
 
 
@@ -1654,22 +1506,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     @Override
     public PageResponse<QuizAttemptResponse> getAttemptsForTeacherOrAdmin(Integer chapterItemId, Pageable pageable) {
-        User currentUser = userService.getCurrentUser();
-        ChapterItem chapterItem = chapterItemRepository.findById(chapterItemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Chapter item not found"));
-        Integer teacherId = chapterItem.getChapter().getCourse().getTeacher().getId();
-        boolean isAdmin = currentUser.getRole().getRoleName() == RoleType.ADMIN;
-        boolean isTeacher = teacherId.equals(currentUser.getId());
-
-        if (!isAdmin && !isTeacher) {
-            throw new UnauthorizedException("Báº¡n khÃ´ng cÃ³ quyá»n xem lá»‹ch sá»­ bÃ i lÃ m");
-        }
-
-        Page<QuizAttemptResponse> dtoPage = quizAttemptRepository.findByChapterItem_IdAndStatusIn(
-                chapterItemId, List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED), pageable
-        ).map(this::convertQuizAttemptToDTO);
-
-        return new PageResponse<>(dtoPage.getNumber() + 1, dtoPage.getTotalPages(), dtoPage.getNumberOfElements(), dtoPage.getContent());
+        throw new UnsupportedOperationException("Legacy chapter-item quiz flow has been removed");
     }
 
     //Láº¤Y Káº¾T QUáº¢
@@ -1696,9 +1533,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     @Override
     public Integer getStudentBestScore(Integer chapterItemId) {
-        User currentUser = userService.getCurrentUser();
-        Integer maxGrade = quizAttemptRepository.findMaxGradeByChapterItemAndStudent(chapterItemId, currentUser.getId());
-        return maxGrade == null ? 0 : maxGrade;
+        throw new UnsupportedOperationException("Legacy chapter-item quiz flow has been removed");
     }
 
     @Override
@@ -1754,18 +1589,10 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     /**
      * API cho Sinh viÃªn xem báº£ng Ä‘iá»ƒm cÃ¡ nhÃ¢n cá»§a mÃ¬nh (Táº¥t cáº£ quiz Ä‘Ã£ lÃ m)
-     */
+     */
     @Override
-    public List<StudentQuizResultResponse> getMyGradeBook(Integer courseId) { // ThÃªm tham sá»‘ courseId
-        User currentUser = userService.getCurrentUser();
-
-        boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), courseId, EnrollmentStatus.APPROVED);
-        if (!isEnrolled) {
-            throw new UnauthorizedException("Báº¡n khÃ´ng cÃ³ quyá»n truy cáº­p vÃ o tÃ i nguyÃªn nÃ y!");
-        }
-
-        return quizAttemptRepository.findMaxGradesByStudentAndCourse(currentUser.getId(), courseId);
+    public List<StudentQuizResultResponse> getMyGradeBook(Integer courseId) {
+        throw new UnsupportedOperationException("Legacy course gradebook flow has been removed");
     }
     /**
      * API cho GiÃ¡o viÃªn/Admin xem báº£ng Ä‘iá»ƒm cá»§a khÃ³a há»c
@@ -1782,25 +1609,11 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         return quizAttemptRepository.findMaxGradesByStudentAndClassSection(currentUser.getId(), classSectionId);
     }
-
+
     @Override
     @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_COURSE, key = "@cacheKeyBuilder.courseGradeBookKey(#courseId)", sync = true)
     public List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId) {
-        User currentUser = userService.getCurrentUser();
-
-        // 1. Validate quyá»n truy cáº­p
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-
-        boolean isAdmin = currentUser.getRole().getRoleName() == RoleType.ADMIN;
-        boolean isTeacher = course.getTeacher().getId().equals(currentUser.getId());
-
-        if (!isAdmin && !isTeacher) {
-            throw new UnauthorizedException("Báº¡n khÃ´ng cÃ³ quyá»n xem báº£ng Ä‘iá»ƒm cá»§a khÃ³a há»c nÃ y");
-        }
-
-        // 2. Gá»i Repository láº¥y dá»¯ liá»‡u tá»•ng há»£p
-        return quizAttemptRepository.findMaxGradesByCourse(courseId);
+        throw new UnsupportedOperationException("Legacy course gradebook flow has been removed");
     }
 
     @Override
@@ -1872,30 +1685,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                         classContentItem.getClassChapter().getClassSection().getId()
                 );
             }
-            return;
-        }
-
-        if (attempt.getChapterItem() != null) {
-            ChapterItem chapterItem = attempt.getChapterItem();
-            Progress progress = progressRepository
-                    .findByStudent_IdAndChapterItem_Id(student.getId(), chapterItem.getId())
-                    .orElse(Progress.builder()
-                            .student(student)
-                            .chapterItem(chapterItem)
-                            .isCompleted(false)
-                            .build());
-
-            if (!Boolean.TRUE.equals(progress.getIsCompleted())) {
-                progress.setIsCompleted(true);
-                progress.setCompletedAt(LocalDateTime.now());
-                progressRepository.save(progress);
-                if (chapterItem.getChapter() != null && chapterItem.getChapter().getCourse() != null) {
-                    enrollmentService.recalculateAndSaveProgress(
-                            student.getId(),
-                            chapterItem.getChapter().getCourse().getId()
-                    );
-                }
-            }
         }
     }
 
@@ -1936,13 +1725,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             return true;
         }
 
-        if (attempt.getChapterItem() != null
-                && attempt.getChapterItem().getChapter() != null
-                && attempt.getChapterItem().getChapter().getCourse() != null
-                && attempt.getChapterItem().getChapter().getCourse().getTeacher() != null) {
-            return attempt.getChapterItem().getChapter().getCourse().getTeacher().getId().equals(currentUser.getId());
-        }
-
         if (attempt.getClassContentItem() != null
                 && attempt.getClassContentItem().getClassChapter() != null
                 && attempt.getClassContentItem().getClassChapter().getClassSection() != null) {
@@ -1963,7 +1745,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         response.setId(attempt.getId());
         response.setQuizId(attempt.getQuiz().getId());
         response.setStudentId(attempt.getStudent().getId());
-        response.setChapterItemId(attempt.getChapterItem() != null ? attempt.getChapterItem().getId() : null);
+        response.setChapterItemId(attempt.getChapterItemId());
         response.setClassContentItemId(attempt.getClassContentItem() != null ? attempt.getClassContentItem().getId() : null);
         response.setClassSectionId(resolveClassSectionId(attempt));
         response.setStartTime(attempt.getStartTime());
@@ -2289,7 +2071,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .isPassed(attempt.getIsPassed())
                 .quizId(attempt.getQuiz() != null ? attempt.getQuiz().getId() : null)
                 .studentId(attempt.getStudent() != null ? attempt.getStudent().getId() : null)
-                .chapterItemId(attempt.getChapterItem() != null ? attempt.getChapterItem().getId() : null)
+                .chapterItemId(attempt.getChapterItemId())
                 .classContentItemId(attempt.getClassContentItem() != null ? attempt.getClassContentItem().getId() : null)
                 .classSectionId(resolveClassSectionId(attempt))
                 .totalQuestions(attempt.getTotalQuestions())

@@ -4,9 +4,7 @@ import com.example.backend.dto.request.CategoryRequest;
 import com.example.backend.dto.response.CategoryResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.entity.Category;
-import com.example.backend.entity.old.Course;
 import com.example.backend.repository.CategoryRepository;
-import com.example.backend.repository.old.CourseRepository;
 import com.example.backend.service.CategoryService;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
@@ -19,11 +17,9 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
-    private final CourseRepository courseRepository;
 
-    public CategoryServiceImpl(CategoryRepository categoryRepository, CourseRepository courseRepository) {
+    public CategoryServiceImpl(CategoryRepository categoryRepository) {
         this.categoryRepository = categoryRepository;
-        this.courseRepository = courseRepository;
     }
 
     @Override
@@ -62,9 +58,6 @@ public class CategoryServiceImpl implements CategoryService {
     public void deleteCategory(Integer id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category not found"));
-        for (Course course : category.getCourses()) {
-            course.setCategory(null);
-        }
         categoryRepository.delete(category); // soft delete
     }
 

@@ -29,10 +29,10 @@ public class GoogleOAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHa
     @Value("${hayson.jwt.refresh-token-validity-in-seconds}")
     private long refreshTokenExpiration;
 
-    @Value("${hayson.jwt.refresh-cookie-secure:true}")
+    @Value("${hayson.jwt.refresh-cookie-secure:false}")
     private boolean refreshTokenCookieSecure;
 
-    @Value("${hayson.jwt.refresh-cookie-same-site:None}")
+    @Value("${hayson.jwt.refresh-cookie-same-site:Lax}")
     private String refreshTokenCookieSameSite;
 
     public GoogleOAuth2SuccessHandler(UserServiceImpl userService, SecurityUtil securityUtil, UserRepository userRepository) {

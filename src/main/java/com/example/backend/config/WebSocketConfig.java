@@ -13,14 +13,9 @@ import java.util.Arrays;
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
-    private final WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor;
 
     @Value("${frontend.allowed-origins:${frontend.url}}")
     private String frontendAllowedOrigins;
-
-    public WebSocketConfig(WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor) {
-        this.webSocketAuthChannelInterceptor = webSocketAuthChannelInterceptor;
-    }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
@@ -34,11 +29,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns(resolveAllowedOrigins())
                 .withSockJS();
-    }
-
-    @Override
-    public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(webSocketAuthChannelInterceptor);
     }
 
     private String[] resolveAllowedOrigins() {

@@ -28,6 +28,8 @@ public interface EnrollmentService {
 
     EnrollmentResponse enrollClassSection(Integer classSectionId);
 
+    EnrollmentResponse enrollClassSectionByCode(String classCode);
+
     @Transactional
     void completeLesson(Integer lessonId);
 

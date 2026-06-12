@@ -14,7 +14,7 @@ import java.util.List;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> {
-    List<Enrollment> findByCourse_IdAndStudent_IdIn(
+    List<Enrollment> findByCourseIdAndStudent_IdIn(
             Integer courseId,
             List<Integer> studentIds
     );
@@ -26,19 +26,19 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     Page<Enrollment> findByApprovalStatus(EnrollmentStatus approvalStatus, Pageable pageable);
 
-    List <Enrollment> findByCourse_IdAndApprovalStatus(Integer courseId, EnrollmentStatus approvalStatus);
+    List <Enrollment> findByCourseIdAndApprovalStatus(Integer courseId, EnrollmentStatus approvalStatus);
 
-    Page<Enrollment> findByCourse_IdAndApprovalStatus(Integer courseId, EnrollmentStatus enrollmentStatus, Pageable pageable);
+    Page<Enrollment> findByCourseIdAndApprovalStatus(Integer courseId, EnrollmentStatus enrollmentStatus, Pageable pageable);
 
-    Enrollment findByStudent_IdAndCourse_Id(Integer studentId, Integer courseId);
+    Enrollment findByStudent_IdAndCourseId(Integer studentId, Integer courseId);
 
-    Enrollment findByStudent_IdAndCourse_IdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
+    Enrollment findByStudent_IdAndCourseIdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
 
     Enrollment findByStudent_IdAndClassSection_Id(Integer studentId, Integer classSectionId);
 
     Enrollment findByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
 
-    boolean existsByStudent_IdAndCourse_IdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
+    boolean existsByStudent_IdAndCourseIdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
 
     boolean existsByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
 
@@ -84,6 +84,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     // ── Legacy course-based queries ──
 
-    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.course.id = :courseId AND e.approvalStatus = 'APPROVED'")
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.courseId = :courseId AND e.approvalStatus = 'APPROVED'")
     Long countApprovedEnrollmentsByCourseId(@Param("courseId") Integer courseId);
 }

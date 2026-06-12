@@ -74,7 +74,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
     public List<ClassSectionResponse> getMyTeachingClasses() {
         return resolveTeachingClassSectionIds(requireCurrentUser()).stream()
                 .map(classSectionService::getClassSectionById)
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Override

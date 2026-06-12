@@ -37,7 +37,7 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
             SELECT sp.id
             FROM Enrollment sp
             WHERE sp.student = u
-            AND sp.course.id = :courseId
+            AND sp.courseId = :courseId
         )
     """)
     List<User> findUsersNotInCourseByRole(

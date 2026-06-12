@@ -1,6 +1,7 @@
 package com.example.backend.controller;
 
 import com.example.backend.dto.request.*;
+import com.example.backend.dto.response.ApiResponse;
 import com.example.backend.dto.response.LoginResponse;
 import com.example.backend.dto.response.RegisterResponse;
 import com.example.backend.service.AuthService;
@@ -8,13 +9,17 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/lms")
 public class AuthController {
+    private static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
     private final AuthService authService;
 
@@ -35,13 +40,7 @@ public class AuthController {
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         LoginResponse response = authService.login(loginRequest);
-        ResponseCookie springCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
-                .httpOnly(true)
-                .secure(refreshTokenCookieSecure)
-                .sameSite(refreshTokenCookieSameSite)
-                .path("/")
-                .maxAge(refreshTokenExpiration)
-                .build();
+        ResponseCookie springCookie = buildRefreshCookie(response.getRefreshToken());
         response.setRefreshToken(null);
         return ResponseEntity
                 .ok()
@@ -61,14 +60,7 @@ public class AuthController {
     public ResponseEntity<LoginResponse> verifyOtp(@RequestBody OtpVerificationRequest request) {
         LoginResponse response = authService.verifyOtp(request);
 
-        ResponseCookie refreshCookie = ResponseCookie
-                .from("refresh_token", response.getRefreshToken())
-                .httpOnly(true)
-                .secure(refreshTokenCookieSecure)
-                .sameSite(refreshTokenCookieSameSite)
-                .path("/")
-                .maxAge(refreshTokenExpiration)
-                .build();
+        ResponseCookie refreshCookie = buildRefreshCookie(response.getRefreshToken());
 
         response.setRefreshToken(null);
 
@@ -131,13 +123,7 @@ public class AuthController {
     @PostMapping("/auth/google")
     public ResponseEntity<LoginResponse> googleLogin(@RequestBody GoogleLoginRequest request) {
         LoginResponse response = authService.googleLogin(request);
-        ResponseCookie springCookie = ResponseCookie.from("refresh_token", response.getRefreshToken())
-                .httpOnly(true)
-                .secure(refreshTokenCookieSecure)
-                .sameSite(refreshTokenCookieSameSite)
-                .path("/")
-                .maxAge(refreshTokenExpiration)
-                .build();
+        ResponseCookie springCookie = buildRefreshCookie(response.getRefreshToken());
         response.setRefreshToken(null);
         return ResponseEntity
                 .ok()
@@ -147,17 +133,20 @@ public class AuthController {
 
     @Operation(summary = "Refresh token")
     @PutMapping("/auth/refresh")
-    public ResponseEntity<LoginResponse> refreshToken(
-            @CookieValue(name = "refresh_token", defaultValue = "none") String refreshToken){
-        LoginResponse response = authService.refreshToken(refreshToken);
-        ResponseCookie cookie = ResponseCookie
-                .from("refresh_token", response.getRefreshToken())
-                .httpOnly(true)
-                .secure(refreshTokenCookieSecure)
-                .sameSite(refreshTokenCookieSameSite)
-                .maxAge(refreshTokenExpiration)
-                .path("/")
-                .build();
+    public ResponseEntity<?> refreshToken(
+            @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken){
+        if (!StringUtils.hasText(refreshToken)) {
+            return unauthorizedRefreshResponse("Missing refresh token");
+        }
+
+        LoginResponse response;
+        try {
+            response = authService.refreshToken(refreshToken);
+        } catch (BadCredentialsException e) {
+            return unauthorizedRefreshResponse(e.getMessage());
+        }
+
+        ResponseCookie cookie = buildRefreshCookie(response.getRefreshToken());
         response.setRefreshToken(null);
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -168,6 +157,41 @@ public class AuthController {
     @PutMapping("/auth/logout")
     public ResponseEntity<?> logout(){
         authService.logout();
-        return ResponseEntity.ok().build();
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, expireRefreshCookie().toString())
+                .build();
+    }
+
+    private ResponseCookie buildRefreshCookie(String refreshToken) {
+        return ResponseCookie.from(REFRESH_TOKEN_COOKIE, refreshToken)
+                .httpOnly(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
+                .path("/")
+                .maxAge(refreshTokenExpiration)
+                .build();
+    }
+
+    private ResponseCookie expireRefreshCookie() {
+        return ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
+                .httpOnly(true)
+                .secure(refreshTokenCookieSecure)
+                .sameSite(refreshTokenCookieSameSite)
+                .path("/")
+                .maxAge(0)
+                .build();
+    }
+
+    private ResponseEntity<ApiResponse<Object>> unauthorizedRefreshResponse(String message) {
+        ApiResponse<Object> response = new ApiResponse<>(
+                HttpStatus.UNAUTHORIZED.value(),
+                StringUtils.hasText(message) ? message : "Invalid refresh token",
+                null
+        );
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .header(HttpHeaders.SET_COOKIE, expireRefreshCookie().toString())
+                .body(response);
     }
 }

@@ -1,6 +1,5 @@
 package com.example.backend.entity;
 
-import com.example.backend.entity.old.Course;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -25,9 +24,6 @@ public class Category extends BaseEntity {
     private String title;
 
     private String description;
-
-    @OneToMany(mappedBy = "category")
-    private List<Course> courses;
 
     @OneToMany(mappedBy = "category")
     private List<Subject> subjects;

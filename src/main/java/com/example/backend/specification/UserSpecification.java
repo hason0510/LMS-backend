@@ -44,7 +44,7 @@ public class UserSpecification {
             subQuery.select(enrollment.get("id"))
                     .where(
                             cb.equal(enrollment.get("student"), root),
-                            cb.equal(enrollment.get("course").get("id"), courseId),
+                            cb.equal(enrollment.get("courseId"), courseId),
                             cb.equal(
                                     enrollment.get("approvalStatus"),
                                     EnrollmentStatus.APPROVED
@@ -63,7 +63,7 @@ public class UserSpecification {
             subQuery.select(enrollment.get("id"))
                     .where(
                             cb.equal(enrollment.get("student"), root),
-                            cb.equal(enrollment.get("course").get("id"), courseId),
+                            cb.equal(enrollment.get("courseId"), courseId),
                             cb.equal(
                                     enrollment.get("approvalStatus"),
                                     EnrollmentStatus.APPROVED

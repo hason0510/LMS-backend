@@ -5,9 +5,7 @@ import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.ClassSectionStatus;
-import com.example.backend.constant.CourseStatus;
 import com.example.backend.constant.EnrollmentStatus;
-import com.example.backend.constant.ItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.EnrollmentRequest;
 import com.example.backend.dto.request.course.StudentCourseRequest;
@@ -15,26 +13,21 @@ import com.example.backend.dto.request.search.SearchUserRequest;
 import com.example.backend.dto.response.EnrollmentResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.user.UserViewResponse;
-import com.example.backend.entity.old.ChapterItem;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
-import com.example.backend.entity.old.Course;
 import com.example.backend.entity.Enrollment;
 import com.example.backend.entity.Progress;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
-import com.example.backend.repository.old.ChapterItemRepository;
 import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassMemberRepository;
 import com.example.backend.repository.ClassSectionRepository;
-import com.example.backend.repository.old.CourseRepository;
 import com.example.backend.repository.EnrollmentRepository;
 import com.example.backend.repository.ProgressRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
-import com.example.backend.service.old.CourseService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.NotificationService;
 import com.example.backend.service.UserService;
@@ -54,14 +47,11 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class EnrollmentServiceImpl implements EnrollmentService {
-    private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
     private final UserService userService;
     private final NotificationService notificationService;
-    private final CourseService courseService;
     private final ProgressRepository progressRepository;
-    private final ChapterItemRepository chapterItemRepository;
     private final ClassSectionRepository classSectionRepository;
     private final ClassContentItemRepository classContentItemRepository;
     private final ClassMemberRepository classMemberRepository;
@@ -71,24 +61,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Transactional
     @Override
     public void addStudentsToCourse(Integer courseId, StudentCourseRequest request) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay khoa hoc!"));
-
-        List<User> users = userRepository.findAllById(request.getStudentIds());
-        List<Enrollment> progresses = users.stream()
-                .map(user -> Enrollment.builder()
-                        .student(user)
-                        .course(course)
-                        .progress(0)
-                        .approvalStatus(EnrollmentStatus.APPROVED)
-                        .build())
-                .toList();
-        enrollmentRepository.saveAll(progresses);
-
-        for (User user : users) {
-            String message = "Ban da duoc them vao khoa hoc " + course.getTitle();
-            notificationService.createNotification(user, "Duoc them vao khoa hoc", message, "ENROLLMENT", null, null);
-        }
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Transactional
@@ -111,28 +84,15 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         cacheInvalidationService.evictAllRedisReadCaches();
 
         for (User user : users) {
-            String message = "Ban da duoc them vao lop hoc " + classSection.getTitle();
-            notificationService.createNotification(user, "Duoc them vao lop hoc", message, "ENROLLMENT", null, null);
+            String message = "Ban đã được thêm vào lớp học " + classSection.getTitle();
+            notificationService.createNotification(user, "Được thêm vào lớp học", message, "ENROLLMENT", null, null);
         }
     }
 
     @Transactional
     @Override
     public void removeStudentsInCourse(Integer courseId, StudentCourseRequest request) {
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay khoa hoc!"));
-        if (request.getStudentIds() == null || request.getStudentIds().isEmpty()) {
-            return;
-        }
-
-        List<User> users = userRepository.findAllById(request.getStudentIds());
-        List<Enrollment> progresses = enrollmentRepository.findByCourse_IdAndStudent_IdIn(courseId, request.getStudentIds());
-        enrollmentRepository.deleteAll(progresses);
-
-        for (User user : users) {
-            String message = "Ban da bi xoa khoi danh sach lop " + course.getTitle();
-            notificationService.createNotification(user, "Bi xoa khoi khoa hoc", message, "ENROLLMENT", null, null);
-        }
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Transactional
@@ -150,42 +110,14 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         cacheInvalidationService.evictAllRedisReadCaches();
 
         for (User user : users) {
-            String message = "Ban da bi xoa khoi danh sach lop " + classSection.getTitle();
-            notificationService.createNotification(user, "Bi xoa khoi lop hoc", message, "ENROLLMENT", null, null);
+            String message = "Bạn đã bị xóa khỏi danh sách lớp " + classSection.getTitle();
+            notificationService.createNotification(user, "Bị xóa khỏi lớp học", message, "ENROLLMENT", null, null);
         }
     }
 
     @Override
     public EnrollmentResponse enrollPublicCourse(Integer courseId) {
-        User currentUser = userService.getCurrentUser();
-        Course course = courseRepository.findById(courseId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay khoa hoc!"));
-
-        if (course.getStatus() == CourseStatus.PRIVATE) {
-            throw new UnauthorizedException("Ban khong duoc truy cap vao tai nguyen nay!");
-        }
-
-        Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndCourse_Id(currentUser.getId(), courseId);
-        if (existingEnrollment != null) {
-            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.APPROVED) {
-                throw new BusinessException("Ban da tham gia khoa hoc nay!");
-            }
-            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
-                throw new BusinessException("Hay doi giao vien xet duyet yeu cau cua ban!");
-            }
-        }
-
-        Enrollment newEnrollment = Enrollment.builder()
-                .student(currentUser)
-                .course(course)
-                .progress(0)
-                .approvalStatus(EnrollmentStatus.PENDING)
-                .build();
-        enrollmentRepository.save(newEnrollment);
-
-        String message = "Sinh vien " + currentUser.getFullName() + " da yeu cau tham gia khoa hoc: " + course.getTitle();
-        notificationService.createNotification(course.getTeacher(), "Yeu cau tham gia khoa hoc", message, "ENROLLMENT_REQUEST", null, null);
-        return convertEnrollmentToDTO(newEnrollment);
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Override
@@ -194,87 +126,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         if (!userRepository.existsById(currentUser.getId())) {
             throw new ResourceNotFoundException("Khong tim thay nguoi dung");
         }
-
         if (!StringUtils.hasText(classCode)) {
             throw new BusinessException("Ma lop khong hop le");
         }
-
-        String normalizedClassCode = classCode.trim();
-
-        // Prefer class section flow (new domain model), fallback to legacy course flow for old data.
-        ClassSection classSection = classSectionRepository.findByClassCode(normalizedClassCode).orElse(null);
-        if (classSection != null) {
-            if (classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-                throw new BusinessException("Lop hoc da luu tru, khong the tham gia");
-            }
-            ensureCurrentUserIsNotClassStaff(currentUser, classSection);
-
-            Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(
-                    currentUser.getId(),
-                    classSection.getId()
-            );
-            if (existingEnrollment != null) {
-                if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.APPROVED) {
-                    throw new BusinessException("Ban da tham gia lop hoc nay!");
-                }
-                if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
-                    throw new BusinessException("Hay doi giao vien xet duyet yeu cau cua ban!");
-                }
-            }
-
-            EnrollmentStatus targetStatus = classSection.getStatus() == ClassSectionStatus.PUBLIC
-                    ? EnrollmentStatus.APPROVED
-                    : EnrollmentStatus.PENDING;
-
-            Enrollment newEnrollment = Enrollment.builder()
-                    .student(currentUser)
-                    .classSection(classSection)
-                    .progress(0)
-                    .approvalStatus(targetStatus)
-                    .build();
-            enrollmentRepository.save(newEnrollment);
-
-            if (targetStatus == EnrollmentStatus.PENDING) {
-                User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
-                if (notifyUser != null) {
-                    String message = "Sinh vien " + currentUser.getFullName()
-                            + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
-                    notificationService.createNotification(
-                            notifyUser,
-                            "Yeu cau tham gia lop hoc",
-                            message,
-                            "CLASS_SECTION_ENROLLMENT_REQUEST",
-                            null,
-                            null
-                    );
-                }
-            }
-            cacheInvalidationService.evictAllRedisReadCaches();
-            return convertEnrollmentToDTO(newEnrollment);
-        }
-
-        Course course = courseRepository.findByClassCode(normalizedClassCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
-        if (enrollmentRepository.findByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), course.getId(), EnrollmentStatus.APPROVED) != null) {
-            throw new BusinessException("Ban da tham gia khoa hoc nay!");
-        }
-        if (enrollmentRepository.findByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), course.getId(), EnrollmentStatus.PENDING) != null) {
-            throw new BusinessException("Hay doi giao vien xet duyet yeu cau cua ban");
-        }
-
-        Enrollment newEnrollment = Enrollment.builder()
-                .student(currentUser)
-                .course(course)
-                .progress(0)
-                .approvalStatus(EnrollmentStatus.PENDING)
-                .build();
-        enrollmentRepository.save(newEnrollment);
-
-        String message = "Sinh vien " + currentUser.getFullName() + " da yeu cau tham gia khoa hoc: " + course.getTitle();
-        notificationService.createNotification(course.getTeacher(), "Yeu cau tham gia khoa hoc", message, "ENROLLMENT_REQUEST", null, null);
-        return convertEnrollmentToDTO(newEnrollment);
+        return enrollClassSectionByCode(classCode);
     }
 
     @Override
@@ -282,76 +137,28 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         User currentUser = userService.getCurrentUser();
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc"));
-        ensureCurrentUserIsNotClassStaff(currentUser, classSection);
+        return enrollCurrentUserInClassSection(currentUser, classSection);
+    }
 
-        Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(currentUser.getId(), classSectionId);
-        if (existingEnrollment != null) {
-            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.APPROVED) {
-                throw new BusinessException("Ban da tham gia lop hoc nay!");
-            }
-            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
-                throw new BusinessException("Hay doi giao vien xet duyet yeu cau cua ban!");
-            }
+    @Override
+    public EnrollmentResponse enrollClassSectionByCode(String classCode) {
+        User currentUser = userService.getCurrentUser();
+        if (!userRepository.existsById(currentUser.getId())) {
+            throw new ResourceNotFoundException("Khong tim thay nguoi dung");
+        }
+        if (!StringUtils.hasText(classCode)) {
+            throw new BusinessException("Ma lop khong hop le");
         }
 
-        Enrollment newEnrollment = Enrollment.builder()
-                .student(currentUser)
-                .classSection(classSection)
-                .progress(0)
-                .approvalStatus(classSection.getStatus() == ClassSectionStatus.PUBLIC
-                        ? EnrollmentStatus.APPROVED
-                        : EnrollmentStatus.PENDING)
-                .build();
-        enrollmentRepository.save(newEnrollment);
-        cacheInvalidationService.evictAllRedisReadCaches();
-
-        if (newEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
-            User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
-            if (notifyUser != null) {
-                String message = "Sinh vien " + currentUser.getFullName() + " da yeu cau tham gia lop hoc: " + classSection.getTitle();
-                notificationService.createNotification(notifyUser, "Yeu cau tham gia lop hoc", message, "CLASS_SECTION_ENROLLMENT_REQUEST", null, null);
-            }
-        }
-
-        cacheInvalidationService.evictAllRedisReadCaches();
-        return convertEnrollmentToDTO(newEnrollment);
+        ClassSection classSection = classSectionRepository.findByClassCode(classCode.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+        return enrollCurrentUserInClassSection(currentUser, classSection);
     }
 
     @Transactional
     @Override
     public void completeLesson(Integer chapterItemId) {
-        User currentUser = userService.getCurrentUser();
-        ChapterItem chapterItem = chapterItemRepository.findById(chapterItemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Bai giang khong ton tai"));
-        Integer courseId = chapterItem.getChapter().getCourse().getId();
-
-        if (chapterItem.getType() != ItemType.LESSON) {
-            throw new BusinessException("Day khong phai la bai giang!");
-        }
-
-        boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentUser.getId(), courseId, EnrollmentStatus.APPROVED);
-        if (!isEnrolled) {
-            throw new UnauthorizedException("Ban chua dang ky hoac chua duoc duyet vao khoa hoc nay");
-        }
-
-        Progress progress = progressRepository
-                .findByStudent_IdAndChapterItem_Id(currentUser.getId(), chapterItem.getId())
-                .orElse(Progress.builder()
-                        .student(currentUser)
-                        .chapterItem(chapterItem)
-                        .isCompleted(false)
-                        .build());
-
-        if (!Boolean.TRUE.equals(progress.getIsCompleted())) {
-            progress.setIsCompleted(true);
-            progress.setCompletedAt(LocalDateTime.now());
-            progressRepository.save(progress);
-
-            if (chapterItem.getChapter() != null && chapterItem.getChapter().getCourse() != null) {
-                recalculateAndSaveProgress(currentUser.getId(), chapterItem.getChapter().getCourse().getId());
-            }
-        }
+        throw new UnsupportedOperationException("Legacy course lesson flow has been removed");
     }
 
     @Transactional
@@ -369,7 +176,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
         if (!isEnrolled) {
-            throw new UnauthorizedException("Ban chua dang ky hoac chua duoc duyet vao lop hoc nay");
+            throw new UnauthorizedException("Bạn chưa đăng ký hoặc chưa được duyệt vào lớp học này");
         }
 
         Progress progress = progressRepository
@@ -393,7 +200,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentResponse approveStudentToEnrollment(EnrollmentRequest request) {
         User currentUser = userService.getCurrentUser();
         User student = userRepository.findById(request.getStudentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay nguoi dung!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng!"));
 
         validateEnrollmentTarget(request);
         ensureStudentIsNotClassStaff(request, student);
@@ -409,8 +216,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         enrollmentRepository.save(enrollment);
         cacheInvalidationService.evictAllRedisReadCaches();
 
-        String message = "Ban da duoc phe duyet tham gia: " + resolveEnrollmentTargetTitle(enrollment);
-        notificationService.createNotification(student, "Yeu cau da duoc phe duyet", message, "ENROLLMENT", null, null);
+        String message = "Bạn đã được phê duyệt tham gia: " + resolveEnrollmentTargetTitle(enrollment);
+        notificationService.createNotification(student, "Yêu cầu đã được phê duyệt", message, "ENROLLMENT", null, null);
         return convertEnrollmentToDTO(enrollment);
     }
 
@@ -418,7 +225,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public void rejectStudentEnrollment(EnrollmentRequest request) {
         User currentUser = userService.getCurrentUser();
         User student = userRepository.findById(request.getStudentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay nguoi dung!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
         validateEnrollmentTarget(request);
         Enrollment enrollment = findEnrollment(request);
@@ -432,17 +239,13 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         String title = resolveEnrollmentTargetTitle(enrollment);
         enrollmentRepository.delete(enrollment);
         cacheInvalidationService.evictAllRedisReadCaches();
-        String message = "Yeu cau tham gia cua ban da bi tu choi: " + title;
-        notificationService.createNotification(student, "Yeu cau bi tu choi", message, "ENROLLMENT_REJECTED", null, null);
+        String message = "Yêu cầu tham gia của bạn đã bị từ chối: " + title;
+        notificationService.createNotification(student, "Yêu cầu bị từ chối", message, "ENROLLMENT_REJECTED", null, null);
     }
 
     @Override
     public PageResponse<EnrollmentResponse> getStudentsApprovedInEnrollment(Integer courseId, Pageable pageable) {
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException("Khong tim thay khoa hoc");
-        }
-        Page<Enrollment> enrollmentPage = enrollmentRepository.findByCourse_IdAndApprovalStatus(courseId, EnrollmentStatus.APPROVED, pageable);
-        return convertToPageResponse(enrollmentPage);
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     public PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, Pageable pageable) {
@@ -478,11 +281,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     public PageResponse<EnrollmentResponse> getStudentsPendingEnrollment(Integer courseId, Pageable pageable) {
-        if (!courseRepository.existsById(courseId)) {
-            throw new ResourceNotFoundException("Khong tim thay khoa hoc");
-        }
-        Page<Enrollment> enrollmentPage = enrollmentRepository.findByCourse_IdAndApprovalStatus(courseId, EnrollmentStatus.PENDING, pageable);
-        return convertToPageResponse(enrollmentPage);
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Override
@@ -507,16 +306,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     public EnrollmentResponse getCurrentUserProgressByCourse(Integer courseId) {
-        User currentStudent = userService.getCurrentUser();
-        Enrollment enrollment = enrollmentRepository.findByStudent_IdAndCourse_IdAndApprovalStatus(
-                currentStudent.getId(),
-                courseId,
-                EnrollmentStatus.APPROVED
-        );
-        if (enrollment == null) {
-            throw new UnauthorizedException("Ban khong nam trong khoa hoc nay!");
-        }
-        return convertEnrollmentToDTO(enrollment);
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Override
@@ -570,32 +360,12 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     public PageResponse<UserViewResponse> searchStudentsInCourse(Integer courseId, SearchUserRequest request, Pageable pageable) {
-        Specification<User> spec = buildBaseUserSearchSpec(request);
-        spec = spec.and(UserSpecification.hasRole(RoleType.STUDENT));
-        spec = spec.and(UserSpecification.inCourse(courseId));
-        Page<User> userPage = userRepository.findAll(spec, pageable);
-        Page<UserViewResponse> response = userPage.map(userService::convertUserViewToDTO);
-        return new PageResponse<>(
-                response.getNumber() + 1,
-                (int) response.getTotalElements(),
-                response.getTotalPages(),
-                response.getContent()
-        );
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Override
     public PageResponse<UserViewResponse> searchStudentsNotInCourse(Integer courseId, SearchUserRequest request, Pageable pageable) {
-        Specification<User> spec = buildBaseUserSearchSpec(request);
-        spec = spec.and(UserSpecification.hasRole(RoleType.STUDENT));
-        spec = spec.and(UserSpecification.notInCourse(courseId));
-        Page<User> userPage = userRepository.findAll(spec, pageable);
-        Page<UserViewResponse> response = userPage.map(userService::convertUserViewToDTO);
-        return new PageResponse<>(
-                response.getNumber() + 1,
-                (int) response.getTotalElements(),
-                response.getTotalPages(),
-                response.getContent()
-        );
+        throw new UnsupportedOperationException("Legacy course enrollment flow has been removed");
     }
 
     @Override
@@ -615,30 +385,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
 
     @Override
     public void recalculateAndSaveProgress(Integer studentId, Integer courseId) {
-        Enrollment enrollment = enrollmentRepository.findByStudent_IdAndCourse_IdAndApprovalStatus(
-                studentId,
-                courseId,
-                EnrollmentStatus.APPROVED
-        );
-        if (enrollment == null) {
-            return;
-        }
-
-        long totalItems = chapterItemRepository.countTotalItemsByCourseId(courseId);
-        if (totalItems == 0) {
-            enrollment.setProgress(0);
-            enrollmentRepository.save(enrollment);
-            return;
-        }
-
-        long completedItems = progressRepository.countCompletedItemsByStudentAndCourse(studentId, courseId);
-        int percent = (int) Math.round(((double) completedItems / totalItems) * 100);
-        if (percent > 100) {
-            percent = 100;
-        }
-
-        enrollment.setProgress(percent);
-        enrollmentRepository.save(enrollment);
+        // Legacy course-based progress recalculation has been retired.
+        // Keep this method as a no-op for backward compatibility with any
+        // remaining internal legacy calls.
     }
 
     @Override
@@ -742,8 +491,58 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         return convertEnrollmentToDTO(enrollment, true);
     }
 
+    private EnrollmentResponse enrollCurrentUserInClassSection(User currentUser, ClassSection classSection) {
+        if (classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
+            throw new BusinessException("Lớp học đã được lưu trữ, bạn không thể tham gia!");
+        }
+        ensureCurrentUserIsNotClassStaff(currentUser, classSection);
+
+        Enrollment existingEnrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(
+                currentUser.getId(),
+                classSection.getId()
+        );
+        if (existingEnrollment != null) {
+            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.APPROVED) {
+                throw new BusinessException("Bạn đã tham gia lớp học này!");
+            }
+            if (existingEnrollment.getApprovalStatus() == EnrollmentStatus.PENDING) {
+                throw new BusinessException("Hãy đợi giảng viên xét duyet yêu cầu của bạn!");
+            }
+        }
+
+        EnrollmentStatus targetStatus = classSection.getStatus() == ClassSectionStatus.PUBLIC
+                ? EnrollmentStatus.APPROVED
+                : EnrollmentStatus.PENDING;
+
+        Enrollment newEnrollment = Enrollment.builder()
+                .student(currentUser)
+                .classSection(classSection)
+                .progress(0)
+                .approvalStatus(targetStatus)
+                .build();
+        enrollmentRepository.save(newEnrollment);
+
+        if (targetStatus == EnrollmentStatus.PENDING) {
+            User notifyUser = classMemberAuthorizationService.resolvePrimaryTeacher(classSection);
+            if (notifyUser != null) {
+                String message = "Người học " + currentUser.getFullName()
+                        + " đã yêu cầu tham gia lớp học: " + classSection.getTitle();
+                notificationService.createNotification(
+                        notifyUser,
+                        "Yêu cầu tham gia lớp học",
+                        message,
+                        "CLASS_SECTION_ENROLLMENT_REQUEST",
+                        null,
+                        null
+                );
+            }
+        }
+
+        cacheInvalidationService.evictAllRedisReadCaches();
+        return convertEnrollmentToDTO(newEnrollment);
+    }
+
     private EnrollmentResponse convertEnrollmentToDTO(Enrollment enrollment, boolean includeProgress) {
-        Course course = enrollment.getCourse();
         ClassSection classSection = enrollment.getClassSection();
 
         return EnrollmentResponse.builder()
@@ -754,9 +553,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .studentNumber(enrollment.getStudent() != null ? enrollment.getStudent().getStudentNumber() : null)
                 .email(enrollment.getStudent() != null ? enrollment.getStudent().getGmail() : null)
                 .studentAvatar(enrollment.getStudent() != null ? enrollment.getStudent().getImageUrl() : null)
-                .courseTitle(course != null ? course.getTitle() : null)
-                .courseCode(course != null ? course.getClassCode() : null)
-                .courseId(course != null ? course.getId() : null)
+                .courseTitle(null)
+                .courseCode(null)
+                .courseId(enrollment.getCourseId())
                 .classSectionTitle(classSection != null ? classSection.getTitle() : null)
                 .classSectionCode(classSection != null ? classSection.getClassCode() : null)
                 .classSectionId(classSection != null ? classSection.getId() : null)
@@ -792,10 +591,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private void validateEnrollmentTarget(EnrollmentRequest request) {
-        boolean hasCourse = request.getCourseId() != null;
-        boolean hasClassSection = request.getClassSectionId() != null;
-        if (hasCourse == hasClassSection) {
-            throw new BusinessException("Chi duoc truyen mot trong hai truong: courseId hoac classSectionId");
+        if (request.getClassSectionId() == null) {
+            throw new BusinessException("Class section id is required");
         }
     }
 
@@ -836,13 +633,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private Enrollment findPendingEnrollment(EnrollmentRequest request) {
-        if (request.getCourseId() != null) {
-            return enrollmentRepository.findByStudent_IdAndCourse_IdAndApprovalStatus(
-                    request.getStudentId(),
-                    request.getCourseId(),
-                    EnrollmentStatus.PENDING
-            );
-        }
         return enrollmentRepository.findByStudent_IdAndClassSection_IdAndApprovalStatus(
                 request.getStudentId(),
                 request.getClassSectionId(),
@@ -851,12 +641,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private Enrollment findEnrollment(EnrollmentRequest request) {
-        if (request.getCourseId() != null) {
-            return enrollmentRepository.findByStudent_IdAndCourse_Id(
-                    request.getStudentId(),
-                    request.getCourseId()
-            );
-        }
         return enrollmentRepository.findByStudent_IdAndClassSection_Id(
                 request.getStudentId(),
                 request.getClassSectionId()
@@ -868,11 +652,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return true;
         }
 
-        Course course = enrollment.getCourse();
-        if (course != null && course.getTeacher() != null && course.getTeacher().getId().equals(currentUser.getId())) {
-            return true;
-        }
-
         ClassSection classSection = enrollment.getClassSection();
         if (classSection == null) {
             return false;
@@ -881,9 +660,6 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     }
 
     private String resolveEnrollmentTargetTitle(Enrollment enrollment) {
-        if (enrollment.getCourse() != null) {
-            return enrollment.getCourse().getTitle();
-        }
         if (enrollment.getClassSection() != null) {
             return enrollment.getClassSection().getTitle();
         }

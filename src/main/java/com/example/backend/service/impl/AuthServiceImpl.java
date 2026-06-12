@@ -8,7 +8,6 @@ import com.example.backend.entity.User;
 import com.example.backend.exception.AccountLockedException;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
-import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.AuthService;
 import com.example.backend.service.OtpService;
@@ -24,11 +23,12 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -100,20 +100,33 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse refreshToken(String oldRefreshToken) {
-        // 1. Decode token
-        Jwt decodeToken = securityUtil.checkValidRefreshToken(oldRefreshToken);
+        if (!StringUtils.hasText(oldRefreshToken)) {
+            throw new BadCredentialsException("Missing refresh token");
+        }
+
+        Jwt decodeToken;
+        try {
+            decodeToken = securityUtil.checkValidRefreshToken(oldRefreshToken);
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new BadCredentialsException("Invalid refresh token", e);
+        }
 
         // 2. Lấy userId từ subject
-        Integer userId = Integer.valueOf(decodeToken.getSubject());
+        Integer userId;
+        try {
+            userId = Integer.valueOf(decodeToken.getSubject());
+        } catch (NumberFormatException e) {
+            throw new BadCredentialsException("Invalid refresh token", e);
+        }
 
         // 3. Tìm user theo ID
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UnauthorizedException("User not found"));
+                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
         ensureAccountActive(user);
 
         // 4. So sánh refresh token trong DB
         if (user.getRefreshToken() == null || !user.getRefreshToken().equals(oldRefreshToken)) {
-            throw new UnauthorizedException("Invalid refresh token");
+            throw new BadCredentialsException("Invalid refresh token");
         }
 
         // 5. Build response

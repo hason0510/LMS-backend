@@ -5,7 +5,6 @@ import com.example.backend.constant.GradingStatus;
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.User;
-import com.example.backend.entity.old.ChapterItem;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -58,9 +57,8 @@ public class QuizAttempt extends BaseEntity {
     @JoinColumn(name = "student_id")
     private User student;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chapter_item_id")
-    private ChapterItem chapterItem;
+    @Column(name = "chapter_item_id")
+    private Integer chapterItemId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_content_item_id")

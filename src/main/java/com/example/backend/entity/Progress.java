@@ -1,6 +1,5 @@
 package com.example.backend.entity;
 
-import com.example.backend.entity.old.ChapterItem;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,8 +20,8 @@ public class Progress {
     @ManyToOne
     private User student;
 
-    @ManyToOne
-    private ChapterItem chapterItem;
+    @Column(name = "chapter_item_id")
+    private Integer chapterItemId;
 
     @ManyToOne
     @JoinColumn(name = "class_content_item_id")

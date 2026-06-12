@@ -78,7 +78,7 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class QuestionBankServiceImpl implements QuestionBankService {
-    private static final Pattern AIKEN_OPTION_PATTERN = Pattern.compile("^([A-Z])\\.\\s+(.+)$");
+    private static final Pattern AIKEN_OPTION_PATTERN = Pattern.compile("^([A-Z])[.)]\\s+(.+)$");
     private static final Pattern AIKEN_ANSWER_PATTERN = Pattern.compile("^ANSWER\\s*:\\s*([A-Z])\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern GIFT_TAG_METADATA_PATTERN = Pattern.compile("\\[tag:(.+?)]", Pattern.CASE_INSENSITIVE);
 
@@ -249,10 +249,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 question = new BankQuestion();
                 question.setQuestionBank(questionBank);
                 question.setContent(parsed.content());
+                question.setExplanation(parsed.explanation());
                 question.setType(parsed.type());
                 question.setDefaultPoints(BigDecimal.ONE);
                 question.setDifficultyLevel(tagResolution.difficultyLevel());
                 question.setOptions(parsed.options());
+                question.setInteractionItems(parsed.interactionItems());
 
                 if (question.getOptions() != null) {
                     for (BankQuestionOption option : question.getOptions()) {
@@ -260,11 +262,20 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                     }
                     question.getOptions().sort(Comparator.comparing(BankQuestionOption::getOrderIndex));
                 }
+                if (question.getInteractionItems() != null) {
+                    for (QuestionInteractionItem item : question.getInteractionItems()) {
+                        item.setBankQuestion(question);
+                    }
+                    question.getInteractionItems().sort(Comparator.comparing(QuestionInteractionItem::getOrderIndex));
+                }
 
                 question = bankQuestionRepository.save(question);
                 syncQuestionTags(question, tagResolution.tagNames(), currentRole, true);
                 if (tagResolution.hasMultipleDifficultyTags()) {
                     warnings.add("Question #" + questionNumber + ": multiple difficulty tags found; using last one");
+                }
+                for (String parsedWarning : parsed.warnings()) {
+                    warnings.add("Question #" + questionNumber + ": " + parsedWarning);
                 }
                 importedCount++;
             } catch (BusinessException ex) {
@@ -481,9 +492,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         String questionPart = cleanedBlock.substring(0, openBrace).trim();
         String trailingPart = cleanedBlock.substring(closeBrace + 1).trim();
         if (StringUtils.hasText(trailingPart)) {
-            // Missing-word style keeps text after answer block. This requires a dedicated format
-            // not represented in current QuestionType, so we skip it for now.
-            throw new BusinessException("Unsupported GIFT type: missing-word sentence format");
+            return parseGiftClozeQuestion(cleanedBlock);
         }
 
         String content = extractQuestionContent(questionPart);
@@ -492,28 +501,27 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
 
         String answerBlock = cleanedBlock.substring(openBrace + 1, closeBrace).trim();
+        ParsedGiftAnswerBlock parsedAnswerBlock = parseGiftAnswerBlock(answerBlock);
 
-        String normalizedAnswer = answerBlock.toUpperCase(Locale.ROOT);
+        String normalizedAnswer = parsedAnswerBlock.rawAnswerSection().toUpperCase(Locale.ROOT);
         if ("T".equals(normalizedAnswer) || "TRUE".equals(normalizedAnswer)
                 || "F".equals(normalizedAnswer) || "FALSE".equals(normalizedAnswer)) {
-            // True/False is not a dedicated enum in current schema.
-            // We map it to SINGLE_CHOICE with 2 options to keep compatibility.
             boolean isTrueCorrect = "T".equals(normalizedAnswer) || "TRUE".equals(normalizedAnswer);
             List<BankQuestionOption> options = new ArrayList<>();
-            options.add(buildOption("True", isTrueCorrect, 1));
-            options.add(buildOption("False", !isTrueCorrect, 2));
-            return new ParsedGiftQuestion(content, QuestionType.SINGLE_CHOICE, options);
+            options.add(buildOption("True", isTrueCorrect, 1, null));
+            options.add(buildOption("False", !isTrueCorrect, 2, null));
+            return ParsedGiftQuestion.forOptions(content, QuestionType.TRUE_FALSE, parsedAnswerBlock.generalFeedback(), options);
         }
 
         if (!StringUtils.hasText(answerBlock)) {
-            throw new BusinessException("Unsupported GIFT essay '{}' without short-answer key");
+            return ParsedGiftQuestion.forOptions(content, QuestionType.ESSAY, null, List.of());
         }
         if (answerBlock.startsWith("#")) {
             // Numerical questions require dedicated model + scoring logic.
             throw new BusinessException("Unsupported GIFT type: numerical");
         }
 
-        List<GiftAnswerToken> tokens = parseGiftAnswerTokens(answerBlock);
+        List<GiftAnswerToken> tokens = new ArrayList<>(parsedAnswerBlock.tokens());
         if (tokens.isEmpty()) {
             // GIFT short answer can omit '=' for a single answer.
             tokens.add(toGiftAnswerToken('=', answerBlock));
@@ -522,8 +530,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         boolean hasMatchingSyntax = tokens.stream()
                 .anyMatch(token -> StringUtils.hasText(token.content()) && token.content().contains("->"));
         if (hasMatchingSyntax) {
-            // Matching questions need pairwise answer model; current QuestionType does not support it.
-            throw new BusinessException("Unsupported GIFT type: matching");
+            return parseGiftMatchingQuestion(content, parsedAnswerBlock.generalFeedback(), tokens);
         }
 
         int correctCount = (int) tokens.stream().filter(GiftAnswerToken::correct).count();
@@ -531,8 +538,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             throw new BusinessException("Question must have at least one correct answer");
         }
 
-        boolean hasIncorrect = tokens.stream().anyMatch(token -> !token.correct());
-        QuestionType questionType = hasIncorrect
+        boolean hasChoiceSyntax = tokens.stream().anyMatch(token -> token.marker() == '~');
+        QuestionType questionType = hasChoiceSyntax
                 ? (correctCount == 1 ? QuestionType.SINGLE_CHOICE : QuestionType.MULTIPLE_CHOICE)
                 : QuestionType.SHORT_ANSWER;
 
@@ -542,13 +549,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             if (questionType == QuestionType.SHORT_ANSWER && !token.correct()) {
                 continue;
             }
-            options.add(buildOption(token.content(), token.correct(), orderIndex++));
+            options.add(buildOption(token.content(), token.correct(), orderIndex++, token.feedback()));
         }
 
         if (options.isEmpty()) {
             throw new BusinessException("No valid options parsed from GIFT block");
         }
-        return new ParsedGiftQuestion(content, questionType, options);
+        return ParsedGiftQuestion.forOptions(content, questionType, parsedAnswerBlock.generalFeedback(), options);
     }
 
     private ParsedGiftQuestion parseAikenBlock(String block) {
@@ -642,10 +649,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         List<BankQuestionOption> options = new ArrayList<>();
         int orderIndex = 1;
         for (AikenOptionLine parsedOption : parsedOptions) {
-            options.add(buildOption(parsedOption.content(), parsedOption.letter() == resolvedAnswerLetter, orderIndex++));
+            options.add(buildOption(parsedOption.content(), parsedOption.letter() == resolvedAnswerLetter, orderIndex++, null));
         }
 
-        return new ParsedGiftQuestion(content, QuestionType.SINGLE_CHOICE, options);
+        return ParsedGiftQuestion.forOptions(content, QuestionType.SINGLE_CHOICE, null, options);
     }
 
     private List<GiftAnswerToken> parseGiftAnswerTokens(String answerBlock) {
@@ -687,6 +694,20 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         return tokens;
     }
 
+    private ParsedGiftAnswerBlock parseGiftAnswerBlock(String answerBlock) {
+        if (answerBlock == null) {
+            return new ParsedGiftAnswerBlock(List.of(), null, "");
+        }
+        int generalFeedbackIndex = findUnescapedSequence(answerBlock, "####");
+        String tokenSection = generalFeedbackIndex >= 0
+                ? answerBlock.substring(0, generalFeedbackIndex).trim()
+                : answerBlock.trim();
+        String generalFeedback = generalFeedbackIndex >= 0
+                ? unescapeGiftText(answerBlock.substring(generalFeedbackIndex + 4).trim())
+                : null;
+        return new ParsedGiftAnswerBlock(parseGiftAnswerTokens(tokenSection), generalFeedback, tokenSection);
+    }
+
     private GiftAnswerToken toGiftAnswerToken(char marker, String rawPayload) {
         String payload = rawPayload == null ? "" : rawPayload.trim();
         Integer weight = null;
@@ -704,7 +725,9 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         }
 
         int feedbackIndex = findFirstUnescaped(payload, '#');
+        String feedback = null;
         if (feedbackIndex >= 0) {
+            feedback = unescapeGiftText(payload.substring(feedbackIndex + 1).trim());
             payload = payload.substring(0, feedbackIndex).trim();
         }
 
@@ -719,14 +742,19 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         } else {
             isCorrect = weight != null && weight > 0;
         }
-        return new GiftAnswerToken(content, isCorrect);
+        return new GiftAnswerToken(marker, content, isCorrect, feedback);
     }
 
     private BankQuestionOption buildOption(String content, boolean isCorrect, int orderIndex) {
+        return buildOption(content, isCorrect, orderIndex, null);
+    }
+
+    private BankQuestionOption buildOption(String content, boolean isCorrect, int orderIndex, String explanation) {
         BankQuestionOption option = new BankQuestionOption();
         option.setContent(content.trim());
         option.setIsCorrect(isCorrect);
         option.setOrderIndex(orderIndex);
+        option.setExplanation(StringUtils.hasText(explanation) ? explanation.trim() : null);
         return option;
     }
 
@@ -785,6 +813,18 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         return -1;
     }
 
+    private int findUnescapedSequence(String text, String target) {
+        if (!StringUtils.hasText(text) || !StringUtils.hasText(target) || target.length() > text.length()) {
+            return -1;
+        }
+        for (int i = 0; i <= text.length() - target.length(); i++) {
+            if (text.startsWith(target, i) && !isEscaped(text, i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private boolean isEscaped(String text, int index) {
         int slashCount = 0;
         int cursor = index - 1;
@@ -796,6 +836,11 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private String unescapeGiftText(String value) {
+        String unescaped = unescapeGiftTextPreserveWhitespace(value);
+        return unescaped == null ? null : unescaped.trim();
+    }
+
+    private String unescapeGiftTextPreserveWhitespace(String value) {
         if (value == null) {
             return null;
         }
@@ -817,10 +862,287 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (escaped) {
             out.append('\\');
         }
-        return out.toString().trim();
+        return out.toString();
     }
 
-    private record ParsedGiftQuestion(String content, QuestionType type, List<BankQuestionOption> options) {
+    private ParsedGiftQuestion parseGiftMatchingQuestion(
+            String content,
+            String explanation,
+            List<GiftAnswerToken> tokens
+    ) {
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        int orderIndex = 1;
+
+        for (GiftAnswerToken token : tokens) {
+            if (token.marker() != '=') {
+                throw new BusinessException("GIFT matching pairs must use '=' marker");
+            }
+            int arrowIndex = token.content().indexOf("->");
+            if (arrowIndex < 0) {
+                throw new BusinessException("GIFT matching pair is missing '->'");
+            }
+            String promptContent = token.content().substring(0, arrowIndex).trim();
+            String matchContent = token.content().substring(arrowIndex + 2).trim();
+            if (!StringUtils.hasText(promptContent) || !StringUtils.hasText(matchContent)) {
+                throw new BusinessException("GIFT matching prompt and match must not be blank");
+            }
+
+            String matchKey = "match-" + orderIndex;
+
+            QuestionInteractionItem prompt = new QuestionInteractionItem();
+            prompt.setContent(promptContent);
+            prompt.setItemKey("prompt-" + orderIndex);
+            prompt.setRole(QuestionInteractionItemRole.PROMPT);
+            prompt.setCorrectMatchKey(matchKey);
+            prompt.setOrderIndex(orderIndex);
+            items.add(prompt);
+
+            QuestionInteractionItem match = new QuestionInteractionItem();
+            match.setContent(matchContent);
+            match.setItemKey(matchKey);
+            match.setRole(QuestionInteractionItemRole.MATCH);
+            match.setOrderIndex(orderIndex);
+            items.add(match);
+
+            if (StringUtils.hasText(token.feedback())) {
+                warnings.add("matching feedback is ignored for pair " + orderIndex);
+            }
+            orderIndex++;
+        }
+
+        if (items.isEmpty()) {
+            throw new BusinessException("No valid matching pairs parsed from GIFT block");
+        }
+        return ParsedGiftQuestion.forInteraction(content, QuestionType.MATCHING, explanation, items, warnings);
+    }
+
+    private ParsedGiftQuestion parseGiftClozeQuestion(String block) {
+        String body = stripQuestionTitlePrefix(block);
+        if (!StringUtils.hasText(body)) {
+            throw new BusinessException("Question content is empty");
+        }
+
+        StringBuilder renderedContent = new StringBuilder();
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        String explanation = null;
+        int cursor = 0;
+        int blankIndex = 1;
+
+        while (cursor < body.length()) {
+            int openBrace = findFirstUnescaped(body.substring(cursor), '{');
+            if (openBrace < 0) {
+                renderedContent.append(unescapeGiftTextPreserveWhitespace(body.substring(cursor)));
+                break;
+            }
+            openBrace += cursor;
+            int closeBrace = findClosingBrace(body, openBrace);
+            if (closeBrace < 0) {
+                throw new BusinessException("GIFT question has unclosed answer block");
+            }
+
+            renderedContent.append(unescapeGiftTextPreserveWhitespace(body.substring(cursor, openBrace)));
+
+            InlineClozeBlank blank = parseInlineClozeBlank(body.substring(openBrace + 1, closeBrace).trim(), blankIndex);
+            items.add(blank.item());
+            renderedContent.append(blank.token());
+            warnings.addAll(blank.warnings());
+            if (StringUtils.hasText(blank.explanation())) {
+                if (!StringUtils.hasText(explanation)) {
+                    explanation = blank.explanation();
+                } else if (!explanation.equals(blank.explanation())) {
+                    warnings.add("multiple cloze general feedback sections found; keeping the first one");
+                }
+            }
+
+            cursor = closeBrace + 1;
+            blankIndex++;
+        }
+
+        if (items.isEmpty()) {
+            throw new BusinessException("CLOZE requires at least one blank item");
+        }
+
+        String content = renderedContent.toString().trim();
+        if (!StringUtils.hasText(content)) {
+            throw new BusinessException("Question content is empty");
+        }
+        return ParsedGiftQuestion.forInteraction(content, QuestionType.CLOZE, explanation, items, warnings);
+    }
+
+    private InlineClozeBlank parseInlineClozeBlank(String rawAnswerBlock, int blankIndex) {
+        if (!StringUtils.hasText(rawAnswerBlock)) {
+            throw new BusinessException("Unsupported inline GIFT essay blank");
+        }
+        String normalizedAnswer = rawAnswerBlock.toUpperCase(Locale.ROOT);
+        if ("T".equals(normalizedAnswer) || "TRUE".equals(normalizedAnswer)
+                || "F".equals(normalizedAnswer) || "FALSE".equals(normalizedAnswer)) {
+            throw new BusinessException("Unsupported GIFT type: true/false inside cloze sentence");
+        }
+        if (rawAnswerBlock.startsWith("#")) {
+            throw new BusinessException("Unsupported GIFT type: numerical cloze blank");
+        }
+
+        ParsedGiftAnswerBlock parsedAnswerBlock = parseGiftAnswerBlock(rawAnswerBlock);
+        List<GiftAnswerToken> tokens = new ArrayList<>(parsedAnswerBlock.tokens());
+        if (tokens.isEmpty()) {
+            tokens.add(toGiftAnswerToken('=', rawAnswerBlock));
+        }
+        if (tokens.stream().anyMatch(token -> StringUtils.hasText(token.content()) && token.content().contains("->"))) {
+            throw new BusinessException("Unsupported GIFT type: matching inside cloze sentence");
+        }
+
+        List<GiftAnswerToken> correctTokens = tokens.stream()
+                .filter(GiftAnswerToken::correct)
+                .toList();
+        if (correctTokens.isEmpty()) {
+            throw new BusinessException("CLOZE blank must have at least one correct answer");
+        }
+
+        boolean hasChoiceSyntax = tokens.stream().anyMatch(token -> token.marker() == '~');
+        List<String> warnings = new ArrayList<>();
+        if (tokens.stream().anyMatch(token -> StringUtils.hasText(token.feedback()))) {
+            warnings.add("cloze option feedback is ignored for blank " + blankIndex);
+        }
+
+        QuestionInteractionItem item = new QuestionInteractionItem();
+        item.setRole(QuestionInteractionItemRole.BLANK);
+        item.setBlankIndex(blankIndex);
+        item.setItemKey("blank-" + blankIndex);
+        item.setOrderIndex(blankIndex);
+
+        if (hasChoiceSyntax && correctTokens.size() == 1) {
+            List<String> options = uniquePreservingOrder(tokens.stream().map(GiftAnswerToken::content).toList());
+            String correctAnswer = correctTokens.get(0).content();
+            item.setContent(correctAnswer);
+            item.setAcceptedAnswers(joinAcceptedAnswers(List.of(correctAnswer)));
+            item.setBlankType("SELECT");
+            item.setBlankOptions(toJsonArray(options));
+            return new InlineClozeBlank(
+                    item,
+                    buildClozeToken(correctAnswer, options.stream().filter(option -> !option.equalsIgnoreCase(correctAnswer)).toList()),
+                    parsedAnswerBlock.generalFeedback(),
+                    warnings
+            );
+        }
+
+        if (hasChoiceSyntax && correctTokens.size() > 1) {
+            warnings.add("multiple correct cloze choices imported as text input for blank " + blankIndex);
+        }
+
+        List<String> acceptedAnswers = uniquePreservingOrder(correctTokens.stream()
+                .map(GiftAnswerToken::content)
+                .toList());
+        String primaryAnswer = acceptedAnswers.get(0);
+        item.setContent(primaryAnswer);
+        item.setAcceptedAnswers(joinAcceptedAnswers(acceptedAnswers));
+        item.setBlankType("TEXT_INPUT");
+        item.setBlankOptions(null);
+        return new InlineClozeBlank(item, buildClozeToken(primaryAnswer, List.of()), parsedAnswerBlock.generalFeedback(), warnings);
+    }
+
+    private String buildClozeToken(String primaryAnswer, List<String> options) {
+        StringBuilder token = new StringBuilder("[[");
+        token.append(primaryAnswer);
+        for (String option : options) {
+            token.append('|').append(option);
+        }
+        token.append("]]");
+        return token.toString();
+    }
+
+    private List<String> uniquePreservingOrder(List<String> values) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<String> unique = new ArrayList<>();
+        for (String value : values) {
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            String trimmed = value.trim();
+            String key = trimmed.toLowerCase(Locale.ROOT);
+            if (seen.add(key)) {
+                unique.add(trimmed);
+            }
+        }
+        return unique;
+    }
+
+    private String toJsonArray(List<String> values) {
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append('"').append(escapeJson(values.get(i))).append('"');
+        }
+        builder.append(']');
+        return builder.toString();
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n")
+                .replace("\t", "\\t");
+    }
+
+    private String stripQuestionTitlePrefix(String text) {
+        String content = text == null ? "" : text.trim();
+        if (content.startsWith("::")) {
+            int secondMarker = content.indexOf("::", 2);
+            if (secondMarker > 1) {
+                return content.substring(secondMarker + 2).trim();
+            }
+        }
+        return content;
+    }
+
+    private record ParsedGiftQuestion(
+            String content,
+            QuestionType type,
+            String explanation,
+            List<BankQuestionOption> options,
+            List<QuestionInteractionItem> interactionItems,
+            List<String> warnings
+    ) {
+        private static ParsedGiftQuestion forOptions(
+                String content,
+                QuestionType type,
+                String explanation,
+                List<BankQuestionOption> options
+        ) {
+            return new ParsedGiftQuestion(
+                    content,
+                    type,
+                    explanation,
+                    options != null ? options : new ArrayList<>(),
+                    new ArrayList<>(),
+                    List.of()
+            );
+        }
+
+        private static ParsedGiftQuestion forInteraction(
+                String content,
+                QuestionType type,
+                String explanation,
+                List<QuestionInteractionItem> interactionItems,
+                List<String> warnings
+        ) {
+            return new ParsedGiftQuestion(
+                    content,
+                    type,
+                    explanation,
+                    new ArrayList<>(),
+                    interactionItems != null ? interactionItems : new ArrayList<>(),
+                    warnings != null ? warnings : List.of()
+            );
+        }
     }
 
     private record TagResolutionResult(
@@ -830,10 +1152,21 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     ) {
     }
 
-    private record GiftAnswerToken(String content, boolean correct) {
+    private record ParsedGiftAnswerBlock(List<GiftAnswerToken> tokens, String generalFeedback, String rawAnswerSection) {
+    }
+
+    private record GiftAnswerToken(char marker, String content, boolean correct, String feedback) {
     }
 
     private record AikenOptionLine(char letter, String content) {
+    }
+
+    private record InlineClozeBlank(
+            QuestionInteractionItem item,
+            String token,
+            String explanation,
+            List<String> warnings
+    ) {
     }
 
     //END OF TODO
