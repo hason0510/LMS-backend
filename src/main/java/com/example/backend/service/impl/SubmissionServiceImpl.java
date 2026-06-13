@@ -76,10 +76,10 @@ public class SubmissionServiceImpl implements SubmissionService {
         ensureStudentEnrollment(currentUser, classSection.getId());
 
         LocalDateTime now = LocalDateTime.now();
-        boolean lateSubmission = isLateSubmission(assignment, now);
-        if (lateSubmission && !assignment.isAllowLateSubmission()) {
-            throw new BusinessException("Late submission is not allowed for this assignment");
+        if (isSubmissionClosed(assignment, now)) {
+            throw new BusinessException("Đã quá thời gian nộp bài!");
         }
+        boolean lateSubmission = isLateSubmission(assignment, now);
 
         Submission submission = submissionRepository.findByAssignment_IdAndClassSection_IdAndStudent_Id(
                         assignment.getId(),
@@ -452,15 +452,12 @@ public class SubmissionServiceImpl implements SubmissionService {
         return assignment.getDueAt() != null && submittedAt.isAfter(assignment.getDueAt());
     }
 
+    private boolean isSubmissionClosed(Assignment assignment, LocalDateTime now) {
+        return assignment.getCloseAt() != null && now.isAfter(assignment.getCloseAt());
+    }
+
     private boolean canResubmit(Assignment assignment) {
-        LocalDateTime now = LocalDateTime.now();
-        if (assignment.getCloseAt() != null && now.isAfter(assignment.getCloseAt())) {
-            return false;
-        }
-        if (assignment.getDueAt() == null) {
-            return true;
-        }
-        return !now.isAfter(assignment.getDueAt()) || assignment.isAllowLateSubmission();
+        return !isSubmissionClosed(assignment, LocalDateTime.now());
     }
 
     private SubmissionResponse convertToResponse(Submission submission) {

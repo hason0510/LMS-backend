@@ -20,7 +20,6 @@ public class StudentAssignmentFeedResponse {
     private LocalDateTime dueAt;
     private LocalDateTime closeAt;
     private Integer maxScore;
-    private Boolean allowLateSubmission;
     private SubmissionStatus submissionStatus;
     private LocalDateTime submissionTime;
     private Integer grade;
@@ -28,4 +27,3 @@ public class StudentAssignmentFeedResponse {
     private boolean pastDue;
     private boolean upcoming;
 }
-

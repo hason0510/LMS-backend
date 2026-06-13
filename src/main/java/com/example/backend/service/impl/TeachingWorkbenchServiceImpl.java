@@ -31,9 +31,11 @@ import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ClassSectionService;
 import com.example.backend.service.TeachingWorkbenchService;
 import com.example.backend.service.UserService;
+import com.example.backend.specification.QuizAttemptSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -230,17 +232,15 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
             User currentUser,
             ClassSection classSection
     ) {
-        Integer teacherId = currentUser.getRole().getRoleName() == RoleType.ADMIN ? null : currentUser.getId();
-        List<QuizAttempt> attempts = quizAttemptRepository.searchManagedAttempts(
-                List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED),
-                classSection.getId(),
-                teacherId,
-                List.of(ClassMemberRole.TEACHER, ClassMemberRole.TA),
-                null,
-                "PENDING",
-                GradingStatus.NEEDS_REVIEW,
-                Pageable.unpaged()
-        ).getContent();
+        Specification<QuizAttempt> specification = Specification
+                .where(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
+                .and(QuizAttemptSpecification.hasClassSectionId(classSection.getId()))
+                .and(QuizAttemptSpecification.accessibleFor(
+                        currentUser,
+                        List.of(ClassMemberRole.TEACHER, ClassMemberRole.TA)
+                ))
+                .and(QuizAttemptSpecification.hasManagedResult("PENDING", GradingStatus.NEEDS_REVIEW));
+        List<QuizAttempt> attempts = quizAttemptRepository.findAll(specification, Pageable.unpaged()).getContent();
 
         for (QuizAttempt attempt : attempts) {
             if (attempt.getStudent() == null) {

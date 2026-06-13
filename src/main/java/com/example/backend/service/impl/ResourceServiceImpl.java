@@ -39,6 +39,7 @@ import com.example.backend.service.UserService;
 import com.example.backend.specification.ResourceSpecification;
 import com.example.backend.utils.FileUploadUtil;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.io.FilenameUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -780,12 +781,78 @@ public class ResourceServiceImpl implements ResourceService {
         response.setFileUrl(normalizedFileUrl);
         response.setHlsUrl(resource.getHlsUrl());
         response.setMimeType(resource.getMimeType());
+        response.setFileType(resolveFileType(resource.getTitle(), normalizedFileUrl, resource.getMimeType(), normalizedType, normalizedSource));
         response.setFileSize(resource.getFileSize());
         response.setLessonId(resource.getLesson() != null ? resource.getLesson().getId() : null);
         response.setLessonTitle(resource.getLesson() != null ? resource.getLesson().getTitle() : null);
         response.setAssignmentId(resource.getAssignment() != null ? resource.getAssignment().getId() : null);
         response.setSubmissionId(resource.getSubmission() != null ? resource.getSubmission().getId() : null);
         return response;
+    }
+
+    private String resolveFileType(
+            String title,
+            String fileUrl,
+            String mimeType,
+            ResourceType type,
+            ResourceSource source
+    ) {
+        if (type == ResourceType.LINK || source == ResourceSource.LINK || source == ResourceSource.EMBED) {
+            return "LINK";
+        }
+
+        String extension = resolveExtension(title);
+        if (!StringUtils.hasText(extension)) {
+            extension = resolveExtension(fileUrl);
+        }
+        if (StringUtils.hasText(extension)) {
+            return extension.toUpperCase(Locale.ROOT);
+        }
+
+        String normalizedMime = mimeType != null ? mimeType.trim().toLowerCase(Locale.ROOT) : "";
+        if (StringUtils.hasText(normalizedMime)) {
+            return switch (normalizedMime) {
+                case "application/pdf" -> "PDF";
+                case "application/msword" -> "DOC";
+                case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "DOCX";
+                case "application/vnd.ms-powerpoint" -> "PPT";
+                case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "PPTX";
+                case "application/vnd.ms-excel" -> "XLS";
+                case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "XLSX";
+                case "text/plain" -> "TXT";
+                default -> {
+                    int slashIndex = normalizedMime.indexOf('/');
+                    if (slashIndex >= 0 && slashIndex < normalizedMime.length() - 1) {
+                        String subtype = normalizedMime.substring(slashIndex + 1);
+                        int suffixIndex = subtype.indexOf('+');
+                        if (suffixIndex > 0) {
+                            subtype = subtype.substring(0, suffixIndex);
+                        }
+                        yield subtype.toUpperCase(Locale.ROOT);
+                    }
+                    yield normalizedMime.toUpperCase(Locale.ROOT);
+                }
+            };
+        }
+
+        return type != null ? type.name() : "FILE";
+    }
+
+    private String resolveExtension(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        int fragmentIndex = normalized.indexOf('#');
+        if (fragmentIndex >= 0) {
+            normalized = normalized.substring(0, fragmentIndex);
+        }
+        String extension = FilenameUtils.getExtension(normalized);
+        return StringUtils.hasText(extension) ? extension : null;
     }
 
     private String resolveScopeTargetName(ResourceScopeType scopeType, Integer scopeId) {

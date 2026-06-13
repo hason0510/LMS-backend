@@ -234,7 +234,6 @@ public class AssignmentServiceImpl implements AssignmentService {
             response.setDueAt(assignment.getDueAt());
             response.setCloseAt(assignment.getCloseAt());
             response.setMaxScore(assignment.getMaxScore());
-            response.setAllowLateSubmission(assignment.isAllowLateSubmission());
             response.setSubmissionStatus(submission != null ? submission.getStatus() : SubmissionStatus.NOT_SUBMITTED);
             response.setSubmissionTime(submission != null ? submission.getSubmissionTime() : null);
             response.setGrade(submission != null ? submission.getGrade() : null);
@@ -353,7 +352,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setMaxScore(request.getMaxScore());
         assignment.setDueAt(request.getDueAt());
         assignment.setCloseAt(request.getCloseAt());
-        assignment.setAllowLateSubmission(Boolean.TRUE.equals(request.getAllowLateSubmission()));
 
         if ((request.getResourceIds() == null || request.getResourceIds().isEmpty())
                 && (createMode || request.getResources() != null)) {
@@ -578,7 +576,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setMaxScore(assignment.getMaxScore());
         response.setDueAt(assignment.getDueAt());
         response.setCloseAt(assignment.getCloseAt());
-        response.setAllowLateSubmission(assignment.isAllowLateSubmission());
         ClassSection classSection = resolvePrimaryClassSection(assignment);
         response.setClassSectionId(classSection != null ? classSection.getId() : null);
         response.setResources(resourceService.getResourcesByAssignmentId(assignment.getId()));
@@ -671,7 +668,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (classContentItem.getItemType() != ContentItemType.ASSIGNMENT
                 || classContentItem.getAssignment() == null
                 || !classContentItem.getAssignment().getId().equals(assignment.getId())) {
-            throw new UnauthorizedException("Noi dung bai tap khong hop le");
+            throw new UnauthorizedException("Nội dung bài tập không hợp lệ");
         }
 
         ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
@@ -683,6 +680,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         throw new BusinessException(accessResult.message() != null
                 ? accessResult.message()
-                : "Ban khong co quyen truy cap noi dung nay");
+                : "Bạn không có quyền truy cập nội dung này");
     }
 }

@@ -20,7 +20,6 @@ public class AssignmentResponse {
     private Integer maxScore;
     private LocalDateTime dueAt;
     private LocalDateTime closeAt;
-    private Boolean allowLateSubmission;
     private Integer classSectionId;
     private List<ResourceResponse> resources;
 }

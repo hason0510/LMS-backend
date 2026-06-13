@@ -44,6 +44,8 @@ public interface QuestionBankService {
 
     String exportGiftQuestions(Integer questionBankId);
 
+    String exportAikenQuestions(Integer questionBankId);
+
     QuestionTagResponse createTag(Integer questionBankId, QuestionTagRequest request);
 
     List<QuestionTagResponse> createTagsBatch(Integer questionBankId, QuestionTagBatchRequest request);

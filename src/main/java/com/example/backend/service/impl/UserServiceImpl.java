@@ -69,13 +69,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public User handleGetUserByGmail(String email) {
         return userRepository.findFirstByGmailOrderByIdAsc(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Nguoi dung khong ton tai"));
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
     }
 
     @Override
     public User handleGetUserByUserName(String username) {
         return userRepository.findFirstByUserNameOrderByIdAsc(username)
-                .orElseThrow(() -> new ResourceNotFoundException("Nguoi dung khong ton tai"));
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
     }
 
     @Override
@@ -123,10 +123,10 @@ public class UserServiceImpl implements UserService {
 
     private void assertValidUserName(String userName) {
         if (!StringUtils.hasText(userName)) {
-            throw new BusinessException("Ten nguoi dung khong duoc de trong");
+            throw new BusinessException("Tên người dùng không được để trống");
         }
         if (userName.trim().contains("@")) {
-            throw new BusinessException("Ten nguoi dung khong duoc chua ky tu @");
+            throw new BusinessException("Tên người dùng không được chứa ký tự @");
         }
     }
 
@@ -173,10 +173,10 @@ public class UserServiceImpl implements UserService {
             throw new UnauthorizedException("You have no permission");
         }
         if (currentUser.getId().equals(id)) {
-            throw new BusinessException("Ban khong the tu khoa tai khoan cua minh");
+            throw new BusinessException("Bạn không thể tự khóa tài khoản của mình");
         }
         if (targetUser.getRole() != null && targetUser.getRole().getRoleName() == RoleType.ADMIN) {
-            throw new BusinessException("Khong the khoa tai khoan quan tri vien trong phien ban nay");
+            throw new BusinessException("Không thể khóa tài khoản quản trị viên trong phiên bản này");
         }
 
         targetUser.setActive(false);
@@ -200,7 +200,7 @@ public class UserServiceImpl implements UserService {
             throw new UnauthorizedException("You have no permission");
         }
         if (targetUser.getRole() != null && targetUser.getRole().getRoleName() == RoleType.ADMIN) {
-            throw new BusinessException("Khong the mo khoa tai khoan quan tri vien trong phien ban nay");
+            throw new BusinessException("Không thể mở khóa tài khoản quản trị viên trong phiên bản này");
         }
 
         targetUser.setActive(true);
@@ -246,7 +246,7 @@ public class UserServiceImpl implements UserService {
             String nextUserName = request.getUserName().trim();
             assertValidUserName(nextUserName);
             if (!nextUserName.equals(updatedUser.getUserName()) && userRepository.existsByUserName(nextUserName)) {
-                throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+                throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
             }
             updatedUser.setUserName(nextUserName);
         }
@@ -258,7 +258,7 @@ public class UserServiceImpl implements UserService {
             }
             if (!nextStudentNumber.equals(updatedUser.getStudentNumber())) {
                 if (userRepository.existsByStudentNumber(nextStudentNumber)) {
-                    throw new BusinessException("Ma so nay da duoc su dung");
+                    throw new BusinessException("Mã số này đã được sử dụng");
                 } else {
                     updatedUser.setStudentNumber(nextStudentNumber);
                 }
@@ -267,11 +267,11 @@ public class UserServiceImpl implements UserService {
 
         if (request.getGmail() != null && !request.getGmail().equals(updatedUser.getGmail())) {
             if (updatedUser.isVerified()) {
-                throw new BusinessException("Khong the thay doi email sau khi tai khoan da duoc xac thuc");
+                throw new BusinessException("Không thể thay đổi email sau khi tài khoản đã được xác thực");
             }
             String nextGmail = request.getGmail().trim();
             if (userRepository.existsByGmail(nextGmail)) {
-                throw new BusinessException("Gmail nay da duoc su dung");
+                throw new BusinessException("Gmail này đã được sử dụng");
             } else {
                 updatedUser.setGmail(nextGmail);
             }
@@ -392,19 +392,19 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         assertValidUserName(request.getUserName());
         if (userRepository.existsByUserName(request.getUserName())) {
-            throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+            throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
         } else {
             user.setUserName(request.getUserName());
         }
 
         if (userRepository.existsByGmail(request.getGmail())) {
-            throw new BusinessException("Gmail nay da duoc su dung");
+            throw new BusinessException("Gmail này đã được sử dụng");
         } else {
             user.setGmail(request.getGmail());
         }
 
         if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
-            throw new BusinessException("Ma so nay da duoc su dung");
+            throw new BusinessException("Mã số này đã được sử dụng");
         } else {
             user.setStudentNumber(request.getStudentNumber());
         }
@@ -444,19 +444,19 @@ public class UserServiceImpl implements UserService {
         User user = new User();
         assertValidUserName(request.getUserName());
         if (userRepository.existsByUserName(request.getUserName())) {
-            throw new BusinessException("Ten nguoi dung da duoc su dung, vui long chon ten khac");
+            throw new BusinessException("Tên người dùng đã được sử dụng, vui lòng chọn tên khác");
         } else {
             user.setUserName(request.getUserName());
         }
 
         if (userRepository.existsByGmail(request.getGmail())) {
-            throw new BusinessException("Gmail nay da duoc su dung");
+            throw new BusinessException("Gmail này đã được sử dụng");
         } else {
             user.setGmail(request.getGmail());
         }
 
         if (userRepository.existsByStudentNumber(request.getStudentNumber())) {
-            throw new BusinessException("Ma so nay da duoc su dung");
+            throw new BusinessException("Mã số này đã được sử dụng");
         } else {
             user.setStudentNumber(request.getStudentNumber());
         }
@@ -480,10 +480,15 @@ public class UserServiceImpl implements UserService {
     @Override
     public PageResponse<UserInfoResponse> searchUser(SearchUserRequest request, Pageable pageable) {
         Specification<User> spec = (root, query, cb) -> cb.conjunction();
-        if (StringUtils.hasText(request.getUserName())) {
+        boolean hasUserName = StringUtils.hasText(request.getUserName());
+        boolean hasFullName = StringUtils.hasText(request.getFullName());
+        if (hasUserName && hasFullName) {
+            Specification<User> identitySpec = UserSpecification.likeUserName(request.getUserName())
+                    .or(UserSpecification.likeFullName(request.getFullName()));
+            spec = spec.and(identitySpec);
+        } else if (hasUserName) {
             spec = spec.and(UserSpecification.likeUserName(request.getUserName()));
-        }
-        if (StringUtils.hasText(request.getFullName())) {
+        } else if (hasFullName) {
             spec = spec.and(UserSpecification.likeFullName(request.getFullName()));
         }
         if (StringUtils.hasText(request.getStudentNumber())) {
@@ -540,13 +545,13 @@ public class UserServiceImpl implements UserService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromGmail);
             message.setTo(toGmail);
-            message.setSubject("Thong tin tai khoan cua ban");
-            message.setText("Chao ban,\n\n" +
-                    "Tai khoan cua ban da duoc tao thanh cong.\n" +
-                    "Mat khau tam thoi cua ban la: " + password + "\n\n" +
-                    "Vui long dang nhap va doi mat khau khi lan dau su dung.\n\n" +
-                    "Tran trong,\n" +
-                    "He thong LMS");
+            message.setSubject("Thông tin tài khoản của bạn");
+            message.setText("Chào bạn,\n\n" +
+                    "Tài khoản của bạn đã được tạo thành công.\n" +
+                    "Mật khẩu tạm thời của bạn là: " + password + "\n\n" +
+                    "Vui lòng đăng nhập và đổi mật khẩu khi lần đầu sử dụng.\n\n" +
+                    "Trân trọng,\n" +
+                    "Hệ thống LMS");
             mailSender.send(message);
         } catch (Exception e) {
             System.err.println("Failed to send password email to " + toGmail + ": " + e.getMessage());

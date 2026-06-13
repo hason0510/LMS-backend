@@ -21,11 +21,13 @@ import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.QuizAttemptService;
 import com.example.backend.service.UserService;
+import com.example.backend.specification.QuizAttemptSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -85,7 +87,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
         Quiz chosenQuiz = resolveQuizFromClassContentItem(classContentItem);
         if (!chosenQuiz.getId().equals(quizId)) {
-            throw new ResourceNotFoundException("Quiz khong ton tai");
+            throw new ResourceNotFoundException("Quiz không tồn tại");
         }
 
         ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection());
@@ -93,14 +95,14 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
         if (!isEnrolled) {
-            throw new UnauthorizedException("Ban khong co quyen truy cap vao tai nguyen nay!");
+            throw new UnauthorizedException("Bạn không có quyền truy cập vào tài nguyên này!");
         }
 
         ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
         if (!accessResult.accessible()) {
             throw new BusinessException(accessResult.message() != null
                     ? accessResult.message()
-                    : "Ban khong co quyen truy cap vao tai nguyen nay!");
+                    : "Bạn không có quyền truy cập vào tài nguyên này!");
         }
 
         checkQuizAvailability(chosenQuiz);
@@ -808,7 +810,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                         currentUser.getId(),
                         AttemptStatus.IN_PROGRESS
                 )
-                .orElseThrow(() -> new ResourceNotFoundException("Khong co bai lam nao dang dien ra"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không có bài làm nào đang diễn ra"));
 
         attempt = expireAttemptIfTimedOut(attempt);
         cacheInvalidationService.evictTeachingAndReportCaches();
@@ -842,8 +844,11 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     @Override
     public PageResponse<QuizAttemptResponse> getManagedQuizAttempts(
             Integer classSectionId,
+            Integer quizId,
             String result,
-            String search,
+            String studentKeyword,
+            String quizKeyword,
+            String classKeyword,
             Pageable pageable
     ) {
         User currentUser = userService.getCurrentUser();
@@ -851,26 +856,25 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             ClassSection classSection = classSectionRepository.findById(classSectionId)
                     .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
             if (!canReviewClassSection(classSection, currentUser)) {
-                throw new UnauthorizedException("Ban khong co quyen xem lich su bai lam");
+                throw new UnauthorizedException("Bạn không có quyền xem lịch sử bài làm");
             }
         }
-        Integer teacherId = currentUser.getRole().getRoleName() == RoleType.ADMIN ? null : currentUser.getId();
         String resultFilter = StringUtils.hasText(result) ? result.trim().toUpperCase(Locale.ROOT) : null;
         if (resultFilter != null && !List.of("PASS", "FAIL", "PENDING").contains(resultFilter)) {
             resultFilter = null;
         }
-        String keyword = StringUtils.hasText(search) ? search.trim() : null;
-
-        Page<QuizAttemptResponse> dtoPage = quizAttemptRepository.searchManagedAttempts(
-                List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED),
+        Specification<QuizAttempt> specification = buildManagedQuizAttemptSpecification(
+                currentUser,
                 classSectionId,
-                teacherId,
-                List.of(ClassMemberRole.TEACHER, ClassMemberRole.TA),
-                keyword,
+                quizId,
                 resultFilter,
-                GradingStatus.NEEDS_REVIEW,
-                pageable
-        ).map(this::convertQuizAttemptToDTO);
+                StringUtils.hasText(studentKeyword) ? studentKeyword.trim() : null,
+                StringUtils.hasText(quizKeyword) ? quizKeyword.trim() : null,
+                StringUtils.hasText(classKeyword) ? classKeyword.trim() : null
+        );
+
+        Page<QuizAttemptResponse> dtoPage = quizAttemptRepository.findAll(specification, pageable)
+                .map(this::convertQuizAttemptToDTO);
 
         return new PageResponse<>(
                 dtoPage.getNumber() + 1,
@@ -878,6 +882,28 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 dtoPage.getTotalElements(),
                 dtoPage.getContent()
         );
+    }
+
+    private Specification<QuizAttempt> buildManagedQuizAttemptSpecification(
+            User currentUser,
+            Integer classSectionId,
+            Integer quizId,
+            String resultFilter,
+            String studentKeyword,
+            String quizKeyword,
+            String classKeyword
+    ) {
+        return Specification.where(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
+                .and(QuizAttemptSpecification.hasClassSectionId(classSectionId))
+                .and(QuizAttemptSpecification.hasQuizId(quizId))
+                .and(QuizAttemptSpecification.accessibleFor(
+                        currentUser,
+                        List.of(ClassMemberRole.TEACHER, ClassMemberRole.TA)
+                ))
+                .and(QuizAttemptSpecification.studentMatches(studentKeyword))
+                .and(QuizAttemptSpecification.quizMatches(quizKeyword))
+                .and(QuizAttemptSpecification.classMatches(classKeyword))
+                .and(QuizAttemptSpecification.hasManagedResult(resultFilter, GradingStatus.NEEDS_REVIEW));
     }
 
     @Override
@@ -888,10 +914,10 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         ensureClassSectionInteractive(resolveClassSection(attempt));
         User currentUser = userService.getCurrentUser();
         if (!canReviewAttempt(attempt, currentUser)) {
-            throw new UnauthorizedException("Ban khong co quyen cham bai nay");
+            throw new UnauthorizedException("Bạn không có quyền chấm bài này");
         }
         if (attempt.getStudent() != null && attempt.getStudent().getId().equals(currentUser.getId())) {
-            throw new BusinessException("Ban khong the tu cham bai cua chinh minh");
+            throw new BusinessException("Bạn không thể tự chấm bài của chính mình");
         }
         if (attempt.getStatus() != AttemptStatus.COMPLETED && attempt.getStatus() != AttemptStatus.EXPIRED) {
             throw new BusinessException("Chi co the cham bai da nop hoac da het gio");
@@ -1519,7 +1545,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         if (!canReviewClassSection(classContentItem.getClassChapter().getClassSection(), currentUser)
                 && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
-            throw new UnauthorizedException("Ban khong co quyen xem lich su bai lam");
+            throw new UnauthorizedException("Bạn không có quyền xem lịch sử bài làm");
         }
 
         Page<QuizAttemptResponse> dtoPage = quizAttemptRepository.findByClassContentItem_IdAndStatusIn(
@@ -1589,7 +1615,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     /**
      * API cho Sinh viÃªn xem báº£ng Ä‘iá»ƒm cÃ¡ nhÃ¢n cá»§a mÃ¬nh (Táº¥t cáº£ quiz Ä‘Ã£ lÃ m)
-     */
+     */
+
     @Override
     public List<StudentQuizResultResponse> getMyGradeBook(Integer courseId) {
         throw new UnsupportedOperationException("Legacy course gradebook flow has been removed");
@@ -1604,12 +1631,13 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
         if (!isEnrolled) {
-            throw new UnauthorizedException("Ban khong co quyen truy cap vao tai nguyen nay!");
+            throw new UnauthorizedException("Bạn không có quyền truy cập vào tài nguyên này!");
         }
 
         return quizAttemptRepository.findMaxGradesByStudentAndClassSection(currentUser.getId(), classSectionId);
     }
-
+
+
     @Override
     @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_COURSE, key = "@cacheKeyBuilder.courseGradeBookKey(#courseId)", sync = true)
     public List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId) {
@@ -1625,7 +1653,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         if (!classMemberAuthorizationService.canViewProgress(classSection, currentUser)
                 && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
-            throw new UnauthorizedException("Ban khong co quyen xem bang diem cua lop hoc nay");
+            throw new UnauthorizedException("Bạn không có quyền xem bảng điểm của lớp học này");
         }
 
         return quizAttemptRepository.findMaxGradesByClassSection(classSectionId);
@@ -1633,7 +1661,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     private Quiz resolveQuizFromClassContentItem(ClassContentItem classContentItem) {
         if (classContentItem.getItemType() != ContentItemType.QUIZ) {
-            throw new BusinessException("Noi dung nay khong phai quiz");
+            throw new BusinessException("Nội dung này không phải quiz");
         }
 
         Quiz quiz = classContentItem.getQuiz();

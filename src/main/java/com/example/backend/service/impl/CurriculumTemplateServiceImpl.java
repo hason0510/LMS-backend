@@ -24,6 +24,8 @@ import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizBankSourceResponse;
 import com.example.backend.dto.response.quiz.QuizQuestionResponse;
 import com.example.backend.dto.response.ResourceResponse;
+import com.example.backend.entity.quiz.QuestionBank;
+import com.example.backend.entity.quiz.QuestionTag;
 import com.example.backend.entity.template.ChapterTemplate;
 import com.example.backend.entity.template.ContentItemTemplate;
 import com.example.backend.entity.template.CurriculumTemplate;
@@ -532,6 +534,8 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             return;
         }
 
+        validateQuizTemplateContentPresence(quizTemplate, request);
+
         clearQuizTemplateSourcesAndQuestions(quizTemplate.getId());
 
         if (request.getBankSources() != null && !request.getBankSources().isEmpty()) {
@@ -545,6 +549,84 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
 
         if (request.getQuestions() != null && !request.getQuestions().isEmpty()) {
             createTemplateManualQuestions(quizTemplate, request.getQuestions());
+        }
+    }
+
+    private void validateQuizTemplateContentPresence(QuizTemplate quizTemplate, QuizTemplateRequest request) {
+        boolean hasBankSources = request.getBankSources() != null && !request.getBankSources().isEmpty();
+        boolean hasManualQuestions = request.getQuestions() != null && !request.getQuestions().isEmpty();
+
+        if (!hasBankSources && !hasManualQuestions) {
+            throw new BusinessException("Quiz template must contain at least one question");
+        }
+
+        if (hasBankSources) {
+            validateTemplateBankSourcesCanProvideQuestions(quizTemplate, request.getBankSources());
+        }
+    }
+
+    private void validateTemplateBankSourcesCanProvideQuestions(
+            QuizTemplate quizTemplate,
+            List<QuizBankSourceRequest> sourceRequests
+    ) {
+        boolean hasAtLeastOneQuestion = false;
+
+        for (QuizBankSourceRequest sourceRequest : sourceRequests) {
+            if (sourceRequest.getQuestionBankId() == null) {
+                throw new BusinessException("questionBankId is required for each question bank source");
+            }
+
+            QuestionBank questionBank = questionBankRepository.findById(sourceRequest.getQuestionBankId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+
+            List<Integer> tagIds = normalizeTagIds(sourceRequest.getTagIds());
+            List<QuestionTag> tags = resolveTags(tagIds);
+
+            if (sourceRequest.getSelectionMode() == null) {
+                throw new BusinessException("selectionMode is required for question bank sources");
+            }
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.MANUAL) {
+                throw new BusinessException("Manual selection in question bank mode is not supported. Use Questions Library for manual questions.");
+            }
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.RANDOM
+                    && (sourceRequest.getQuestionCount() == null || sourceRequest.getQuestionCount() <= 0)) {
+                throw new BusinessException("questionCount is required for RANDOM question bank sources");
+            }
+            for (QuestionTag tag : tags) {
+                if (tag.getQuestionBank() != null
+                        && !Objects.equals(tag.getQuestionBank().getId(), questionBank.getId())) {
+                    throw new BusinessException("Question tag must belong to the same question bank");
+                }
+            }
+
+            QuizTemplateBankSource previewSource = new QuizTemplateBankSource();
+            previewSource.setQuizTemplate(quizTemplate);
+            previewSource.setQuestionBank(questionBank);
+            previewSource.setSelectionMode(sourceRequest.getSelectionMode());
+            previewSource.setQuestionCount(sourceRequest.getQuestionCount());
+            previewSource.setDifficultyLevel(sourceRequest.getDifficultyLevel());
+            previewSource.setTags(new ArrayList<>(tags));
+            previewSource.setTagMatchMode(sourceRequest.getTagMatchMode() != null
+                    ? sourceRequest.getTagMatchMode()
+                    : QuizTagMatchMode.ANY);
+
+            List<BankQuestion> matchedQuestions = resolveTemplateMatchedQuestions(previewSource);
+
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+                hasAtLeastOneQuestion = hasAtLeastOneQuestion || !matchedQuestions.isEmpty();
+                continue;
+            }
+
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
+                if (matchedQuestions.size() < sourceRequest.getQuestionCount()) {
+                    throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
+                }
+                hasAtLeastOneQuestion = true;
+            }
+        }
+
+        if (!hasAtLeastOneQuestion) {
+            throw new BusinessException("Quiz template must contain at least one question");
         }
     }
 

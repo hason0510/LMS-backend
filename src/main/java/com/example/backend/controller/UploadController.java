@@ -99,8 +99,74 @@ public class UploadController {
         response.setTitle(saved.getTitle());
         response.setMimeType(saved.getMimeType());
         response.setFileSize(saved.getFileSize());
+        response.setFileType(resolveFileType(saved.getTitle(), saved.getFileUrl(), saved.getMimeType(), saved.getType(), saved.getSource()));
         response.setType(saved.getType() != null ? saved.getType().name() : response.getType());
         return ResponseEntity.ok(response);
+    }
+
+    private String resolveFileType(
+            String title,
+            String fileUrl,
+            String mimeType,
+            ResourceType type,
+            ResourceSource source
+    ) {
+        if (type == ResourceType.LINK || source == ResourceSource.LINK || source == ResourceSource.EMBED) {
+            return "LINK";
+        }
+
+        String extension = resolveExtension(title);
+        if (extension == null) {
+            extension = resolveExtension(fileUrl);
+        }
+        if (extension != null) {
+            return extension.toUpperCase();
+        }
+
+        if (mimeType != null && !mimeType.isBlank()) {
+            String normalizedMime = mimeType.trim().toLowerCase();
+            return switch (normalizedMime) {
+                case "application/pdf" -> "PDF";
+                case "application/msword" -> "DOC";
+                case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "DOCX";
+                case "application/vnd.ms-powerpoint" -> "PPT";
+                case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "PPTX";
+                case "application/vnd.ms-excel" -> "XLS";
+                case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "XLSX";
+                case "text/plain" -> "TXT";
+                default -> {
+                    int slashIndex = normalizedMime.indexOf('/');
+                    if (slashIndex >= 0 && slashIndex < normalizedMime.length() - 1) {
+                        String subtype = normalizedMime.substring(slashIndex + 1);
+                        int suffixIndex = subtype.indexOf('+');
+                        if (suffixIndex > 0) {
+                            subtype = subtype.substring(0, suffixIndex);
+                        }
+                        yield subtype.toUpperCase();
+                    }
+                    yield normalizedMime.toUpperCase();
+                }
+            };
+        }
+
+        return type != null ? type.name() : "FILE";
+    }
+
+    private String resolveExtension(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value;
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        int fragmentIndex = normalized.indexOf('#');
+        if (fragmentIndex >= 0) {
+            normalized = normalized.substring(0, fragmentIndex);
+        }
+        String extension = FilenameUtils.getExtension(normalized);
+        return extension == null || extension.isBlank() ? null : extension;
     }
 
     private ResourceVisibility resolveVisibility(ResourceScopeType scopeType) {

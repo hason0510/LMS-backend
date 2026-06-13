@@ -378,7 +378,7 @@ public class QuizServiceImpl implements QuizService {
         if (classContentItem.getItemType() != ContentItemType.QUIZ
                 || classContentItem.getQuiz() == null
                 || !classContentItem.getQuiz().getId().equals(quiz.getId())) {
-            throw new UnauthorizedException("Noi dung quiz khong hop le");
+            throw new UnauthorizedException("Nội dung quiz không hợp lệ");
         }
 
         ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
@@ -390,7 +390,7 @@ public class QuizServiceImpl implements QuizService {
         }
         throw new BusinessException(accessResult.message() != null
                 ? accessResult.message()
-                : "Ban khong co quyen truy cap noi dung nay");
+                : "Bạn không có quyền truy cập nội dung này");
     }
 
     private void syncLinkedClassContentItemTitle(Quiz quiz, String previousQuizTitle) {
@@ -410,6 +410,8 @@ public class QuizServiceImpl implements QuizService {
             return;
         }
 
+        validateQuizContentPresence(quiz, request);
+
         clearQuizSourcesAndQuestions(quiz);
 
         if (request.getBankSources() != null && !request.getBankSources().isEmpty()) {
@@ -423,6 +425,64 @@ public class QuizServiceImpl implements QuizService {
 
         if (request.getQuestions() != null && !request.getQuestions().isEmpty()) {
             createManualQuestions(quiz, request.getQuestions());
+        }
+    }
+
+    private void validateQuizContentPresence(Quiz quiz, QuizRequest request) {
+        boolean hasBankSources = request.getBankSources() != null && !request.getBankSources().isEmpty();
+        boolean hasManualQuestions = request.getQuestions() != null && !request.getQuestions().isEmpty();
+
+        if (!hasBankSources && !hasManualQuestions) {
+            throw new BusinessException("Quiz must contain at least one question");
+        }
+
+        if (hasBankSources) {
+            validateBankSourcesCanProvideQuestions(quiz, request.getBankSources());
+        }
+    }
+
+    private void validateBankSourcesCanProvideQuestions(Quiz quiz, List<QuizBankSourceRequest> sourceRequests) {
+        boolean hasAtLeastOneQuestion = false;
+
+        for (QuizBankSourceRequest sourceRequest : sourceRequests) {
+            if (sourceRequest.getQuestionBankId() == null) {
+                throw new BusinessException("questionBankId is required for each question bank source");
+            }
+
+            QuestionBank questionBank = questionBankRepository.findById(sourceRequest.getQuestionBankId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+            List<Integer> tagIds = normalizeTagIds(sourceRequest.getTagIds());
+            List<QuestionTag> tags = resolveTags(tagIds);
+
+            validateQuestionBankSource(quiz, questionBank, tags, sourceRequest);
+
+            QuizBankSource previewSource = new QuizBankSource();
+            previewSource.setQuestionBank(questionBank);
+            previewSource.setSelectionMode(sourceRequest.getSelectionMode());
+            previewSource.setQuestionCount(sourceRequest.getQuestionCount());
+            previewSource.setDifficultyLevel(sourceRequest.getDifficultyLevel());
+            previewSource.setTags(new ArrayList<>(tags));
+            previewSource.setTagMatchMode(sourceRequest.getTagMatchMode() != null
+                    ? sourceRequest.getTagMatchMode()
+                    : QuizTagMatchMode.ANY);
+
+            List<BankQuestion> matchedQuestions = resolveMatchedQuestions(previewSource);
+
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+                hasAtLeastOneQuestion = hasAtLeastOneQuestion || !matchedQuestions.isEmpty();
+                continue;
+            }
+
+            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
+                if (matchedQuestions.size() < sourceRequest.getQuestionCount()) {
+                    throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
+                }
+                hasAtLeastOneQuestion = true;
+            }
+        }
+
+        if (!hasAtLeastOneQuestion) {
+            throw new BusinessException("Quiz must contain at least one question");
         }
     }
 
@@ -662,8 +722,9 @@ public class QuizServiceImpl implements QuizService {
             validateInteractionItems(questionRequest.getType(), questionRequest.getItems());
 
             QuizQuestion question = new QuizQuestion();
+            BankQuestion sourceQuestion = null;
             if (questionRequest.getSourceBankQuestionId() != null) {
-                BankQuestion sourceQuestion = bankQuestionRepository.findById(questionRequest.getSourceBankQuestionId())
+                sourceQuestion = bankQuestionRepository.findById(questionRequest.getSourceBankQuestionId())
                         .orElseThrow(() -> new ResourceNotFoundException("Source bank question not found"));
                 question.setSourceBankQuestion(sourceQuestion);
             }
@@ -675,24 +736,87 @@ public class QuizServiceImpl implements QuizService {
             }
             question.setQuiz(quiz);
 
-            List<QuizAnswer> answers = new ArrayList<>();
-            if (!isInteractionQuestionType(questionRequest.getType()) && questionRequest.getAnswers() != null) {
-                for (QuizAnswerRequest answerRequest : questionRequest.getAnswers()) {
-                    QuizAnswer answer = new QuizAnswer();
-                    answer.setContent(answerRequest.getContent());
-                    answer.setIsCorrect(answerRequest.getIsCorrect() != null ? answerRequest.getIsCorrect() : false);
-                    answer.setExplanation(answerRequest.getExplanation());
-                    if (answerRequest.getResourceId() != null) {
-                        answer.setResource(resolveUsableQuizResource(quiz, answerRequest.getResourceId()));
-                    }
-                    answer.setQuizQuestion(question);
-                    answers.add(answer);
-                }
-            }
+            List<QuizAnswer> answers = buildQuestionAnswers(quiz, question, questionRequest, sourceQuestion);
             question.setAnswers(answers);
-            question.setInteractionItems(buildQuizInteractionItems(question, questionRequest.getItems()));
+            question.setInteractionItems(buildQuestionInteractionItems(question, questionRequest, sourceQuestion));
             quizQuestionRepository.save(question);
         }
+    }
+
+    private List<QuizAnswer> buildQuestionAnswers(
+            Quiz quiz,
+            QuizQuestion question,
+            QuizQuestionRequest questionRequest,
+            BankQuestion sourceQuestion
+    ) {
+        if (isInteractionQuestionType(questionRequest.getType())) {
+            return new ArrayList<>();
+        }
+
+        if (questionRequest.getAnswers() != null && !questionRequest.getAnswers().isEmpty()) {
+            List<QuizAnswer> answers = new ArrayList<>();
+            for (QuizAnswerRequest answerRequest : questionRequest.getAnswers()) {
+                QuizAnswer answer = new QuizAnswer();
+                answer.setContent(answerRequest.getContent());
+                answer.setIsCorrect(answerRequest.getIsCorrect() != null ? answerRequest.getIsCorrect() : false);
+                answer.setExplanation(answerRequest.getExplanation());
+                if (answerRequest.getResourceId() != null) {
+                    answer.setResource(resolveUsableQuizResource(quiz, answerRequest.getResourceId()));
+                }
+                answer.setQuizQuestion(question);
+                answers.add(answer);
+            }
+            return answers;
+        }
+
+        if (sourceQuestion == null || sourceQuestion.getOptions() == null || sourceQuestion.getOptions().isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<QuizAnswer> answers = new ArrayList<>();
+        for (BankQuestionOption sourceOption : sourceQuestion.getOptions()) {
+            QuizAnswer answer = new QuizAnswer();
+            answer.setContent(sourceOption.getContent());
+            answer.setIsCorrect(Boolean.TRUE.equals(sourceOption.getIsCorrect()));
+            answer.setExplanation(sourceOption.getExplanation());
+            answer.setResource(sourceOption.getResource());
+            answer.setQuizQuestion(question);
+            answers.add(answer);
+        }
+        return answers;
+    }
+
+    private List<QuestionInteractionItem> buildQuestionInteractionItems(
+            QuizQuestion question,
+            QuizQuestionRequest questionRequest,
+            BankQuestion sourceQuestion
+    ) {
+        if (questionRequest.getItems() != null && !questionRequest.getItems().isEmpty()) {
+            return buildQuizInteractionItems(question, questionRequest.getItems());
+        }
+
+        if (sourceQuestion == null || sourceQuestion.getInteractionItems() == null || sourceQuestion.getInteractionItems().isEmpty()) {
+            return List.of();
+        }
+
+        List<QuestionInteractionItem> items = new ArrayList<>();
+        for (QuestionInteractionItem sourceItem : sourceQuestion.getInteractionItems()) {
+            QuestionInteractionItem item = new QuestionInteractionItem();
+            item.setQuizQuestion(question);
+            item.setContent(sourceItem.getContent());
+            item.setItemKey(sourceItem.getItemKey());
+            item.setRole(sourceItem.getRole());
+            item.setCorrectMatchKey(sourceItem.getCorrectMatchKey());
+            item.setCorrectOrderIndex(sourceItem.getCorrectOrderIndex());
+            item.setBlankIndex(sourceItem.getBlankIndex());
+            item.setAcceptedAnswers(sourceItem.getAcceptedAnswers());
+            item.setBlankType(sourceItem.getBlankType());
+            item.setBlankOptions(sourceItem.getBlankOptions());
+            item.setResource(sourceItem.getResource());
+            item.setOrderIndex(sourceItem.getOrderIndex());
+            items.add(item);
+        }
+        return items;
     }
 
     private List<QuestionInteractionItem> buildQuizInteractionItems(

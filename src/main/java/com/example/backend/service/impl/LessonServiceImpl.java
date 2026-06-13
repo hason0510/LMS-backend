@@ -134,7 +134,7 @@ public class LessonServiceImpl implements LessonService {
         if (classContentItem.getItemType() != ContentItemType.LESSON
                 || classContentItem.getLesson() == null
                 || !classContentItem.getLesson().getId().equals(lesson.getId())) {
-            throw new UnauthorizedException("Noi dung bai hoc khong hop le");
+            throw new UnauthorizedException("Nội dung bài học không hợp lệ");
         }
 
         ClassContentAccessResult accessResult = classContentAccessService.evaluateForUser(classContentItem, currentUser);
@@ -146,6 +146,6 @@ public class LessonServiceImpl implements LessonService {
         }
         throw new BusinessException(accessResult.message() != null
                 ? accessResult.message()
-                : "Ban khong co quyen truy cap noi dung nay");
+                : "Bạn không có quyền truy cập nội dung này");
     }
 }

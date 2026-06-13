@@ -17,6 +17,7 @@ public class ClassMemberResponse {
     private Integer userId;
     private String username;
     private String fullName;
+    private String studentNumber;
     private String email;
     private String avatarUrl;
     private ClassMemberRole role;

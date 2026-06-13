@@ -23,6 +23,7 @@ public class ResourceResponse {
     private String hlsUrl;
     private String description;
     private String mimeType;
+    private String fileType;
     private Long fileSize;
     private ResourceType type;
     private ResourceSource source;

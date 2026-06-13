@@ -68,7 +68,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Override
     public void addStudentsToClassSection(Integer classSectionId, StudentCourseRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
 
         List<User> users = userRepository.findAllById(request.getStudentIds());
         ensureUsersAreNotClassStaff(classSection, users);
@@ -99,7 +99,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Override
     public void removeStudentsFromClassSection(Integer classSectionId, StudentCourseRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
         if (request.getStudentIds() == null || request.getStudentIds().isEmpty()) {
             return;
         }
@@ -124,10 +124,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentResponse enrollPrivateCourse(String classCode) {
         User currentUser = userService.getCurrentUser();
         if (!userRepository.existsById(currentUser.getId())) {
-            throw new ResourceNotFoundException("Khong tim thay nguoi dung");
+            throw new ResourceNotFoundException("Không tìm thấy người dùng");
         }
         if (!StringUtils.hasText(classCode)) {
-            throw new BusinessException("Ma lop khong hop le");
+            throw new BusinessException("Mã lớp không hợp lệ");
         }
         return enrollClassSectionByCode(classCode);
     }
@@ -136,7 +136,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentResponse enrollClassSection(Integer classSectionId) {
         User currentUser = userService.getCurrentUser();
         ClassSection classSection = classSectionRepository.findById(classSectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học"));
         return enrollCurrentUserInClassSection(currentUser, classSection);
     }
 
@@ -144,14 +144,14 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public EnrollmentResponse enrollClassSectionByCode(String classCode) {
         User currentUser = userService.getCurrentUser();
         if (!userRepository.existsById(currentUser.getId())) {
-            throw new ResourceNotFoundException("Khong tim thay nguoi dung");
+            throw new ResourceNotFoundException("Không tìm thấy người dùng");
         }
         if (!StringUtils.hasText(classCode)) {
-            throw new BusinessException("Ma lop khong hop le");
+            throw new BusinessException("Mã lớp không hợp lệ");
         }
 
         ClassSection classSection = classSectionRepository.findByClassCode(classCode.trim())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
         return enrollCurrentUserInClassSection(currentUser, classSection);
     }
 
@@ -166,7 +166,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public void completeClassContentItem(Integer classContentItemId) {
         User currentUser = userService.getCurrentUser();
         ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Noi dung lop hoc khong ton tai"));
+                .orElseThrow(() -> new ResourceNotFoundException("Nội dung lớp học không tồn tại"));
 
         if (classContentItem.getItemType() != ContentItemType.LESSON) {
             throw new BusinessException("Chi bai hoc moi duoc danh dau hoan thanh thu cong");
@@ -206,10 +206,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         ensureStudentIsNotClassStaff(request, student);
         Enrollment enrollment = findPendingEnrollment(request);
         if (enrollment == null) {
-            throw new ResourceNotFoundException("Yeu cau tham gia khong ton tai hoac da duoc xu ly!");
+            throw new ResourceNotFoundException("Yêu cầu tham gia không tồn tại hoặc đã được xử lý!");
         }
         if (!isEnrollmentOwner(enrollment, currentUser)) {
-            throw new UnauthorizedException("Ban khong co quyen phe duyet yeu cau nay!");
+            throw new UnauthorizedException("Bạn không có quyền phê duyệt yêu cầu này!");
         }
 
         enrollment.setApprovalStatus(EnrollmentStatus.APPROVED);
@@ -230,10 +230,10 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         validateEnrollmentTarget(request);
         Enrollment enrollment = findEnrollment(request);
         if (enrollment == null) {
-            throw new ResourceNotFoundException("Khong tim thay thong tin dang ky cua nguoi dung nay!");
+            throw new ResourceNotFoundException("Không tìm thấy thông tin đăng ký của người dùng này!");
         }
         if (!isEnrollmentOwner(enrollment, currentUser)) {
-            throw new UnauthorizedException("Ban khong co quyen tu choi yeu cau nay!");
+            throw new UnauthorizedException("Bạn không có quyền từ chối yêu cầu này!");
         }
 
         String title = resolveEnrollmentTargetTitle(enrollment);
@@ -256,7 +256,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Override
     public PageResponse<EnrollmentResponse> getStudentsApprovedInClassSection(Integer classSectionId, String keyword, Pageable pageable) {
         if (!classSectionRepository.existsById(classSectionId)) {
-            throw new ResourceNotFoundException("Khong tim thay lop hoc");
+            throw new ResourceNotFoundException("Không tìm thấy lớp học");
         }
         assertCanViewClassSectionRoster(classSectionId);
         User currentUser = userService.getCurrentUser();
@@ -288,7 +288,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Cacheable(value = CacheNames.ENROLLMENT_PENDING_CLASS_SECTION, key = "@cacheKeyBuilder.pendingClassSectionEnrollmentKey(#classSectionId, #pageable)", sync = true)
     public PageResponse<EnrollmentResponse> getStudentsPendingInClassSection(Integer classSectionId, Pageable pageable) {
         if (!classSectionRepository.existsById(classSectionId)) {
-            throw new ResourceNotFoundException("Khong tim thay lop hoc");
+            throw new ResourceNotFoundException("Không tìm thấy lớp học");
         }
         Page<Enrollment> enrollmentPage = enrollmentRepository.findByClassSection_IdAndApprovalStatus(classSectionId, EnrollmentStatus.PENDING, pageable);
         return convertToPageResponse(enrollmentPage);
@@ -318,7 +318,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 EnrollmentStatus.APPROVED
         );
         if (enrollment == null) {
-            throw new UnauthorizedException("Ban khong nam trong lop hoc nay!");
+            throw new UnauthorizedException("Bạn không nằm trong lớp học này!");
         }
         return convertEnrollmentToDTO(enrollment);
     }
@@ -326,7 +326,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     @Override
     public EnrollmentResponse getEnrollmentById(Integer id) {
         Enrollment enrollment = enrollmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay tai nguyen"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài nguyên"));
         return convertEnrollmentToDTO(enrollment);
     }
 
@@ -574,7 +574,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         }
 
         ClassSection classSection = classSectionRepository.findById(classSectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học"));
         if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
             return;
         }
@@ -587,7 +587,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 )) {
             return;
         }
-        throw new UnauthorizedException("Ban khong co quyen xem danh sach hoc vien cua lop nay");
+        throw new UnauthorizedException("Bạn không có quyền xem danh sách học viên của lớp này");
     }
 
     private void validateEnrollmentTarget(EnrollmentRequest request) {
@@ -601,7 +601,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return;
         }
         if (classMemberAuthorizationService.isTeacherOrTa(classSection, currentUser)) {
-            throw new BusinessException("Khong the dang ky vao lop khi ban dang giu vai tro giang day trong chinh lop nay");
+            throw new BusinessException("Không thể đăng ký vào lớp khi bạn đang giữ vai trò giảng dạy trong chính lớp này");
         }
     }
 
@@ -619,7 +619,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return;
         }
         if (classMemberAuthorizationService.isTeacherOrTa(classSection, user)) {
-            throw new BusinessException("Khong the them hoc vien vao lop khi nguoi dung da la giang vien hoac tro giang cua lop nay");
+            throw new BusinessException("Không thể thêm học viên vào lớp khi người dùng đã là giảng viên hoặc trợ giảng của lớp này");
         }
     }
 
@@ -628,7 +628,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return;
         }
         ClassSection classSection = classSectionRepository.findById(request.getClassSectionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
         ensureUserIsNotClassStaff(classSection, student);
     }
 

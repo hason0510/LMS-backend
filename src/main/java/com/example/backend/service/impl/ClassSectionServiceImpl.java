@@ -271,15 +271,15 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     @Override
     public ClassSectionJoinPreviewResponse getJoinPreview(String classCode) {
         if (!StringUtils.hasText(classCode)) {
-            throw new BusinessException("Ma lop khong hop le");
+            throw new BusinessException("Mã lớp không hợp lệ");
         }
 
         User currentUser = userService.getCurrentUser();
         ClassSection classSection = classSectionRepository.findByClassCode(classCode.trim())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay lop hoc!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
 
         if (classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Lop hoc da luu tru, khong the tham gia");
+            throw new BusinessException("Lớp học đã lưu trữ, không thể tham gia");
         }
         ensureCurrentUserIsNotClassStaff(currentUser, classSection);
 
@@ -329,12 +329,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (request.getRole() == ClassMemberRole.TEACHER) {
-            ensureUserIsNotEnrolledInClassSection(user, classSection);
-            transferTeacherOwnership(classSection, user);
-            cacheInvalidationService.evictAllRedisReadCaches();
-            return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, user.getId())
-                    .map(this::convertClassMember)
-                    .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
+            throw new BusinessException("Primary teacher role cannot be assigned from staff management");
         }
 
         ensureUserIsNotEnrolledInClassSection(user, classSection);
@@ -354,12 +349,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
 
         if (request.getRole() == ClassMemberRole.TEACHER) {
-            ensureUserIsNotEnrolledInClassSection(member.getUser(), classSection);
-            transferTeacherOwnership(classSection, member.getUser());
-            cacheInvalidationService.evictAllRedisReadCaches();
-            return classMemberRepository.findByClassSection_IdAndUser_Id(classSectionId, userId)
-                    .map(this::convertClassMember)
-                    .orElseThrow(() -> new ResourceNotFoundException("Class member not found"));
+            throw new BusinessException("Primary teacher role cannot be assigned from staff management");
         }
 
         if (member.getRole() == ClassMemberRole.TEACHER) {
@@ -852,6 +842,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         response.setUserId(member.getUser() != null ? member.getUser().getId() : null);
         response.setUsername(member.getUser() != null ? member.getUser().getUserName() : null);
         response.setFullName(member.getUser() != null ? member.getUser().getFullName() : null);
+        response.setStudentNumber(member.getUser() != null ? member.getUser().getStudentNumber() : null);
         response.setEmail(member.getUser() != null ? member.getUser().getGmail() : null);
         response.setAvatarUrl(member.getUser() != null ? member.getUser().getImageUrl() : null);
         response.setRole(member.getRole());
@@ -1697,7 +1688,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
         Enrollment enrollment = enrollmentRepository.findByStudent_IdAndClassSection_Id(user.getId(), classSection.getId());
         if (enrollment != null) {
-            throw new BusinessException("Khong the them nguoi dung da la hoc vien vao vai tro giang day trong cung lop");
+            throw new BusinessException("Không thể thêm người dùng đã là học viên vào vai trò giảng dạy trong cùng lớp");
         }
     }
 

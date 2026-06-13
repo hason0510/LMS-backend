@@ -28,7 +28,7 @@ public class UserDetailCustom implements UserDetailsService {
             throw new UsernameNotFoundException("User not found: " + username);
         }
         if (!user.isLocalAuthEnabled() || user.getPassword() == null || user.getPassword().isBlank()) {
-            throw new UnauthorizedException("Tai khoan nay chi ho tro dang nhap bang Google");
+            throw new UnauthorizedException("Tài khoản này chỉ hỗ trợ đăng nhập bằng Google");
         }
         if (!user.isVerified()) {
             throw new UnauthorizedException("Chưa xác thực OTP");

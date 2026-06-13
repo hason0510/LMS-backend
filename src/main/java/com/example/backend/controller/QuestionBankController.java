@@ -124,6 +124,17 @@ public class QuestionBankController {
     }
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    @GetMapping(value = "/{questionBankId}/export-aiken", produces = "text/plain; charset=UTF-8")
+    public ResponseEntity<byte[]> exportAikenQuestions(@PathVariable Integer questionBankId) {
+        String aikenContent = questionBankService.exportAikenQuestions(questionBankId);
+        String fileName = "question-bank-" + questionBankId + ".aiken.txt";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType("text/plain; charset=UTF-8"))
+                .body(aikenContent.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
     @PostMapping("/{questionBankId}/tags")
     public ResponseEntity<QuestionTagResponse> createTag(
             @PathVariable Integer questionBankId,

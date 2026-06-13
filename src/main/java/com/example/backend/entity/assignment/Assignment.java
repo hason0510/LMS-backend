@@ -45,9 +45,6 @@ public class Assignment extends BaseEntity {
     @Column(name = "close_at")
     private LocalDateTime closeAt;
 
-    @Column(name = "allow_late_submission", nullable = false)
-    private boolean allowLateSubmission = false;
-
     @OneToMany(mappedBy = "assignment")
     private List<Submission> submissions;
 

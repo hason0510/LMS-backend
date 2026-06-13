@@ -49,6 +49,8 @@ import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
 import com.example.backend.service.ResourceAuthorizationService;
 import com.example.backend.service.UserService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.backend.specification.QuestionBankSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +83,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private static final Pattern AIKEN_OPTION_PATTERN = Pattern.compile("^([A-Z])[.)]\\s+(.+)$");
     private static final Pattern AIKEN_ANSWER_PATTERN = Pattern.compile("^ANSWER\\s*:\\s*([A-Z])\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern GIFT_TAG_METADATA_PATTERN = Pattern.compile("\\[tag:(.+?)]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CLOZE_EXPORT_TOKEN_PATTERN = Pattern.compile("\\[\\[([^\\]]+)\\]\\]");
 
 
     private final QuestionBankRepository questionBankRepository;
@@ -96,6 +99,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final DifficultyTagResolver difficultyTagResolver;
     private final ResourceRepository resourceRepository;
     private final ResourceAuthorizationService resourceAuthorizationService;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -300,13 +304,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     @Override
     @Transactional(readOnly = true)
     public String exportGiftQuestions(Integer questionBankId) {
-        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
-                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
-        requireEditPermission(questionBank);
-
-        List<BankQuestion> questions = bankQuestionRepository.findByQuestionBank_Id(questionBankId).stream()
-                .sorted(Comparator.comparing(BankQuestion::getId))
-                .toList();
+        List<BankQuestion> questions = getExportableBankQuestions(questionBankId);
 
         StringBuilder output = new StringBuilder();
         for (BankQuestion question : questions) {
@@ -320,6 +318,34 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             output.append(block);
         }
         return output.toString();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String exportAikenQuestions(Integer questionBankId) {
+        List<BankQuestion> questions = getExportableBankQuestions(questionBankId);
+
+        StringBuilder output = new StringBuilder();
+        for (BankQuestion question : questions) {
+            String block = buildAikenExportBlock(question);
+            if (!StringUtils.hasText(block)) {
+                continue;
+            }
+            if (output.length() > 0) {
+                output.append("\n\n");
+            }
+            output.append(block);
+        }
+        return output.toString();
+    }
+
+    private List<BankQuestion> getExportableBankQuestions(Integer questionBankId) {
+        QuestionBank questionBank = questionBankRepository.findById(questionBankId)
+                .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
+        requireEditPermission(questionBank);
+        return bankQuestionRepository.findByQuestionBank_Id(questionBankId).stream()
+                .sorted(Comparator.comparing(BankQuestion::getId))
+                .toList();
     }
 
 
@@ -354,20 +380,73 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             return null;
         }
 
-        if (question.getType() != QuestionType.SINGLE_CHOICE
-                && question.getType() != QuestionType.MULTIPLE_CHOICE
-                && question.getType() != QuestionType.SHORT_ANSWER) {
-            return "// skipped question id=" + question.getId() + ": unsupported type " + question.getType();
+        String metadataLine = buildGiftMetadataLine(question);
+        String questionTitlePrefix = "::Q" + question.getId() + "::";
+
+        if (question.getType() == QuestionType.CLOZE) {
+            String clozeContent = buildGiftClozeContent(question);
+            if (!StringUtils.hasText(clozeContent)) {
+                return "// skipped question id=" + question.getId() + ": invalid cloze content";
+            }
+            StringBuilder block = new StringBuilder();
+            if (StringUtils.hasText(metadataLine)) {
+                block.append(metadataLine).append('\n');
+            }
+            block.append(questionTitlePrefix).append(clozeContent);
+            if (StringUtils.hasText(question.getExplanation())) {
+                block.append(" {####").append(escapeGiftText(question.getExplanation())).append('}');
+            }
+            return block.toString();
         }
 
-        List<BankQuestionOption> options = question.getOptions() != null
-                ? question.getOptions().stream()
-                .sorted(Comparator.comparing(BankQuestionOption::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
-                .toList()
-                : List.of();
+        String answerBody = switch (question.getType()) {
+            case TRUE_FALSE -> buildGiftTrueFalseAnswerBody(question);
+            case SINGLE_CHOICE, MULTIPLE_CHOICE, SHORT_ANSWER -> buildGiftChoiceAnswerBody(question);
+            case ESSAY -> buildGiftEssayAnswerBody(question);
+            case MATCHING -> buildGiftMatchingAnswerBody(question);
+            default -> null;
+        };
 
+        if (answerBody == null) {
+            return "// skipped question id=" + question.getId() + ": unsupported or invalid type " + question.getType();
+        }
+
+        StringBuilder block = new StringBuilder();
+        if (StringUtils.hasText(metadataLine)) {
+            block.append(metadataLine).append('\n');
+        }
+        block.append(questionTitlePrefix)
+                .append(escapeGiftText(question.getContent()))
+                .append(" {\n");
+        if (StringUtils.hasText(answerBody)) {
+            block.append(answerBody).append('\n');
+        }
+        block.append('}');
+        return block.toString();
+    }
+
+    private String buildGiftTrueFalseAnswerBody(BankQuestion question) {
+        List<BankQuestionOption> options = getSortedOptions(question);
+        if (options.size() < 2) {
+            return null;
+        }
+        BankQuestionOption trueOption = findOptionByContent(options, "true");
+        BankQuestionOption falseOption = findOptionByContent(options, "false");
+        if (trueOption == null || falseOption == null) {
+            return null;
+        }
+
+        StringBuilder answerBody = new StringBuilder(Boolean.TRUE.equals(trueOption.getIsCorrect()) ? "T" : "F");
+        if (StringUtils.hasText(question.getExplanation())) {
+            answerBody.append("####").append(escapeGiftText(question.getExplanation()));
+        }
+        return answerBody.toString();
+    }
+
+    private String buildGiftChoiceAnswerBody(BankQuestion question) {
+        List<BankQuestionOption> options = getSortedOptions(question);
         if (options.isEmpty()) {
-            return "// skipped question id=" + question.getId() + ": no options";
+            return null;
         }
 
         List<String> answerLines = new ArrayList<>();
@@ -376,33 +455,225 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 continue;
             }
             boolean correct = Boolean.TRUE.equals(option.getIsCorrect());
-            if (question.getType() == QuestionType.SHORT_ANSWER) {
-                if (!correct) {
-                    continue;
-                }
-                answerLines.add("=" + escapeGiftText(option.getContent()));
-            } else {
-                answerLines.add((correct ? "=" : "~") + escapeGiftText(option.getContent()));
+            if (question.getType() == QuestionType.SHORT_ANSWER && !correct) {
+                continue;
             }
+            StringBuilder line = new StringBuilder();
+            line.append(question.getType() == QuestionType.SHORT_ANSWER
+                    ? '='
+                    : (correct ? '=' : '~'));
+            line.append(escapeGiftText(option.getContent()));
+            if (StringUtils.hasText(option.getExplanation())) {
+                line.append('#').append(escapeGiftText(option.getExplanation()));
+            }
+            answerLines.add(line.toString());
         }
 
         if (answerLines.isEmpty()) {
-            return "// skipped question id=" + question.getId() + ": no valid answer lines";
+            return null;
+        }
+        if (StringUtils.hasText(question.getExplanation())) {
+            answerLines.add("####" + escapeGiftText(question.getExplanation()));
+        }
+        return String.join("\n", answerLines);
+    }
+
+    private String buildGiftEssayAnswerBody(BankQuestion question) {
+        if (!StringUtils.hasText(question.getExplanation())) {
+            return "";
+        }
+        return "####" + escapeGiftText(question.getExplanation());
+    }
+
+    private String buildGiftMatchingAnswerBody(BankQuestion question) {
+        List<QuestionInteractionItem> items = getSortedInteractionItems(question);
+        if (items.isEmpty()) {
+            return null;
         }
 
-        String metadataLine = buildGiftMetadataLine(question);
-        StringBuilder block = new StringBuilder();
-        if (StringUtils.hasText(metadataLine)) {
-            block.append(metadataLine).append('\n');
+        Map<String, QuestionInteractionItem> matchesByKey = items.stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.MATCH)
+                .filter(item -> StringUtils.hasText(item.getItemKey()))
+                .collect(java.util.stream.Collectors.toMap(
+                        QuestionInteractionItem::getItemKey,
+                        item -> item,
+                        (left, right) -> left
+                ));
+
+        List<String> answerLines = new ArrayList<>();
+        for (QuestionInteractionItem prompt : items.stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.PROMPT)
+                .toList()) {
+            QuestionInteractionItem match = StringUtils.hasText(prompt.getCorrectMatchKey())
+                    ? matchesByKey.get(prompt.getCorrectMatchKey())
+                    : null;
+            if (match == null || !StringUtils.hasText(prompt.getContent()) || !StringUtils.hasText(match.getContent())) {
+                continue;
+            }
+            answerLines.add("=" + escapeGiftText(prompt.getContent()) + " -> " + escapeGiftText(match.getContent()));
         }
-        block.append("::Q").append(question.getId()).append("::")
-                .append(escapeGiftText(question.getContent()))
-                .append(" {\n");
-        for (String answerLine : answerLines) {
-            block.append(answerLine).append('\n');
+
+        if (answerLines.isEmpty()) {
+            return null;
         }
-        block.append('}');
+        if (StringUtils.hasText(question.getExplanation())) {
+            answerLines.add("####" + escapeGiftText(question.getExplanation()));
+        }
+        return String.join("\n", answerLines);
+    }
+
+    private String buildGiftClozeContent(BankQuestion question) {
+        List<QuestionInteractionItem> blanks = getSortedInteractionItems(question).stream()
+                .filter(item -> item.getRole() == QuestionInteractionItemRole.BLANK)
+                .toList();
+        if (blanks.isEmpty()) {
+            return null;
+        }
+
+        Matcher matcher = CLOZE_EXPORT_TOKEN_PATTERN.matcher(question.getContent());
+        StringBuffer rebuilt = new StringBuffer();
+        int blankPointer = 0;
+        while (matcher.find()) {
+            if (blankPointer >= blanks.size()) {
+                return null;
+            }
+            String replacement = buildGiftClozeBlankAnswer(blanks.get(blankPointer));
+            matcher.appendReplacement(rebuilt, Matcher.quoteReplacement(replacement));
+            blankPointer++;
+        }
+        matcher.appendTail(rebuilt);
+
+        if (blankPointer != blanks.size()) {
+            return null;
+        }
+        return rebuilt.toString();
+    }
+
+    private String buildGiftClozeBlankAnswer(QuestionInteractionItem blank) {
+        List<String> acceptedAnswers = parseAcceptedAnswers(blank.getAcceptedAnswers());
+        if (acceptedAnswers.isEmpty()) {
+            throw new BusinessException("CLOZE blank is missing accepted answers");
+        }
+
+        StringBuilder builder = new StringBuilder("{");
+        if ("SELECT".equalsIgnoreCase(blank.getBlankType())) {
+            List<String> options = parseBlankOptionsJson(blank.getBlankOptions());
+            String correctAnswer = acceptedAnswers.get(0);
+            if (options.isEmpty()) {
+                options = new ArrayList<>(acceptedAnswers);
+            }
+            if (options.stream().noneMatch(option -> option.equalsIgnoreCase(correctAnswer))) {
+                options.add(0, correctAnswer);
+            }
+            boolean wroteCorrect = false;
+            for (String option : uniqueCaseInsensitive(options)) {
+                if (option.equalsIgnoreCase(correctAnswer) && !wroteCorrect) {
+                    builder.append('=').append(escapeGiftText(option)).append(' ');
+                    wroteCorrect = true;
+                } else {
+                    builder.append('~').append(escapeGiftText(option)).append(' ');
+                }
+            }
+        } else {
+            for (String acceptedAnswer : uniqueCaseInsensitive(acceptedAnswers)) {
+                builder.append('=').append(escapeGiftText(acceptedAnswer)).append(' ');
+            }
+        }
+        if (builder.charAt(builder.length() - 1) == ' ') {
+            builder.setLength(builder.length() - 1);
+        }
+        builder.append('}');
+        return builder.toString();
+    }
+
+    private String buildAikenExportBlock(BankQuestion question) {
+        if (question == null || !StringUtils.hasText(question.getContent())) {
+            return null;
+        }
+        if (question.getType() != QuestionType.SINGLE_CHOICE && question.getType() != QuestionType.TRUE_FALSE) {
+            return "// skipped question id=" + question.getId() + ": unsupported AIKEN type " + question.getType();
+        }
+
+        List<BankQuestionOption> options = getSortedOptions(question).stream()
+                .filter(option -> StringUtils.hasText(option.getContent()))
+                .toList();
+        if (options.size() < 2) {
+            return "// skipped question id=" + question.getId() + ": AIKEN requires at least 2 options";
+        }
+        if (options.size() > 26) {
+            return "// skipped question id=" + question.getId() + ": AIKEN supports at most 26 options";
+        }
+
+        List<BankQuestionOption> correctOptions = options.stream()
+                .filter(option -> Boolean.TRUE.equals(option.getIsCorrect()))
+                .toList();
+        if (correctOptions.size() != 1) {
+            return "// skipped question id=" + question.getId() + ": AIKEN requires exactly 1 correct option";
+        }
+
+        StringBuilder block = new StringBuilder(question.getContent().replace("\r\n", "\n").replace('\r', '\n').trim());
+        char correctLetter = 'A';
+        for (int i = 0; i < options.size(); i++) {
+            BankQuestionOption option = options.get(i);
+            char letter = (char) ('A' + i);
+            block.append('\n').append(letter).append(". ").append(option.getContent().trim());
+            if (Boolean.TRUE.equals(option.getIsCorrect())) {
+                correctLetter = letter;
+            }
+        }
+        block.append('\n').append("ANSWER: ").append(correctLetter);
         return block.toString();
+    }
+
+    private List<BankQuestionOption> getSortedOptions(BankQuestion question) {
+        return question.getOptions() != null
+                ? question.getOptions().stream()
+                .sorted(Comparator.comparing(BankQuestionOption::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
+                .toList()
+                : List.of();
+    }
+
+    private List<QuestionInteractionItem> getSortedInteractionItems(BankQuestion question) {
+        return question.getInteractionItems() != null
+                ? question.getInteractionItems().stream()
+                .sorted(Comparator.comparing(QuestionInteractionItem::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
+                .toList()
+                : List.of();
+    }
+
+    private BankQuestionOption findOptionByContent(List<BankQuestionOption> options, String content) {
+        return options.stream()
+                .filter(option -> StringUtils.hasText(option.getContent()) && option.getContent().trim().equalsIgnoreCase(content))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private List<String> parseBlankOptionsJson(String blankOptions) {
+        if (!StringUtils.hasText(blankOptions)) {
+            return new ArrayList<>();
+        }
+        try {
+            List<String> parsed = objectMapper.readValue(blankOptions, new TypeReference<List<String>>() {});
+            return parsed == null ? new ArrayList<>() : new ArrayList<>(parsed);
+        } catch (Exception ex) {
+            return new ArrayList<>();
+        }
+    }
+
+    private List<String> uniqueCaseInsensitive(List<String> values) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            String trimmed = value.trim();
+            String key = trimmed.toLowerCase(Locale.ROOT);
+            if (seen.add(key)) {
+                result.add(trimmed);
+            }
+        }
+        return result;
     }
 
     private String buildGiftMetadataLine(BankQuestion question) {
@@ -944,7 +1215,19 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
             renderedContent.append(unescapeGiftTextPreserveWhitespace(body.substring(cursor, openBrace)));
 
-            InlineClozeBlank blank = parseInlineClozeBlank(body.substring(openBrace + 1, closeBrace).trim(), blankIndex);
+            String rawInlineBlock = body.substring(openBrace + 1, closeBrace).trim();
+            ParsedGiftAnswerBlock inlineAnswerBlock = parseGiftAnswerBlock(rawInlineBlock);
+            if (inlineAnswerBlock.tokens().isEmpty() && StringUtils.hasText(inlineAnswerBlock.generalFeedback())) {
+                if (!StringUtils.hasText(explanation)) {
+                    explanation = inlineAnswerBlock.generalFeedback();
+                } else if (!explanation.equals(inlineAnswerBlock.generalFeedback())) {
+                    warnings.add("multiple cloze general feedback sections found; keeping the first one");
+                }
+                cursor = closeBrace + 1;
+                continue;
+            }
+
+            InlineClozeBlank blank = parseInlineClozeBlank(rawInlineBlock, blankIndex);
             items.add(blank.item());
             renderedContent.append(blank.token());
             warnings.addAll(blank.warnings());

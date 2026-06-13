@@ -61,12 +61,23 @@ public class QuizAttemptController {
     @GetMapping("/quiz-attempts/manage")
     public ResponseEntity<PageResponse<QuizAttemptResponse>> getManagedQuizAttempts(
             @RequestParam(required = false) Integer classSectionId,
+            @RequestParam(required = false) Integer quizId,
             @RequestParam(required = false) String result,
-            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String studentKeyword,
+            @RequestParam(required = false) String quizKeyword,
+            @RequestParam(required = false) String classKeyword,
             Pageable pageable
     ) {
         return ResponseEntity.ok(
-                quizAttemptService.getManagedQuizAttempts(classSectionId, result, search, pageable)
+                quizAttemptService.getManagedQuizAttempts(
+                        classSectionId,
+                        quizId,
+                        result,
+                        studentKeyword,
+                        quizKeyword,
+                        classKeyword,
+                        pageable
+                )
         );
     }
 

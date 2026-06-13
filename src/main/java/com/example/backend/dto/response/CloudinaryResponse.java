@@ -16,5 +16,6 @@ public class CloudinaryResponse {
     private String hlsUrl;
     private String title;
     private String mimeType;
+    private String fileType;
     private Long fileSize;
 }

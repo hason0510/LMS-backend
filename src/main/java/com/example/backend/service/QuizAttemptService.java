@@ -36,8 +36,11 @@ public interface QuizAttemptService {
 
     PageResponse<QuizAttemptResponse> getManagedQuizAttempts(
             Integer classSectionId,
+            Integer quizId,
             String result,
-            String search,
+            String studentKeyword,
+            String quizKeyword,
+            String classKeyword,
             Pageable pageable
     );
 
