@@ -1,6 +1,7 @@
 package com.example.backend.dto.request;
 
 import lombok.*;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -18,7 +19,7 @@ public class RegisterRequest {
     private String password;
     private String studentNumber;
     private String workPlace;
-    private Integer yearsOfExperience;
+    private LocalDate joinDate;
     private String fieldOfExpertise;
     private String bio;
 }

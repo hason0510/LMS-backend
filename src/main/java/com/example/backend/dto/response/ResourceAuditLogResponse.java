@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -17,5 +18,5 @@ public class ResourceAuditLogResponse {
     private String actionType;
     private String actorUsername;
     private String summary;
-    private LocalDate createdDate;
+    private LocalDateTime createdDate;
 }

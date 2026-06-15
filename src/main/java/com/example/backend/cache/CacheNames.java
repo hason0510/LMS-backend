@@ -25,6 +25,10 @@ public final class CacheNames {
     public static final String QUIZ_GRADEBOOK_COURSE = "quiz_gradebook_course";
     public static final String ASSIGNMENT_TEACHING_OVERVIEW = "assignment_teaching_overview";
 
+    public static final String ADMIN_REPORT_SUMMARY = "admin_report_summary";
+    public static final String CLASS_REPORT_OVERVIEW = "class_report_overview";
+    public static final String CLASS_ASSIGNMENT_REPORT = "class_assignment_report";
+
     public static final List<String> USER_CACHES = List.of(
             USER,
             USER_PAGE
@@ -51,7 +55,10 @@ public final class CacheNames {
             ENROLLMENT_PENDING_CLASS_SECTION,
             QUIZ_GRADEBOOK_CLASS_SECTION,
             QUIZ_GRADEBOOK_COURSE,
-            ASSIGNMENT_TEACHING_OVERVIEW
+            ASSIGNMENT_TEACHING_OVERVIEW,
+            ADMIN_REPORT_SUMMARY,
+            CLASS_REPORT_OVERVIEW,
+            CLASS_ASSIGNMENT_REPORT
     );
 
     public static final List<String> ALL_REDIS_READ_CACHES = List.of(
@@ -71,7 +78,10 @@ public final class CacheNames {
             ENROLLMENT_PENDING_CLASS_SECTION,
             QUIZ_GRADEBOOK_CLASS_SECTION,
             QUIZ_GRADEBOOK_COURSE,
-            ASSIGNMENT_TEACHING_OVERVIEW
+            ASSIGNMENT_TEACHING_OVERVIEW,
+            ADMIN_REPORT_SUMMARY,
+            CLASS_REPORT_OVERVIEW,
+            CLASS_ASSIGNMENT_REPORT
     );
 
     private CacheNames() {

@@ -1,6 +1,7 @@
 package com.example.backend.dto.response.user;
 
 import lombok.*;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -17,7 +18,7 @@ public class UserViewResponse {
     private String imageUrl;
     private String cloudinaryImageId;
     private String workPlace;
-    private Integer yearsOfExperience;
+    private LocalDate joinDate;
     private String fieldOfExpertise;
     private String bio;
 }

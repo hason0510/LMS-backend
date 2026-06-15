@@ -29,6 +29,9 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
 
     long countByUserNameStartingWith(String prefix);
 
+    @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName")
+    long countByRoleName(@Param("roleName") RoleType roleName);
+
     @Query("""
         SELECT u
         FROM User u

@@ -69,7 +69,10 @@ public class RedisConfig {
                 .withCacheConfiguration(CacheNames.ENROLLMENT_PENDING_CLASS_SECTION, cacheConfiguration(Duration.ofSeconds(60)))
                 .withCacheConfiguration(CacheNames.QUIZ_GRADEBOOK_CLASS_SECTION, cacheConfiguration(Duration.ofSeconds(60)))
                 .withCacheConfiguration(CacheNames.QUIZ_GRADEBOOK_COURSE, cacheConfiguration(Duration.ofSeconds(60)))
-                .withCacheConfiguration(CacheNames.ASSIGNMENT_TEACHING_OVERVIEW, cacheConfiguration(Duration.ofSeconds(60)));
+                .withCacheConfiguration(CacheNames.ASSIGNMENT_TEACHING_OVERVIEW, cacheConfiguration(Duration.ofSeconds(60)))
+                .withCacheConfiguration(CacheNames.ADMIN_REPORT_SUMMARY, cacheConfiguration(Duration.ofMinutes(5)))
+                .withCacheConfiguration(CacheNames.CLASS_REPORT_OVERVIEW, cacheConfiguration(Duration.ofMinutes(2)))
+                .withCacheConfiguration(CacheNames.CLASS_ASSIGNMENT_REPORT, cacheConfiguration(Duration.ofMinutes(2)));
     }
 
     private RedisCacheConfiguration cacheConfiguration(Duration ttl) {

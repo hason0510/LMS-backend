@@ -38,6 +38,7 @@ public interface ResourceService {
 
     List<ResourceReferenceResponse> getResourceReferences(Integer resourceId);
     List<ResourceAuditLogResponse> getResourceAuditLogs(Integer resourceId);
+    void recordAuditLog(Integer resourceId, String actionType, String summary);
 
     List<ResourceResponse> getResourcesByLessonId(Integer lessonId);
     List<ResourceResponse> getResourcesByLessonTemplateId(Integer lessonTemplateId);

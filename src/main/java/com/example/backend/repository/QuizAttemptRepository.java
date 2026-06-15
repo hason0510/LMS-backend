@@ -69,6 +69,53 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
             "GROUP BY s.id, s.fullName, s.studentNumber, qa.quiz.id, qa.quiz.title, qa.classContentItem.id " +
             "ORDER BY s.studentNumber ASC, cc.orderIndex ASC, cci.orderIndex ASC")
     List<ClassSectionQuizGradeResponse> findMaxGradesByClassSection(@Param("classSectionId") Integer classSectionId);
-}
 
+    /**
+     * Aggregate quiz statistics across a class section.
+     * Returns a single Object[]: [totalAttempts, averageScore, topScore, distinctStudents]
+     * over completed or expired attempts only.
+     */
+    @Query("SELECT COUNT(qa), COALESCE(AVG(qa.grade), 0), COALESCE(MAX(qa.grade), 0), COUNT(DISTINCT qa.student.id) " +
+            "FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED')")
+    Object[] aggregateClassSectionQuizStats(@Param("classSectionId") Integer classSectionId);
+
+    /**
+     * Quiz-level aggregate (per quizId) for a class section. Each row:
+     * [quizId, classContentItemId, quizTitle, totalAttempts, distinctStudents, avgGrade, maxGrade,
+     *  passedCount, notPassedCount, waitingReviewCount, minPassScore]
+     *
+     * passedCount counts attempts where isPassed=true and gradingStatus<>NEEDS_REVIEW.
+     * waitingReviewCount counts attempts where gradingStatus=NEEDS_REVIEW.
+     */
+    @Query("SELECT qa.quiz.id, qa.classContentItem.id, qa.quiz.title, " +
+            "COUNT(qa), COUNT(DISTINCT qa.student.id), " +
+            "COALESCE(AVG(qa.grade), 0), COALESCE(MAX(qa.grade), 0), " +
+            "SUM(CASE WHEN qa.isPassed = true AND qa.gradingStatus <> com.example.backend.constant.GradingStatus.NEEDS_REVIEW THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN qa.isPassed = false AND qa.gradingStatus <> com.example.backend.constant.GradingStatus.NEEDS_REVIEW THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN qa.gradingStatus = com.example.backend.constant.GradingStatus.NEEDS_REVIEW THEN 1 ELSE 0 END), " +
+            "qa.quiz.minPassScore " +
+            "FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
+            "GROUP BY qa.quiz.id, qa.classContentItem.id, qa.quiz.title, qa.quiz.minPassScore " +
+            "ORDER BY qa.classContentItem.id ASC")
+    List<Object[]> aggregateQuizSummariesByClassSection(@Param("classSectionId") Integer classSectionId);
+
+    /**
+     * Total attempts pending teacher review across given class section IDs (teacher scope).
+     */
+    @Query("SELECT COUNT(qa) FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id IN :classSectionIds " +
+            "AND qa.gradingStatus = com.example.backend.constant.GradingStatus.NEEDS_REVIEW " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED')")
+    long countPendingQuizReviewsInClassSections(@Param("classSectionIds") java.util.Collection<Integer> classSectionIds);
+}
 

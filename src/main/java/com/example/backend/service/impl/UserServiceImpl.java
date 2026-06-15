@@ -318,8 +318,8 @@ public class UserServiceImpl implements UserService {
         if (request.getWorkPlace() != null) {
             updatedUser.setWorkPlace(request.getWorkPlace());
         }
-        if (request.getYearsOfExperience() != null) {
-            updatedUser.setYearsOfExperience(request.getYearsOfExperience());
+        if (request.getJoinDate() != null && isAdmin) {
+            updatedUser.setJoinDate(request.getJoinDate());
         }
         if (request.getFieldOfExpertise() != null) {
             updatedUser.setFieldOfExpertise(request.getFieldOfExpertise());
@@ -421,8 +421,8 @@ public class UserServiceImpl implements UserService {
         if (request.getWorkPlace() != null) {
             user.setWorkPlace(request.getWorkPlace());
         }
-        if (request.getYearsOfExperience() != null) {
-            user.setYearsOfExperience(request.getYearsOfExperience());
+        if (request.getJoinDate() != null) {
+            user.setJoinDate(request.getJoinDate());
         }
         if (request.getFieldOfExpertise() != null) {
             user.setFieldOfExpertise(request.getFieldOfExpertise());
@@ -576,7 +576,7 @@ public class UserServiceImpl implements UserService {
         userDTO.setImageUrl(user.getImageUrl());
         userDTO.setCloudinaryImageId(user.getCloudinaryImageId());
         userDTO.setWorkPlace(user.getWorkPlace());
-        userDTO.setYearsOfExperience(user.getYearsOfExperience());
+        userDTO.setJoinDate(user.getJoinDate());
         userDTO.setFieldOfExpertise(user.getFieldOfExpertise());
         userDTO.setBio(user.getBio());
         return userDTO;
@@ -595,7 +595,7 @@ public class UserServiceImpl implements UserService {
         userDTO.setImageUrl(user.getImageUrl());
         userDTO.setCloudinaryImageId(user.getCloudinaryImageId());
         userDTO.setWorkPlace(user.getWorkPlace());
-        userDTO.setYearsOfExperience(user.getYearsOfExperience());
+        userDTO.setJoinDate(user.getJoinDate());
         userDTO.setFieldOfExpertise(user.getFieldOfExpertise());
         userDTO.setBio(user.getBio());
         return userDTO;

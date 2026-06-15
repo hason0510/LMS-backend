@@ -6,6 +6,7 @@ import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,8 +54,8 @@ public class User extends BaseEntity {
     private String cloudinaryImageId;
     @Column(name = "work_place")
     private String workPlace;
-    @Column(name = "years_of_experience")
-    private Integer yearsOfExperience;
+    @Column(name = "join_date")
+    private LocalDate joinDate;
     @Column(name = "field_of_expertise")
     private String fieldOfExpertise;
     @Column(name = "bio", columnDefinition = "LONGTEXT")

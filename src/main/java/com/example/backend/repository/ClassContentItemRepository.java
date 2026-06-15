@@ -64,4 +64,13 @@ public interface ClassContentItemRepository extends JpaRepository<ClassContentIt
               and cci.assignment.id = :assignmentId
             """)
     List<ClassSection> findClassSectionsByAssignmentId(@Param("assignmentId") Integer assignmentId);
+
+    /**
+     * Count distinct quizzes attached to a class section via ClassContentItem.
+     */
+    @Query("SELECT COUNT(DISTINCT cci.quiz.id) FROM ClassContentItem cci " +
+            "WHERE cci.classChapter.classSection.id = :classSectionId " +
+            "AND cci.itemType = com.example.backend.constant.ContentItemType.QUIZ " +
+            "AND cci.quiz IS NOT NULL")
+    long countTrackedQuizzesByClassSectionId(@Param("classSectionId") Integer classSectionId);
 }

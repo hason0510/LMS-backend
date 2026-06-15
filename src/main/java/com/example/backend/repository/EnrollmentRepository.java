@@ -86,4 +86,62 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.courseId = :courseId AND e.approvalStatus = 'APPROVED'")
     Long countApprovedEnrollmentsByCourseId(@Param("courseId") Integer courseId);
+
+    long countByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus status);
+
+    @Query("SELECT AVG(e.progress) FROM Enrollment e " +
+           "WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED'")
+    Double averageProgressByClassSection(@Param("classSectionId") Integer classSectionId);
+
+    @Query("SELECT COUNT(e) FROM Enrollment e " +
+           "WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED' " +
+           "AND e.progress < :threshold")
+    long countAtRiskStudents(@Param("classSectionId") Integer classSectionId, 
+                             @Param("threshold") int threshold);
+
+    /**
+     * Count approved students whose progress is in [lowThreshold, highThreshold) range.
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e " +
+           "WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED' " +
+           "AND e.progress >= :lowThreshold AND e.progress < :highThreshold")
+    long countStudentsInProgressRange(@Param("classSectionId") Integer classSectionId,
+                                      @Param("lowThreshold") int lowThreshold,
+                                      @Param("highThreshold") int highThreshold);
+
+    /**
+     * Count approved students whose progress is at or above a threshold.
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e " +
+           "WHERE e.classSection.id = :classSectionId AND e.approvalStatus = 'APPROVED' " +
+           "AND e.progress >= :threshold")
+    long countEngagedStudents(@Param("classSectionId") Integer classSectionId,
+                              @Param("threshold") int threshold);
+
+    /**
+     * Total approved students across all class sections (admin scope).
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.approvalStatus = 'APPROVED' AND e.classSection IS NOT NULL")
+    long countTotalApprovedStudents();
+
+    /**
+     * Total approved students across given class section IDs (teacher scope).
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.approvalStatus = 'APPROVED' AND e.classSection.id IN :classSectionIds")
+    long countTotalApprovedStudentsInClassSections(@Param("classSectionIds") Collection<Integer> classSectionIds);
+
+    /**
+     * Total pending requests across given class section IDs (teacher scope).
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.approvalStatus = 'PENDING' AND e.classSection.id IN :classSectionIds")
+    long countPendingRequestsInClassSections(@Param("classSectionIds") Collection<Integer> classSectionIds);
+
+    /**
+     * Total at-risk students across given class section IDs (teacher scope).
+     */
+    @Query("SELECT COUNT(e) FROM Enrollment e " +
+           "WHERE e.approvalStatus = 'APPROVED' AND e.classSection.id IN :classSectionIds " +
+           "AND e.progress < :threshold")
+    long countAtRiskStudentsInClassSections(@Param("classSectionIds") Collection<Integer> classSectionIds,
+                                            @Param("threshold") int threshold);
 }

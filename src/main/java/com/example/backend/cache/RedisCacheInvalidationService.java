@@ -6,6 +6,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class RedisCacheInvalidationService {
 
     public void evictClassSectionCaches() {
         evict(CacheNames.CLASS_SECTION_CACHES);
+        evict(List.of(CacheNames.ADMIN_REPORT_SUMMARY));
     }
 
     public void evictReportCaches() {

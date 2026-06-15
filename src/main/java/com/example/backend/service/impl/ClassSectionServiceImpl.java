@@ -93,6 +93,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -158,6 +159,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         classSection.setCurriculumTemplate(curriculumTemplate);
 
         classSection = classSectionRepository.save(classSection);
+        if (imageResource != null) {
+            resourceService.recordAuditLog(imageResource.getId(), "ATTACH", "Gắn làm ảnh đại diện lớp học");
+        }
         syncTeachingMembers(classSection, teacher, request.getTaIds());
 
         for (ChapterTemplate chapterTemplate : safeList(curriculumTemplate.getChapters())) {
@@ -222,7 +226,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
 
         return classSections.stream()
                 .sorted(Comparator
-                        .comparing(ClassSection::getCreatedDate, Comparator.nullsLast(LocalDate::compareTo))
+                        .comparing(ClassSection::getCreatedDate, Comparator.nullsLast(LocalDateTime::compareTo))
                         .thenComparing(ClassSection::getId, Comparator.nullsLast(Integer::compareTo)))
                 .map(classSection -> convertToResponse(classSection, includeChapters))
                 .collect(java.util.stream.Collectors.toList());
@@ -473,6 +477,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
 
         ClassChapterResponse response = convertChapterToResponse(classChapterRepository.save(classChapter));
+        recalculateLearningProgressForApprovedStudents(classSectionId);
         cacheInvalidationService.evictAllRedisReadCaches();
         return response;
     }
@@ -487,6 +492,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         ClassChapter classChapter = classChapterRepository.findByIdAndClassSection_Id(classChapterId, classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class chapter not found in this class section"));
         classChapterRepository.delete(classChapter);
+        recalculateLearningProgressForApprovedStudents(classSectionId);
         cacheInvalidationService.evictAllRedisReadCaches();
     }
 
@@ -1548,9 +1554,17 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (request.getDescription() != null) {
             classSection.setDescription(request.getDescription());
         }
+        Resource oldImageResource = classSection.getImageResource();
         Resource imageResource = resolveImageResource(request.getImageResourceId());
         classSection.setImageResource(imageResource);
         classSection.setImageUrl(resolveImageUrl(request.getImageUrl(), imageResource));
+        
+        if (oldImageResource != null && !oldImageResource.equals(imageResource)) {
+            resourceService.recordAuditLog(oldImageResource.getId(), "DETACH", "Gỡ khỏi ảnh đại diện lớp học");
+        }
+        if (imageResource != null && !imageResource.equals(oldImageResource)) {
+            resourceService.recordAuditLog(imageResource.getId(), "ATTACH", "Gắn làm ảnh đại diện lớp học");
+        }
         if (request.getStartDate() != null) {
             classSection.setStartDate(request.getStartDate());
         }
@@ -1573,6 +1587,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         Resource imageResource = resourceRepository.findById(imageResourceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image resource not found"));
         resourceAuthorizationService.assertCanUse(imageResource, null, null);
+        imageResource.setLastUsedAt(LocalDateTime.now());
+        resourceRepository.save(imageResource);
         return imageResource;
     }
 

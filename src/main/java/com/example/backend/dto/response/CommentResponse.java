@@ -22,5 +22,6 @@ public class CommentResponse {
     private String fullName;
     private String avatar;
     private Integer parentId;
+    private Boolean isDeleted;
     private List<CommentResponse> replies;
 }

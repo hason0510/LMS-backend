@@ -1,7 +1,8 @@
 package com.example.backend.service.impl;
 
-import com.example.backend.constant.EnrollmentStatus;
+import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ClassSectionStatus;
+import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.CommentRequest;
 import com.example.backend.dto.response.CommentRealtimeEventResponse;
@@ -111,9 +112,19 @@ public class CommentServiceImpl implements CommentService {
         }
 
         if (currentRole == RoleType.STUDENT) {
-            String msg = String.format("Người học %s đã bình luận bài giảng %s trong lớp %s",
+            String msg = String.format("Người học %s đã bình luận Bài giảng \"%s\" trong Lớp \"%s\"",
                     currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
-            notificationService.createNotification(teacher, "Có bình luận mới từ người học", msg, "COMMENT", null, null);
+            if (teacher != null && !teacher.getId().equals(currentUser.getId())) {
+                notificationService.createNotification(teacher, "Có bình luận mới từ người học", msg, "COMMENT", null, null);
+            }
+            if (classSection.getClassMembers() != null) {
+                classSection.getClassMembers().stream()
+                        .filter(m -> m.getRole() == ClassMemberRole.TA || m.getRole() == ClassMemberRole.TEACHER)
+                        .map(ClassMember::getUser)
+                        .filter(u -> teacher == null || !u.getId().equals(teacher.getId()))
+                        .filter(u -> !u.getId().equals(currentUser.getId()))
+                        .forEach(u -> notificationService.createNotification(u, "Có bình luận mới từ người học", msg, "COMMENT", null, null));
+            }
             return;
         }
 
@@ -121,8 +132,13 @@ public class CommentServiceImpl implements CommentService {
             List<Enrollment> enrollments = enrollmentRepository.findByClassSection_IdAndApprovalStatus(
                     classSection.getId(), EnrollmentStatus.APPROVED);
 
-            String msg = String.format("%s %s có thông báo mới trong bài giảng %s trong lớp %s",
-                    getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
+            String msg = String.format(
+                    "%s %s có bình luận mới trong Bài giảng \"%s\" trong Lớp \"%s\"",
+                    getRoleDisplayName(currentRole),
+                    currentUser.getFullName(),
+                    lesson.getTitle(),
+                    classSection.getTitle()
+            );
 
             enrollments.forEach(e -> notificationService.createNotification(e.getStudent(), "Có thông báo mới từ giáo viên", msg, "COMMENT", null, null));
 
@@ -147,6 +163,10 @@ public class CommentServiceImpl implements CommentService {
 
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+
+        if (comment.is_deleted()) {
+            throw new BusinessException("Bình luận này đã bị thu hồi và không thể chỉnh sửa");
+        }
 
         validateActionComment(comment);
 
@@ -228,10 +248,19 @@ public class CommentServiceImpl implements CommentService {
     public void deleteComment(Integer id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment not found"));
+        
+        if (comment.is_deleted()) {
+            throw new BusinessException("Bình luận này đã bị thu hồi");
+        }
+        
         validateActionComment(comment);
-        CommentResponse response = convertEntityToDTO(comment);
         Integer lessonId = comment.getLesson().getId();
-        commentRepository.delete(comment);
+        
+        // Explicitly soft-delete to prevent Hibernate from cascading the REMOVE action to child comments
+        comment.set_deleted(true);
+        commentRepository.save(comment);
+        
+        CommentResponse response = convertEntityToDTO(comment);
         publishCommentEventAfterCommit("DELETED", lessonId, response);
     }
 
@@ -259,17 +288,28 @@ public class CommentServiceImpl implements CommentService {
     public CommentResponse convertEntityToDTO(Comment comment) {
         CommentResponse response = new CommentResponse();
         response.setCommentId(comment.getId());
-        response.setCommentDetail(comment.getContent());
         response.setCreatedAt(comment.getCreatedTime());
         response.setUpdatedAt(comment.getUpdatedTime());
         response.setLessonId(comment.getLesson().getId());
-        response.setUserId(comment.getUser().getId());
-        response.setFullName(comment.getUser().getFullName());
-        response.setAvatar(comment.getUser().getImageUrl());
+        
         if (comment.getParent() != null) {
             response.setParentId(comment.getParent().getId());
         }
         response.setReplies(new ArrayList<>());
+        
+        if (comment.is_deleted()) {
+            response.setCommentDetail("Bình luận này đã bị thu hồi");
+            response.setUserId(null);
+            response.setFullName("Người dùng ẩn danh");
+            response.setAvatar(null);
+            response.setIsDeleted(true);
+        } else {
+            response.setCommentDetail(comment.getContent());
+            response.setUserId(comment.getUser().getId());
+            response.setFullName(comment.getUser().getFullName());
+            response.setAvatar(comment.getUser().getImageUrl());
+            response.setIsDeleted(false);
+        }
         return response;
     }
 

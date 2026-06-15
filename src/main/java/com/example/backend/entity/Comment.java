@@ -16,7 +16,6 @@ import java.util.List;
 @Entity
 @Table(name = "comment")
 @SQLDelete(sql = "UPDATE comment SET is_deleted = true WHERE id = ?")
-@SQLRestriction("is_deleted = false")
 public class Comment extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

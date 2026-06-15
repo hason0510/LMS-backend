@@ -32,7 +32,7 @@ public class ResourceResponse {
     private ResourceVisibility visibility;
     private ResourceStatus status;
     private Integer usageCount;
-    private LocalDate createdDate;
+    private LocalDateTime createdDate;
     private LocalDateTime lastUsedAt;
     private String createdBy;
     private String scopeTargetName;

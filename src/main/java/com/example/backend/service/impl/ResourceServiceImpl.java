@@ -220,7 +220,8 @@ public class ResourceServiceImpl implements ResourceService {
             throw new BusinessException("Không thể xóa media đang được sử dụng. Hãy lưu trữ media thay vì xóa.");
         }
         logResourceAction(resource, "DELETE", "Xóa tài nguyên");
-        resourceRepository.delete(resource);
+        resource.set_deleted(true);
+        resourceRepository.save(resource);
     }
 
     @Override
@@ -1060,6 +1061,12 @@ public class ResourceServiceImpl implements ResourceService {
                 resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
         );
         return count != null ? count : 0;
+    }
+
+    @Override
+    public void recordAuditLog(Integer resourceId, String actionType, String summary) {
+        if (resourceId == null) return;
+        resourceRepository.findById(resourceId).ifPresent(resource -> logResourceAction(resource, actionType, summary));
     }
 
     private void logResourceAction(Resource resource, String actionType, String summary) {
