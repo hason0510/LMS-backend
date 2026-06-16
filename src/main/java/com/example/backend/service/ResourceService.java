@@ -8,7 +8,7 @@ import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.ResourceAuditLogResponse;
 import com.example.backend.dto.response.ResourceReferenceResponse;
 import com.example.backend.dto.response.ResourceUploadPolicyResponse;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;

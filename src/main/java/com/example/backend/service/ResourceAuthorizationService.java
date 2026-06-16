@@ -6,7 +6,7 @@ import com.example.backend.constant.ResourceStatus;
 import com.example.backend.constant.ResourceVisibility;
 import com.example.backend.constant.RoleType;
 import com.example.backend.entity.ClassSection;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.User;
 import com.example.backend.entity.quiz.QuestionBankMember;
 import com.example.backend.exception.UnauthorizedException;

@@ -1,6 +1,7 @@
 package com.example.backend.entity;
 
 import com.example.backend.constant.ClassSectionStatus;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.template.CurriculumTemplate;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

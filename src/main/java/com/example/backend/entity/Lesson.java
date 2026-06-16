@@ -1,5 +1,6 @@
 package com.example.backend.entity;
 
+import com.example.backend.entity.resource.Resource;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;

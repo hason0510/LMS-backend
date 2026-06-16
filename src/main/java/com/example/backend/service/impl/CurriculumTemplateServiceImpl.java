@@ -26,6 +26,7 @@ import com.example.backend.dto.response.quiz.QuizQuestionResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionTag;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.template.ChapterTemplate;
 import com.example.backend.entity.template.ContentItemTemplate;
 import com.example.backend.entity.template.CurriculumTemplate;
@@ -1237,7 +1238,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
                 .toList();
     }
 
-    private ResourceResponse convertResourceToDTO(com.example.backend.entity.Resource resource) {
+    private ResourceResponse convertResourceToDTO(Resource resource) {
         if (resource == null) {
             return null;
         }

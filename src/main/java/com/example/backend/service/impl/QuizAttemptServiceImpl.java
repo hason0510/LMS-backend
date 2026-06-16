@@ -11,6 +11,7 @@ import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.dto.response.quiz.*;
 import com.example.backend.entity.*;
 import com.example.backend.entity.quiz.*;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;

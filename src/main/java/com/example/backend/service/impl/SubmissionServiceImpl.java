@@ -16,7 +16,7 @@ import com.example.backend.dto.response.SubmissionResponse;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Enrollment;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.assignment.Submission;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;

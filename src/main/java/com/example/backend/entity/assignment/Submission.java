@@ -3,7 +3,7 @@ package com.example.backend.entity.assignment;
 import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.entity.BaseEntity;
 import com.example.backend.entity.ClassSection;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

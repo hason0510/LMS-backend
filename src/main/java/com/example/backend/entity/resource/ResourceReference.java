@@ -1,5 +1,6 @@
-package com.example.backend.entity;
+package com.example.backend.entity.resource;
 
+import com.example.backend.entity.BaseEntity;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;

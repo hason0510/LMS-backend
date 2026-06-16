@@ -27,7 +27,7 @@ import com.example.backend.entity.template.ChapterTemplate;
 import com.example.backend.entity.ClassChapter;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassMember;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.template.ContentItemTemplate;
 import com.example.backend.entity.template.CurriculumTemplate;
@@ -92,7 +92,6 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 

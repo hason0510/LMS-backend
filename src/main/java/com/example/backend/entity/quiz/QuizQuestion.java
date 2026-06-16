@@ -2,7 +2,7 @@ package com.example.backend.entity.quiz;
 
 import com.example.backend.constant.QuestionType;
 import com.example.backend.entity.BaseEntity;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;

@@ -1,9 +1,11 @@
-package com.example.backend.entity;
+package com.example.backend.entity.resource;
 
 import com.example.backend.constant.ResourceScopeType;
 import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.ResourceStatus;
 import com.example.backend.constant.ResourceVisibility;
+import com.example.backend.entity.BaseEntity;
+import com.example.backend.entity.Lesson;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.assignment.Submission;
 import jakarta.persistence.*;

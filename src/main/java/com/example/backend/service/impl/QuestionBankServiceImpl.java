@@ -22,7 +22,7 @@ import com.example.backend.dto.response.questionbank.QuestionBankResponse;
 import com.example.backend.dto.response.questionbank.QuestionTagResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.BankQuestionTag;

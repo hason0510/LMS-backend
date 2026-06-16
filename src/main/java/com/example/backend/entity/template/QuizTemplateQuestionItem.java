@@ -2,7 +2,7 @@ package com.example.backend.entity.template;
 
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.entity.BaseEntity;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

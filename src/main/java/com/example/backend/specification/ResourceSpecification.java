@@ -5,7 +5,7 @@ import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.ResourceStatus;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.ResourceVisibility;
-import com.example.backend.entity.Resource;
+import com.example.backend.entity.resource.Resource;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 

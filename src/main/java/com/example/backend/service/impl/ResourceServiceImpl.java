@@ -15,9 +15,9 @@ import com.example.backend.dto.response.ResourceReferenceResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.dto.response.ResourceUploadPolicyResponse;
 import com.example.backend.entity.Lesson;
-import com.example.backend.entity.Resource;
-import com.example.backend.entity.ResourceAuditLog;
-import com.example.backend.entity.ResourceReference;
+import com.example.backend.entity.resource.Resource;
+import com.example.backend.entity.resource.ResourceAuditLog;
+import com.example.backend.entity.resource.ResourceReference;
 import com.example.backend.entity.User;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.assignment.Submission;
@@ -58,7 +58,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
