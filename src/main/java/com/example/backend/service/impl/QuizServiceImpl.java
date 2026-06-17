@@ -55,6 +55,7 @@ import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
 import com.example.backend.service.ClassNotificationService;
 import com.example.backend.service.ResourceAuthorizationService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -95,6 +96,7 @@ public class QuizServiceImpl implements QuizService {
     private final ResourceRepository resourceRepository;
     private final ClassNotificationService classNotificationService;
     private final UserService userService;
+    private final ResourceService resourceService;
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
     private final ResourceAuthorizationService resourceAuthorizationService;
@@ -115,7 +117,8 @@ public class QuizServiceImpl implements QuizService {
             UserService userService,
             ClassMemberAuthorizationService classMemberAuthorizationService,
             ClassContentAccessService classContentAccessService,
-            ResourceAuthorizationService resourceAuthorizationService
+            ResourceAuthorizationService resourceAuthorizationService,
+            ResourceService resourceService
     ) {
         this.quizRepository = quizRepository;
         this.quizQuestionRepository = quizQuestionRepository;
@@ -133,6 +136,7 @@ public class QuizServiceImpl implements QuizService {
         this.classMemberAuthorizationService = classMemberAuthorizationService;
         this.classContentAccessService = classContentAccessService;
         this.resourceAuthorizationService = resourceAuthorizationService;
+        this.resourceService = resourceService;
     }
 
     @Override
@@ -411,7 +415,10 @@ public class QuizServiceImpl implements QuizService {
 
         validateQuizContentPresence(quiz, request);
 
-        clearQuizSourcesAndQuestions(quiz);
+        List<QuizQuestion> existingQuestions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
+        Set<Integer> oldResourceIds = extractResourceIds(existingQuestions);
+
+        clearQuizSourcesAndQuestions(quiz, existingQuestions);
 
         if (request.getBankSources() != null && !request.getBankSources().isEmpty()) {
             if (!quiz.isGenerateQuestionsPerAttempt()) {
@@ -419,11 +426,29 @@ public class QuizServiceImpl implements QuizService {
                 quizRepository.save(quiz);
             }
             saveBankSources(quiz, request.getBankSources());
+            for (Integer resourceId : oldResourceIds) {
+                resourceService.recordAuditLog(resourceId, "DETACH", "Gỡ media khỏi nội dung trắc nghiệm");
+            }
             return;
         }
 
         if (request.getQuestions() != null && !request.getQuestions().isEmpty()) {
             createManualQuestions(quiz, request.getQuestions());
+
+            Set<Integer> newResourceIds = extractResourceIdsFromRequests(request.getQuestions());
+
+            Set<Integer> attachedIds = new java.util.HashSet<>(newResourceIds);
+            attachedIds.removeAll(oldResourceIds);
+
+            Set<Integer> detachedIds = new java.util.HashSet<>(oldResourceIds);
+            detachedIds.removeAll(newResourceIds);
+
+            for (Integer resourceId : attachedIds) {
+                resourceService.recordAuditLog(resourceId, "ATTACH", "Gắn media vào nội dung trắc nghiệm");
+            }
+            for (Integer resourceId : detachedIds) {
+                resourceService.recordAuditLog(resourceId, "DETACH", "Gỡ media khỏi nội dung trắc nghiệm");
+            }
         }
     }
 
@@ -491,10 +516,9 @@ public class QuizServiceImpl implements QuizService {
         }
     }
 
-    private void clearQuizSourcesAndQuestions(Quiz quiz) {
+    private void clearQuizSourcesAndQuestions(Quiz quiz, List<QuizQuestion> existingQuestions) {
         quizBankSourceRepository.deleteAll(quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(quiz.getId()));
 
-        List<QuizQuestion> existingQuestions = quizQuestionRepository.findByQuiz_IdOrderByIdAsc(quiz.getId());
         // Soft delete the old quiz questions so the rows stay in DB for history,
         // but disappear from normal queries via @SQLRestriction.
         quizQuestionRepository.deleteAll(existingQuestions);
@@ -1283,6 +1307,53 @@ public class QuizServiceImpl implements QuizService {
         return r;
     }
 
+    private java.util.Set<Integer> extractResourceIds(List<QuizQuestion> questions) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        if (questions == null) return ids;
+        for (QuizQuestion question : questions) {
+            if (question.getResource() != null && question.getResource().getId() != null) {
+                ids.add(question.getResource().getId());
+            }
+            if (question.getAnswers() != null) {
+                for (com.example.backend.entity.quiz.QuizAnswer answer : question.getAnswers()) {
+                    if (answer.getResource() != null && answer.getResource().getId() != null) {
+                        ids.add(answer.getResource().getId());
+                    }
+                }
+            }
+            if (question.getInteractionItems() != null) {
+                for (com.example.backend.entity.quiz.QuestionInteractionItem item : question.getInteractionItems()) {
+                    if (item.getResource() != null && item.getResource().getId() != null) {
+                        ids.add(item.getResource().getId());
+                    }
+                }
+            }
+        }
+        return ids;
+    }
 
-
+    private java.util.Set<Integer> extractResourceIdsFromRequests(List<QuizQuestionRequest> requests) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        if (requests == null) return ids;
+        for (QuizQuestionRequest request : requests) {
+            if (request.getResourceId() != null) {
+                ids.add(request.getResourceId());
+            }
+            if (request.getAnswers() != null) {
+                for (com.example.backend.dto.request.quiz.QuizAnswerRequest answer : request.getAnswers()) {
+                    if (answer.getResourceId() != null) {
+                        ids.add(answer.getResourceId());
+                    }
+                }
+            }
+            if (request.getItems() != null) {
+                for (com.example.backend.dto.request.quiz.QuestionInteractionItemRequest item : request.getItems()) {
+                    if (item.getResourceId() != null) {
+                        ids.add(item.getResourceId());
+                    }
+                }
+            }
+        }
+        return ids;
+    }
 }

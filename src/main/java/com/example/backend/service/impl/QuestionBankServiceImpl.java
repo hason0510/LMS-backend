@@ -48,6 +48,7 @@ import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.QuestionBankService;
 import com.example.backend.service.ResourceAuthorizationService;
+import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,6 +100,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     private final DifficultyTagResolver difficultyTagResolver;
     private final ResourceRepository resourceRepository;
     private final ResourceAuthorizationService resourceAuthorizationService;
+    private final ResourceService resourceService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -175,6 +177,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
         syncQuestionTags(question, tagResolution.tagNames(), currentRole, true);
+
+        Set<Integer> newResourceIds = extractResourceIds(request);
+        for (Integer resourceId : newResourceIds) {
+            resourceService.recordAuditLog(resourceId, "ATTACH", "Gắn media vào nội dung trắc nghiệm");
+        }
+
         return convertQuestion(bankQuestionRepository.findById(question.getId()).orElseThrow(), true);
     }
 
@@ -185,11 +193,29 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                 .orElseThrow(() -> new ResourceNotFoundException("Bank question not found"));
         QuestionBankMemberRole currentRole = requireEditPermission(question.getQuestionBank());
 
+        Set<Integer> oldResourceIds = extractResourceIds(question);
+
         applyQuestionRequest(question, request);
         TagResolutionResult tagResolution = resolveTags(question.getQuestionBank(), request.getTagNames(), request.getDifficultyLevel(), true);
         question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
         syncQuestionTags(question, tagResolution.tagNames(), currentRole, false);
+
+        Set<Integer> newResourceIds = extractResourceIds(request);
+
+        Set<Integer> attachedIds = new java.util.HashSet<>(newResourceIds);
+        attachedIds.removeAll(oldResourceIds);
+
+        Set<Integer> detachedIds = new java.util.HashSet<>(oldResourceIds);
+        detachedIds.removeAll(newResourceIds);
+
+        for (Integer resourceId : attachedIds) {
+            resourceService.recordAuditLog(resourceId, "ATTACH", "Gắn media vào nội dung trắc nghiệm");
+        }
+        for (Integer resourceId : detachedIds) {
+            resourceService.recordAuditLog(resourceId, "DETACH", "Gỡ media khỏi nội dung trắc nghiệm");
+        }
+
         return convertQuestion(bankQuestionRepository.findById(question.getId()).orElseThrow(), true);
     }
 
@@ -1650,6 +1676,52 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         questionBank.setName(request.getName().trim());
         questionBank.setDescription(StringUtils.hasText(request.getDescription()) ? request.getDescription().trim() : null);
         questionBank.setSubject(subject);
+    }
+
+    private Set<Integer> extractResourceIds(BankQuestion question) {
+        Set<Integer> ids = new java.util.HashSet<>();
+        if (question == null) return ids;
+        if (question.getResource() != null && question.getResource().getId() != null) {
+            ids.add(question.getResource().getId());
+        }
+        if (question.getOptions() != null) {
+            for (BankQuestionOption option : question.getOptions()) {
+                if (option.getResource() != null && option.getResource().getId() != null) {
+                    ids.add(option.getResource().getId());
+                }
+            }
+        }
+        if (question.getInteractionItems() != null) {
+            for (QuestionInteractionItem item : question.getInteractionItems()) {
+                if (item.getResource() != null && item.getResource().getId() != null) {
+                    ids.add(item.getResource().getId());
+                }
+            }
+        }
+        return ids;
+    }
+
+    private Set<Integer> extractResourceIds(BankQuestionRequest request) {
+        Set<Integer> ids = new java.util.HashSet<>();
+        if (request == null) return ids;
+        if (request.getResourceId() != null) {
+            ids.add(request.getResourceId());
+        }
+        if (request.getOptions() != null) {
+            for (BankQuestionOptionRequest option : request.getOptions()) {
+                if (option.getResourceId() != null) {
+                    ids.add(option.getResourceId());
+                }
+            }
+        }
+        if (request.getItems() != null) {
+            for (QuestionInteractionItemRequest item : request.getItems()) {
+                if (item.getResourceId() != null) {
+                    ids.add(item.getResourceId());
+                }
+            }
+        }
+        return ids;
     }
 
     private void applyQuestionRequest(BankQuestion question, BankQuestionRequest request) {
