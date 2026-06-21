@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
 import com.example.backend.cache.CacheNames;
 import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.ClassMemberRole;
@@ -172,7 +174,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             throw new BusinessException("Chi bai hoc moi duoc danh dau hoan thanh thu cong");
         }
 
-        Integer classSectionId = classContentItem.getClassChapter().getClassSection().getId();
+        var classSection = classContentItem.getClassChapter().getClassSection();
+        ClassSectionGuard.ensureInteractive(classSection);
+        Integer classSectionId = classSection.getId();
         boolean isEnrolled = enrollmentRepository.existsByStudent_IdAndClassSection_IdAndApprovalStatus(
                 currentUser.getId(), classSectionId, EnrollmentStatus.APPROVED);
         if (!isEnrolled) {
@@ -213,6 +217,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         }
 
         enrollment.setApprovalStatus(EnrollmentStatus.APPROVED);
+        enrollment.setApprovedAt(LocalDateTime.now());
         enrollmentRepository.save(enrollment);
         cacheInvalidationService.evictAllRedisReadCaches();
 
@@ -519,6 +524,7 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .classSection(classSection)
                 .progress(0)
                 .approvalStatus(targetStatus)
+                .approvedAt(targetStatus == EnrollmentStatus.APPROVED ? LocalDateTime.now() : null)
                 .build();
         enrollmentRepository.save(newEnrollment);
 
@@ -555,12 +561,13 @@ public class EnrollmentServiceImpl implements EnrollmentService {
                 .studentAvatar(enrollment.getStudent() != null ? enrollment.getStudent().getImageUrl() : null)
                 .courseTitle(null)
                 .courseCode(null)
-                .courseId(enrollment.getCourseId())
                 .classSectionTitle(classSection != null ? classSection.getTitle() : null)
                 .classSectionCode(classSection != null ? classSection.getClassCode() : null)
                 .classSectionId(classSection != null ? classSection.getId() : null)
                 .progress(includeProgress ? enrollment.getProgress() : null)
                 .approvalStatus(enrollment.getApprovalStatus() != null ? enrollment.getApprovalStatus().toString() : null)
+                .createdAt(enrollment.getCreatedDate())
+                .approvedAt(enrollment.getApprovedAt())
                 .build();
     }
 

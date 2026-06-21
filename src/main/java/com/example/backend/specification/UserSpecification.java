@@ -36,44 +36,6 @@ public class UserSpecification {
         };
     }
 
-    public static Specification<User> notInCourse(Integer courseId) {
-        return (root, query, cb) -> {
-            var subQuery = query.subquery(Integer.class);
-            var enrollment = subQuery.from(Enrollment.class);
-
-            subQuery.select(enrollment.get("id"))
-                    .where(
-                            cb.equal(enrollment.get("student"), root),
-                            cb.equal(enrollment.get("courseId"), courseId),
-                            cb.equal(
-                                    enrollment.get("approvalStatus"),
-                                    EnrollmentStatus.APPROVED
-                            )
-                    );
-
-            return cb.not(cb.exists(subQuery));
-        };
-    }
-
-    public static Specification<User> inCourse(Integer courseId) {
-        return (root, query, cb) -> {
-            var subQuery = query.subquery(Integer.class);
-            var enrollment = subQuery.from(Enrollment.class);
-
-            subQuery.select(enrollment.get("id"))
-                    .where(
-                            cb.equal(enrollment.get("student"), root),
-                            cb.equal(enrollment.get("courseId"), courseId),
-                            cb.equal(
-                                    enrollment.get("approvalStatus"),
-                                    EnrollmentStatus.APPROVED
-                            )
-                    );
-
-            return cb.exists(subQuery);
-        };
-    }
-
     public static Specification<User> notInClassSection(Integer classSectionId) {
         return (root, query, cb) -> {
             var subQuery = query.subquery(Integer.class);

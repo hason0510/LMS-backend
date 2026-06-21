@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 public class StudentQuizResultResponse {
     private Integer quizId;
     private String quizTitle;
-    private Integer chapterItemId;
     private Integer maxGrade;// Điểm cao nhất đạt được
     @JsonProperty("isPassed")
     private Boolean isPassed; // Đã từng qua môn chưa

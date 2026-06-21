@@ -26,6 +26,7 @@ public class ClassReportOverviewResponse {
     private long taCount;
     private long trackedQuizzes;
     private long trackedAssignments;
+    private long trackedLectures;
     private long atRiskStudents;
     private long engagedStudents;
     private double topScore;

@@ -1,5 +1,6 @@
 package com.example.backend.controller;
 
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.reporting.AdminReportSummaryResponse;
 import com.example.backend.dto.response.reporting.AssignmentReportResponse;
 import com.example.backend.dto.response.reporting.ClassReportOverviewResponse;
@@ -32,6 +33,38 @@ public class ReportingController {
         return ResponseEntity.ok(reportingService.getAdminReportSummary());
     }
 
+    @Operation(summary = "Paginated teacher load (classes per teacher) with search + sort")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/admin/reports/teacher-load")
+    public ResponseEntity<PageResponse<AdminReportSummaryResponse.TeacherLoadItem>> getTeacherLoad(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "desc") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "8") int size) {
+        return ResponseEntity.ok(reportingService.getTeacherLoad(search, sort, page, size));
+    }
+
+    @Operation(summary = "Paginated subject load (classes per subject) with search + sort")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/admin/reports/subject-load")
+    public ResponseEntity<PageResponse<AdminReportSummaryResponse.SubjectLoadItem>> getSubjectLoad(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "desc") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "8") int size) {
+        return ResponseEntity.ok(reportingService.getSubjectLoad(search, sort, page, size));
+    }
+
+    @Operation(summary = "Paginated assistant (TA) list with the classes they support; search by name/email/class")
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/admin/reports/assistants")
+    public ResponseEntity<PageResponse<AdminReportSummaryResponse.AssistantClassesItem>> getAssistants(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(reportingService.getAssistantList(search, page, size));
+    }
+
     @Operation(summary = "Get teacher-scope report summary across all classes the user teaches or assists")
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/teacher/reports/summary")
@@ -44,7 +77,7 @@ public class ReportingController {
     @GetMapping("/class-sections/{id}/reports/overview")
     public ResponseEntity<ClassReportOverviewResponse> getClassReportOverview(
             @PathVariable Integer id,
-            @RequestParam(defaultValue = "50") int lowThreshold,
+            @RequestParam(defaultValue = "40") int lowThreshold,
             @RequestParam(defaultValue = "80") int highThreshold) {
         return ResponseEntity.ok(reportingService.getClassReportOverview(id, lowThreshold, highThreshold));
     }

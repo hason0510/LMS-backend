@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+import java.time.LocalDateTime;
 
 @Setter
 @Getter
@@ -22,13 +23,12 @@ public class Enrollment extends BaseEntity{
     @ManyToOne
     @JoinColumn(name = "student_id")
     private User student;
-    @Column(name = "course_id")
-    private Integer courseId;
     @ManyToOne
     @JoinColumn(name = "class_section_id")
     private ClassSection classSection;
     private Integer progress;
     @Enumerated(EnumType.STRING)
     private EnrollmentStatus approvalStatus;
+    private LocalDateTime approvedAt;
 
 }

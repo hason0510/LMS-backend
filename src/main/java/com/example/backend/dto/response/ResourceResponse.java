@@ -20,7 +20,6 @@ public class ResourceResponse {
     private String fileUrl;
     private String embedUrl;
     private String cloudinaryId;
-    private String hlsUrl;
     private String description;
     private String mimeType;
     private String fileType;
@@ -35,6 +34,7 @@ public class ResourceResponse {
     private LocalDateTime createdDate;
     private LocalDateTime lastUsedAt;
     private String createdBy;
+    private boolean canManage;
     private String scopeTargetName;
     private String lessonTitle;
     private Integer lessonId;

@@ -5,6 +5,7 @@ import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
+import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.reporting.AdminReportSummaryResponse;
 import com.example.backend.dto.response.reporting.AssignmentReportResponse;
 import com.example.backend.dto.response.reporting.ClassReportOverviewResponse;
@@ -16,6 +17,7 @@ import com.example.backend.entity.User;
 import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.exception.UnauthorizedException;
+import com.example.backend.repository.AdminAnalyticsQueryRepository;
 import com.example.backend.repository.AssignmentRepository;
 import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.ClassMemberRepository;
@@ -28,9 +30,12 @@ import com.example.backend.repository.UserRepository;
 import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ReportingService;
 import com.example.backend.service.UserService;
+import com.example.backend.specification.AssistantSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -52,12 +58,13 @@ public class ReportingServiceImpl implements ReportingService {
 
     private static final int TEACHER_LOAD_LIMIT = 6;
     private static final int SUBJECT_LOAD_LIMIT = 6;
-    private static final int TOP_CLASSES_LIMIT = 5;
+    private static final int TOP_CLASSES_LIMIT = 8;
     private static final int ACTIVE_ASSISTANTS_LIMIT = 6;
 
     private final UserRepository userRepository;
     private final ClassSectionRepository classSectionRepository;
     private final ClassMemberRepository classMemberRepository;
+    private final AdminAnalyticsQueryRepository adminAnalyticsQueryRepository;
     private final SubjectRepository subjectRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final AssignmentRepository assignmentRepository;
@@ -223,6 +230,75 @@ public class ReportingServiceImpl implements ReportingService {
     }
 
     // ────────────────────────────────────────────────────────────────────
+    // Admin – biểu đồ tải GV / môn (phân trang + tìm kiếm + sắp xếp)
+    // ────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AdminReportSummaryResponse.TeacherLoadItem> getTeacherLoad(
+            String search, String sort, int page, int size) {
+        requireAdmin();
+        return dimensionLoad("teacher", search, sort, page, size, row ->
+                new AdminReportSummaryResponse.TeacherLoadItem(
+                        (Integer) row[0], (String) row[1], ((Number) row[2]).longValue(), 0L));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AdminReportSummaryResponse.SubjectLoadItem> getSubjectLoad(
+            String search, String sort, int page, int size) {
+        requireAdmin();
+        return dimensionLoad("subject", search, sort, page, size, row ->
+                new AdminReportSummaryResponse.SubjectLoadItem(
+                        (Integer) row[0], (String) row[1], ((Number) row[2]).longValue()));
+    }
+
+    private <T> PageResponse<T> dimensionLoad(
+            String dimension, String search, String sort, int page, int size, Function<Object[], T> mapper) {
+        int safePage = Math.max(page, 1);
+        int safeSize = size <= 0 ? 8 : size;
+        int offset = (safePage - 1) * safeSize;
+        List<Object[]> rows = adminAnalyticsQueryRepository.dimensionLoadPage(dimension, search, sort, offset, safeSize);
+        long total = adminAnalyticsQueryRepository.dimensionLoadCount(dimension, search);
+        List<T> items = rows.stream().map(mapper).toList();
+        int totalPage = safeSize > 0 ? (int) Math.ceil((double) total / safeSize) : 0;
+        return new PageResponse<>(safePage, totalPage, total, items);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AdminReportSummaryResponse.AssistantClassesItem> getAssistantList(
+            String search, int page, int size) {
+        requireAdmin();
+        int safePage = Math.max(page, 1);
+        int safeSize = size <= 0 ? 10 : size;
+
+        Page<User> userPage = userRepository.findAll(
+                AssistantSpecification.isAssistant(search),
+                PageRequest.of(safePage - 1, safeSize, Sort.by(Sort.Direction.ASC, "fullName")));
+
+        // Giữ thứ tự trang khi gắn lớp cho từng TA
+        Map<Integer, AdminReportSummaryResponse.AssistantClassesItem> map = new LinkedHashMap<>();
+        for (User user : userPage.getContent()) {
+            map.put(user.getId(), new AdminReportSummaryResponse.AssistantClassesItem(
+                    user.getId(), user.getFullName(), user.getGmail(), user.getImageUrl(), new ArrayList<>()));
+        }
+        if (!map.isEmpty()) {
+            for (Object[] row : classMemberRepository.findAssistantClassesByUserIds(
+                    ClassMemberRole.TA, map.keySet())) {
+                AdminReportSummaryResponse.AssistantClassesItem item = map.get((Integer) row[0]);
+                if (item != null) {
+                    item.getClasses().add(new AdminReportSummaryResponse.AssistantClassRef(
+                            (Integer) row[1], (String) row[2], (String) row[3]));
+                }
+            }
+        }
+        return new PageResponse<>(
+                safePage, userPage.getTotalPages(), userPage.getTotalElements(),
+                new ArrayList<>(map.values()));
+    }
+
+    // ────────────────────────────────────────────────────────────────────
     // Teacher scope
     // ────────────────────────────────────────────────────────────────────
 
@@ -384,6 +460,7 @@ public class ReportingServiceImpl implements ReportingService {
         // tracked counts
         response.setTrackedQuizzes(classContentItemRepository.countTrackedQuizzesByClassSectionId(classSectionId));
         response.setTrackedAssignments(assignmentRepository.countByClassSectionId(classSectionId));
+        response.setTrackedLectures(classContentItemRepository.countTrackedLecturesByClassSectionId(classSectionId));
 
         // progress buckets (low / medium / high)
         long low = enrollmentRepository.countAtRiskStudents(classSectionId, safeLow);
@@ -553,7 +630,24 @@ public class ReportingServiceImpl implements ReportingService {
             totalWaitingReview += waitingReview;
         }
 
+        // Fetch all grades to build histogram
+        List<Object[]> allGradesRaw = quizAttemptRepository.findAllGradesByClassSectionId(classSectionId);
+        List<Double> allGrades = new ArrayList<>();
+        Map<Integer, List<Double>> gradesByQuiz = new HashMap<>();
+        
+        for (Object[] gRow : allGradesRaw) {
+            Integer qId = (Integer) gRow[0];
+            Double grade = ((Number) gRow[1]).doubleValue();
+            allGrades.add(grade);
+            gradesByQuiz.computeIfAbsent(qId, k -> new ArrayList<>()).add(grade);
+        }
+
         response.setRows(rows);
+        for (QuizReportResponse.QuizSummaryRow rowItem : rows) {
+            rowItem.setHistogram(buildHistogram(gradesByQuiz.getOrDefault(rowItem.getQuizId(), new ArrayList<>())));
+        }
+
+        response.setHistogram(buildHistogram(allGrades));
         response.setTotalAttempts(totalAttempts);
         response.setTotalParticipants(totalParticipants);
         response.setAverageScore(sumGradeCount == 0 ? 0.0 : Math.round((sumGrade / sumGradeCount) * 10.0) / 10.0);
@@ -562,6 +656,24 @@ public class ReportingServiceImpl implements ReportingService {
         response.setTotalNotPassed(totalNotPassed);
         response.setTotalWaitingReview(totalWaitingReview);
         return response;
+    }
+
+    private List<QuizReportResponse.HistogramBin> buildHistogram(List<Double> grades) {
+        int[] counts = new int[10];
+        for (Double grade : grades) {
+            double percentage = grade > 10.0 ? grade : grade * 10;
+            int bin = (int) (percentage / 10);
+            if (bin >= 10) bin = 9;
+            if (bin < 0) bin = 0;
+            counts[bin]++;
+        }
+        
+        List<QuizReportResponse.HistogramBin> bins = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String range = (i == 9) ? "90-100" : (i * 10) + "-" + (i * 10 + 9);
+            bins.add(new QuizReportResponse.HistogramBin(range, counts[i]));
+        }
+        return bins;
     }
 
 

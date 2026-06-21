@@ -1,11 +1,12 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
 import com.example.backend.cache.CacheNames;
 import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.ClassMemberRole;
 import com.example.backend.constant.ClassContentAvailabilityStatus;
-import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
@@ -578,6 +579,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         response.setCloseAt(assignment.getCloseAt());
         ClassSection classSection = resolvePrimaryClassSection(assignment);
         response.setClassSectionId(classSection != null ? classSection.getId() : null);
+        response.setClassSectionStatus(classSection != null && classSection.getStatus() != null ? classSection.getStatus().name() : null);
         response.setResources(resourceService.getResourcesByAssignmentId(assignment.getId()));
         return response;
     }
@@ -623,9 +625,7 @@ public class AssignmentServiceImpl implements AssignmentService {
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
-        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Class section is archived and only supports read-only access");
-        }
+        ClassSectionGuard.ensureInteractive(classSection);
     }
 
     private void requireViewPermission(ClassSection classSection) {

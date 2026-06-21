@@ -57,9 +57,6 @@ public class QuizAttempt extends BaseEntity {
     @JoinColumn(name = "student_id")
     private User student;
 
-    @Column(name = "chapter_item_id")
-    private Integer chapterItemId;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_content_item_id")
     private ClassContentItem classContentItem;

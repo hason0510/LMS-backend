@@ -39,6 +39,7 @@ import com.example.backend.service.UserService;
 import com.example.backend.specification.ResourceSpecification;
 import com.example.backend.utils.FileUploadUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.Page;
@@ -55,12 +56,14 @@ import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ResourceServiceImpl implements ResourceService {
     private static final String ATTACHED_FIELD_NAME = "attached.resource";
     private static final String ENTITY_LESSON = "LESSON";
@@ -219,6 +222,20 @@ public class ResourceServiceImpl implements ResourceService {
             throw new BusinessException("Không thể xóa media đang được sử dụng. Hãy lưu trữ media thay vì xóa.");
         }
         logResourceAction(resource, "DELETE", "Xóa tài nguyên");
+
+        // (2) Dọn các bản ghi tham chiếu của tài nguyên này (tránh dữ liệu mồ côi)
+        resourceReferenceRepository.softDeleteAllActiveByResourceId(resource.getId());
+
+        // (1) Xóa file thật trên Cloudinary. Không để lỗi Cloudinary chặn việc xóa bản ghi.
+        if (StringUtils.hasText(resource.getCloudinaryId())) {
+            try {
+                cloudinaryService.deleteFile(resource.getCloudinaryId(), resource.getType());
+            } catch (Exception ex) {
+                log.warn("Không thể xóa file Cloudinary cho resource {} (publicId={}): {}",
+                        resource.getId(), resource.getCloudinaryId(), ex.getMessage());
+            }
+        }
+
         resource.set_deleted(true);
         resourceRepository.save(resource);
     }
@@ -775,11 +792,11 @@ public class ResourceServiceImpl implements ResourceService {
         response.setCreatedDate(resource.getCreatedDate());
         response.setLastUsedAt(resource.getLastUsedAt());
         response.setCreatedBy(resource.getCreatedBy());
+        response.setCanManage(resourceAuthorizationService.canManage(resource));
         response.setScopeTargetName(resolveScopeTargetName(resource.getScopeType(), resource.getScopeId()));
         response.setEmbedUrl(normalizedEmbedUrl);
         response.setCloudinaryId(normalizedCloudinaryId);
         response.setFileUrl(normalizedFileUrl);
-        response.setHlsUrl(resource.getHlsUrl());
         response.setMimeType(resource.getMimeType());
         response.setFileType(resolveFileType(resource.getTitle(), normalizedFileUrl, resource.getMimeType(), normalizedType, normalizedSource));
         response.setFileSize(resource.getFileSize());
@@ -956,7 +973,6 @@ public class ResourceServiceImpl implements ResourceService {
         final CloudinaryResponse response = this.cloudinaryService.uploadFile(file, fileName, "video");
         uploadResource.setFileUrl(response.getUrl());
         uploadResource.setCloudinaryId(response.getPublicId());
-        uploadResource.setHlsUrl(response.getHlsUrl());
         uploadResource.setMimeType(file.getContentType());
         uploadResource.setFileSize(file.getSize());
         resourceRepository.save(uploadResource);
@@ -1215,7 +1231,7 @@ public class ResourceServiceImpl implements ResourceService {
             List<Resource> legacyResources,
             List<ResourceReference> attachedReferences
     ) {
-        Map<Integer, Resource> merged = new java.util.LinkedHashMap<>();
+        Map<Integer, Resource> merged = new LinkedHashMap<>();
         if (legacyResources != null) {
             for (Resource resource : legacyResources) {
                 if (resource != null && resource.getId() != null) {

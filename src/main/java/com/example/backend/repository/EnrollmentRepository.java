@@ -14,11 +14,6 @@ import java.util.List;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> {
-    List<Enrollment> findByCourseIdAndStudent_IdIn(
-            Integer courseId,
-            List<Integer> studentIds
-    );
-
     List<Enrollment> findByClassSection_IdAndStudent_IdIn(
             Integer classSectionId,
             List<Integer> studentIds
@@ -26,19 +21,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
 
     Page<Enrollment> findByApprovalStatus(EnrollmentStatus approvalStatus, Pageable pageable);
 
-    List <Enrollment> findByCourseIdAndApprovalStatus(Integer courseId, EnrollmentStatus approvalStatus);
-
-    Page<Enrollment> findByCourseIdAndApprovalStatus(Integer courseId, EnrollmentStatus enrollmentStatus, Pageable pageable);
-
-    Enrollment findByStudent_IdAndCourseId(Integer studentId, Integer courseId);
-
-    Enrollment findByStudent_IdAndCourseIdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
-
     Enrollment findByStudent_IdAndClassSection_Id(Integer studentId, Integer classSectionId);
 
     Enrollment findByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
-
-    boolean existsByStudent_IdAndCourseIdAndApprovalStatus(Integer studentId, Integer courseId, EnrollmentStatus approvalStatus);
 
     boolean existsByStudent_IdAndClassSection_IdAndApprovalStatus(Integer studentId, Integer classSectionId, EnrollmentStatus approvalStatus);
 
@@ -81,11 +66,6 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment,Integer> 
     Page<Enrollment> findByClassSection_IdInAndApprovalStatus(Collection<Integer> classSectionIds, EnrollmentStatus approvalStatus, Pageable pageable);
 
     Page<Enrollment> findByClassSection_Id(Integer classSectionId, Pageable pageable);
-
-    // ── Legacy course-based queries ──
-
-    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.courseId = :courseId AND e.approvalStatus = 'APPROVED'")
-    Long countApprovedEnrollmentsByCourseId(@Param("courseId") Integer courseId);
 
     long countByClassSection_IdAndApprovalStatus(Integer classSectionId, EnrollmentStatus status);
 

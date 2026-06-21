@@ -1,7 +1,8 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
 import com.example.backend.constant.ClassMemberRole;
-import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.CommentRequest;
@@ -140,7 +141,7 @@ public class CommentServiceImpl implements CommentService {
                     classSection.getTitle()
             );
 
-            enrollments.forEach(e -> notificationService.createNotification(e.getStudent(), "Có thông báo mới từ giáo viên", msg, "COMMENT", null, null));
+            enrollments.forEach(e -> notificationService.createNotification(e.getStudent(), "Có thông tin mới từ giảng viên", msg, "COMMENT", null, null));
 
             if (currentRole == RoleType.ADMIN && !teacher.getId().equals(currentUser.getId())) {
                 notificationService.createNotification(teacher, "Có thông báo mới từ quản trị viên", msg, "COMMENT", null, null);
@@ -314,9 +315,7 @@ public class CommentServiceImpl implements CommentService {
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
-        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Class section is archived and only supports read-only access");
-        }
+        ClassSectionGuard.ensureInteractive(classSection);
     }
 
     private void publishCommentEventAfterCommit(String type, Integer lessonId, CommentResponse comment) {

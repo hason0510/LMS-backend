@@ -38,7 +38,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, RestAccessDeniedHandler restAccessDeniedHandler, RestAuthenticationEntryPoint restAuthenticationEntryPoint, GoogleOAuth2SuccessHandler googleOAuth2SuccessHandler, AccountStatusFilter accountStatusFilter) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, RestAccessDeniedHandler restAccessDeniedHandler, RestAuthenticationEntryPoint restAuthenticationEntryPoint, AccountStatusFilter accountStatusFilter) throws Exception {
         http.setSharedObject(RestAccessDeniedHandler.class, restAccessDeniedHandler);
         http.setSharedObject(RestAuthenticationEntryPoint.class, restAuthenticationEntryPoint);
         http
@@ -56,7 +56,7 @@ public class SecurityConfig {
                                 "/api/v1/lms/auth/resend-reset-password-otp",
                                 "/api/v1/lms/auth/google",
                                 "/api/v1/lms/auth/refresh",
-                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/oauth2/**", "/ws/**").permitAll()
+                                "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/ws/**").permitAll()
                         .anyRequest().authenticated() // tất cả request được phép
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -64,9 +64,6 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter()) // Register it here
                         )
-                )
-                .oauth2Login(oauth2 -> oauth2
-                        .successHandler(googleOAuth2SuccessHandler)
                 )
                 //.formLogin(f -> f.disable())
                 .formLogin(AbstractHttpConfigurer::disable)

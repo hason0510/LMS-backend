@@ -386,7 +386,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         }
 
         List<String> normalizedPermissions = normalizeTaPermissions(request.getPermissions());
-        member.setPermissions(normalizedPermissions);
+        member.setPermissions(new LinkedHashSet<>(normalizedPermissions));
         ClassMemberResponse response = convertClassMember(classMemberRepository.save(member));
         cacheInvalidationService.evictAllRedisReadCaches();
         return response;
@@ -1166,10 +1166,6 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             return;
         }
 
-        if (templateItem.getItemType() == ContentItemType.ASSIGNMENT) {
-            throw new BusinessException("Assignment template is no longer supported");
-        }
-
         classContentItem.setTitle(resolveTemplateContentPlaceholderTitle(templateItem.getItemType()));
     }
 
@@ -1177,7 +1173,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         return switch (itemType) {
             case LESSON -> "Untitled lesson";
             case QUIZ -> "Untitled quiz";
-            case ASSIGNMENT -> "Untitled assignment";
+            default -> "Untitled content";
         };
     }
 
@@ -1604,7 +1600,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         if (StringUtils.hasText(imageResource.getEmbedUrl())) {
             return imageResource.getEmbedUrl();
         }
-        return imageResource.getHlsUrl();
+        return null;
     }
 
     private String resolveClassCode() {
@@ -1625,7 +1621,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     private void applyDefaultPermissions(ClassMember member, ClassMemberRole role) {
-        member.setPermissions(new ArrayList<>(classMemberAuthorizationService.resolveDefaultCapabilities(role)));
+        member.setPermissions(new LinkedHashSet<>(classMemberAuthorizationService.resolveDefaultCapabilities(role)));
     }
 
     private List<String> normalizeTaPermissions(List<String> requestedPermissions) {

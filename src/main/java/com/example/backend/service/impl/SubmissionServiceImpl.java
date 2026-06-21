@@ -1,8 +1,9 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
 import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.EnrollmentStatus;
-import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.constant.ResourceSource;
 import com.example.backend.constant.RoleType;
@@ -521,9 +522,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
-        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Class section is archived and only supports read-only access");
-        }
+        ClassSectionGuard.ensureInteractive(classSection);
     }
 
     private void preventSelfReview(Submission submission, User currentUser) {

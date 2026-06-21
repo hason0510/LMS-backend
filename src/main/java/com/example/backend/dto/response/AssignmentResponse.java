@@ -21,5 +21,6 @@ public class AssignmentResponse {
     private LocalDateTime dueAt;
     private LocalDateTime closeAt;
     private Integer classSectionId;
+    private String classSectionStatus;
     private List<ResourceResponse> resources;
 }

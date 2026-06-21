@@ -13,7 +13,6 @@ public class CloudinaryResponse {
     private String publicId;
     private String url;
     private String type;
-    private String hlsUrl;
     private String title;
     private String mimeType;
     private String fileType;

@@ -2,6 +2,7 @@ package com.example.backend.dto.response.user;
 
 import lombok.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import java.io.Serializable;
 
@@ -28,5 +29,6 @@ public class UserInfoResponse implements Serializable {
     private LocalDate joinDate;
     private String fieldOfExpertise;
     private String bio;
+    private LocalDateTime createdDate;
 
 }

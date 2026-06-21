@@ -1,5 +1,7 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
 import com.example.backend.cache.CacheNames;
 import com.example.backend.cache.RedisCacheInvalidationService;
 import com.example.backend.constant.*;
@@ -804,7 +806,8 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         User currentUser = userService.getCurrentUser();
         ClassContentItem classContentItem = classContentItemRepository.findById(classContentItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class content item not found"));
-        ensureClassSectionInteractive(classContentItem.getClassChapter().getClassSection());
+        // Lớp lưu trữ vẫn cho người học XEM lại bài đang/đã làm; thao tác ghi
+        // (answer/submit) đã bị chặn riêng ở từng API mutation.
         QuizAttempt attempt = quizAttemptRepository
                 .findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(
                         classContentItemId,
@@ -1684,9 +1687,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
-        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Class section is archived and only supports read-only access");
-        }
+        ClassSectionGuard.ensureInteractive(classSection);
     }
 
     private void markProgressIfPassed(QuizAttempt attempt) {
@@ -1774,7 +1775,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         response.setId(attempt.getId());
         response.setQuizId(attempt.getQuiz().getId());
         response.setStudentId(attempt.getStudent().getId());
-        response.setChapterItemId(attempt.getChapterItemId());
         response.setClassContentItemId(attempt.getClassContentItem() != null ? attempt.getClassContentItem().getId() : null);
         response.setClassSectionId(resolveClassSectionId(attempt));
         response.setStartTime(attempt.getStartTime());
@@ -2014,7 +2014,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         response.setFileUrl(resource.getFileUrl());
         response.setEmbedUrl(resource.getEmbedUrl());
         response.setCloudinaryId(resource.getCloudinaryId());
-        response.setHlsUrl(resource.getHlsUrl());
         response.setDescription(resource.getDescription());
         response.setMimeType(resource.getMimeType());
         response.setFileSize(resource.getFileSize());
@@ -2100,7 +2099,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .isPassed(attempt.getIsPassed())
                 .quizId(attempt.getQuiz() != null ? attempt.getQuiz().getId() : null)
                 .studentId(attempt.getStudent() != null ? attempt.getStudent().getId() : null)
-                .chapterItemId(attempt.getChapterItemId())
                 .classContentItemId(attempt.getClassContentItem() != null ? attempt.getClassContentItem().getId() : null)
                 .classSectionId(resolveClassSectionId(attempt))
                 .totalQuestions(attempt.getTotalQuestions())

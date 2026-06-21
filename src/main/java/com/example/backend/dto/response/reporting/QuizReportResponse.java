@@ -19,6 +19,7 @@ public class QuizReportResponse {
     private long totalNotPassed;
     private long totalWaitingReview;
 
+    private List<HistogramBin> histogram;
     private List<QuizSummaryRow> rows;
 
     @Data
@@ -36,5 +37,14 @@ public class QuizReportResponse {
         private double averageScore;
         private double topScore;
         private Integer minPassScore;
+        private List<HistogramBin> histogram;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class HistogramBin {
+        private String range;
+        private int count;
     }
 }

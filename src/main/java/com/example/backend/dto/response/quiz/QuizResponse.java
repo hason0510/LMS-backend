@@ -25,6 +25,7 @@ public class QuizResponse {
     private Boolean showCorrectAnswer;
     private Integer questionCount;
     private Integer classSectionId;
+    private String classSectionStatus;
     private Integer classContentItemId;
     private List<QuizBankSourceResponse> bankSources;
     private List<QuizQuestionResponse> questions;

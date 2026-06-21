@@ -49,7 +49,7 @@ public interface ClassMemberRepository extends JpaRepository<ClassMember, Intege
      * Aggregate count distinct users across all class sections by role.
      * Used by admin report to count active TAs across the system.
      */
-    @Query("SELECT COUNT(DISTINCT cm.user.id) FROM ClassMember cm WHERE cm.role = :role")
+    @Query("SELECT COUNT(DISTINCT u.id) FROM ClassMember cm JOIN cm.user u WHERE cm.role = :role")
     long countDistinctUsersByRole(@Param("role") ClassMemberRole role);
 
     /**
@@ -73,4 +73,17 @@ public interface ClassMemberRepository extends JpaRepository<ClassMember, Intege
             "WHERE cm.role = :role " +
             "ORDER BY cm.user.fullName ASC, cm.classSection.id ASC")
     List<Object[]> findAssistantsWithClasses(@Param("role") ClassMemberRole role);
+
+    /**
+     * Lớp đang trợ giảng của một tập user (dùng cho danh sách TA phân trang).
+     * Mỗi row: [userId, classSectionId, classSectionTitle, classCode]
+     */
+    @Query("SELECT cm.user.id, cm.classSection.id, cm.classSection.title, cm.classSection.classCode " +
+            "FROM ClassMember cm " +
+            "WHERE cm.role = :role AND cm.user.id IN :userIds " +
+            "ORDER BY cm.classSection.title ASC")
+    List<Object[]> findAssistantClassesByUserIds(
+            @Param("role") ClassMemberRole role,
+            @Param("userIds") Collection<Integer> userIds
+    );
 }

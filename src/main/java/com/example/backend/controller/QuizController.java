@@ -3,6 +3,7 @@ package com.example.backend.controller;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.QuizResponse;
+import com.example.backend.dto.response.quiz.StudentQuizFeedResponse;
 import com.example.backend.service.QuizService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;  // ← ADD THIS IMPORT
@@ -60,6 +61,17 @@ public class QuizController {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
         PageResponse<QuizResponse> quizPage = quizService.getQuizPage(pageable);
         return ResponseEntity.ok(quizPage);
+    }
+
+    @Operation(summary = "Feed quiz của học viên", description = "Danh sách quiz theo trạng thái (UPCOMING/PAST_DUE/COMPLETED/ALL) cho trang tổng quan")
+    @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/me/feed")
+    public ResponseEntity<PageResponse<StudentQuizFeedResponse>> getStudentQuizFeed(
+            @RequestParam(defaultValue = "UPCOMING") String tab,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer classSectionId
+    ) {
+        return ResponseEntity.ok(quizService.getStudentQuizFeed(tab, keyword, classSectionId));
     }
 
     @Operation(summary = "Cập nhật quiz", description = "Update an existing quiz's questions and configurations")  // ← ENHANCED

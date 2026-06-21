@@ -83,7 +83,21 @@ public class ResourceAuthorizationService {
             return false;
         }
         User currentUser = userService.getCurrentUser();
-        return isAdmin(currentUser) || isCreatedBy(resource, currentUser);
+        if (isAdmin(currentUser) || isCreatedBy(resource, currentUser)) {
+            return true;
+        }
+        // OWNER/EDITOR của ngân hàng câu hỏi được quản lý mọi tài nguyên thuộc scope bank đó,
+        // kể cả khi do thành viên khác tạo.
+        if (resource.getScopeType() == ResourceScopeType.QUESTION_BANK
+                && resource.getScopeId() != null
+                && currentUser != null) {
+            return questionBankMemberRepository
+                    .findByQuestionBank_IdAndUser_Id(resource.getScopeId(), currentUser.getId())
+                    .map(member -> member.getRole() == QuestionBankMemberRole.OWNER
+                            || member.getRole() == QuestionBankMemberRole.EDITOR)
+                    .orElse(false);
+        }
+        return false;
     }
 
     public boolean canDelete(Resource resource) {

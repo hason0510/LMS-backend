@@ -7,8 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -42,6 +42,5 @@ public class ClassMember extends BaseEntity {
             joinColumns = @JoinColumn(name = "class_member_id")
     )
     @Column(name = "permission_name", length = 50)
-    @OrderColumn(name = "permission_order")
-    private List<String> permissions = new ArrayList<>();
+    private Set<String> permissions = new LinkedHashSet<>();
 }

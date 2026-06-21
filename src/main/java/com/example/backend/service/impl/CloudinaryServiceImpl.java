@@ -1,7 +1,6 @@
 package com.example.backend.service.impl;
 
 import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
 import com.example.backend.constant.ResourceType;
 import com.example.backend.dto.response.CloudinaryResponse;
 import com.example.backend.exception.BusinessException;
@@ -11,9 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,25 +31,10 @@ public class CloudinaryServiceImpl implements CloudinaryService {
             Map<String, Object> uploadOptions = buildUploadOptions(fileName, normalizedType);
             Map result = uploadToCloudinary(file, uploadOptions);
 
-            String hlsUrl = null;
-            if ("video".equals(normalizedType)) {
-                try {
-                    Map eagerResult = generateVideoStreaming((String) result.get("public_id"));
-                    hlsUrl = extractHlsUrl(eagerResult);
-                } catch (Exception streamingError) {
-                    log.warn(
-                            "Cloudinary uploaded video {} but HLS eager generation failed: {}",
-                            fileName,
-                            streamingError.getMessage()
-                    );
-                }
-            }
-
             return CloudinaryResponse.builder()
                     .publicId((String) result.get("public_id"))
                     .url((String) result.get("secure_url"))
                     .type(normalizedType)
-                    .hlsUrl(hlsUrl)
                     .build();
         } catch (Exception e) {
             log.error("Cloudinary upload failed for type {} and file {}", normalizedType, fileName, e);
@@ -77,28 +59,6 @@ public class CloudinaryServiceImpl implements CloudinaryService {
 
     private Map uploadToCloudinary(MultipartFile file, Map<String, Object> options) throws Exception {
         return cloudinary.uploader().upload(file.getBytes(), options);
-    }
-
-    private Map generateVideoStreaming(String publicId) throws Exception {
-        Map<String, Object> options = new HashMap<>();
-        options.put("type", "upload");
-        options.put("resource_type", "video");
-        options.put("eager", Collections.singletonList(
-                ObjectUtils.asMap("streaming_profile", "sp_auto", "format", "m3u8")
-        ));
-        options.put("eager_async", false);
-        return cloudinary.uploader().explicit(publicId, options);
-    }
-
-    private String extractHlsUrl(Map result) {
-        if (result == null) {
-            return null;
-        }
-        List<Map> eager = (List<Map>) result.get("eager");
-        if (eager == null || eager.isEmpty()) {
-            return null;
-        }
-        return (String) eager.get(0).get("secure_url");
     }
 
     @Override

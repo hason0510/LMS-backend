@@ -69,8 +69,6 @@ public class User extends BaseEntity {
     private List<ClassSection> taughtClassSections;
     @OneToMany(mappedBy = "user")
     private List<ClassMember> classSectionMemberships;
-    @OneToMany(mappedBy = "owner")
-    private List<Subject> ownedSubjects;
 
     @OneToMany(mappedBy = "user")
     private List<QuestionBankMember> questionBankMemberships;

@@ -20,9 +20,6 @@ public class Progress {
     @ManyToOne
     private User student;
 
-    @Column(name = "chapter_item_id")
-    private Integer chapterItemId;
-
     @ManyToOne
     @JoinColumn(name = "class_content_item_id")
     private ClassContentItem classContentItem;

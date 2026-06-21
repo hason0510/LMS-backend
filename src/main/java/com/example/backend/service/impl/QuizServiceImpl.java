@@ -1,8 +1,11 @@
 package com.example.backend.service.impl;
 
+import com.example.backend.utils.ClassSectionGuard;
+
+import com.example.backend.constant.AttemptStatus;
 import com.example.backend.constant.ContentItemType;
+import com.example.backend.constant.GradingStatus;
 import com.example.backend.constant.ClassContentAvailabilityStatus;
-import com.example.backend.constant.ClassSectionStatus;
 import com.example.backend.constant.EnrollmentStatus;
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
@@ -16,6 +19,7 @@ import com.example.backend.dto.request.quiz.QuizBankSourceRequest;
 import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.request.quiz.QuizRequest;
 import com.example.backend.dto.response.PageResponse;
+import com.example.backend.dto.response.quiz.StudentQuizFeedResponse;
 import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizBankSourceResponse;
 import com.example.backend.dto.response.quiz.QuestionInteractionItemResponse;
@@ -26,6 +30,8 @@ import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.Enrollment;
+import com.example.backend.entity.quiz.QuizAttempt;
 import com.example.backend.entity.quiz.QuestionBank;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.entity.quiz.QuestionTag;
@@ -67,10 +73,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
@@ -165,6 +174,7 @@ public class QuizServiceImpl implements QuizService {
         response.setShowCorrectAnswer(quiz.isShowCorrectAnswer());
         response.setQuestionCount(resolveQuizQuestionCount(quiz, questions, bankSources));
         response.setClassSectionId(classSection != null ? classSection.getId() : null);
+        response.setClassSectionStatus(classSection != null && classSection.getStatus() != null ? classSection.getStatus().name() : null);
         response.setClassContentItemId(classContentItem != null ? classContentItem.getId() : null);
         response.setBankSources(bankSources.stream().map(this::convertBankSourceToDTO).toList());
         response.setQuestions(questions.stream()
@@ -437,10 +447,10 @@ public class QuizServiceImpl implements QuizService {
 
             Set<Integer> newResourceIds = extractResourceIdsFromRequests(request.getQuestions());
 
-            Set<Integer> attachedIds = new java.util.HashSet<>(newResourceIds);
+            Set<Integer> attachedIds = new HashSet<>(newResourceIds);
             attachedIds.removeAll(oldResourceIds);
 
-            Set<Integer> detachedIds = new java.util.HashSet<>(oldResourceIds);
+            Set<Integer> detachedIds = new HashSet<>(oldResourceIds);
             detachedIds.removeAll(newResourceIds);
 
             for (Integer resourceId : attachedIds) {
@@ -1101,9 +1111,158 @@ public class QuizServiceImpl implements QuizService {
     }
 
     private void ensureClassSectionInteractive(ClassSection classSection) {
-        if (classSection != null && classSection.getStatus() == ClassSectionStatus.ARCHIVED) {
-            throw new BusinessException("Class section is archived and only supports read-only access");
+        ClassSectionGuard.ensureInteractive(classSection);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // Feed quiz cho học viên (trang tổng quan / việc cần làm)
+    // ────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<StudentQuizFeedResponse> getStudentQuizFeed(String tab, String keyword, Integer classSectionId) {
+        User currentUser = requireCurrentUser();
+        if (currentUser.getRole().getRoleName() != RoleType.STUDENT) {
+            throw new UnauthorizedException("Only students can access quiz feed");
         }
+
+        List<Enrollment> approvedEnrollments = enrollmentRepository.findByStudent_IdAndApprovalStatus(
+                currentUser.getId(), EnrollmentStatus.APPROVED);
+        if (approvedEnrollments.isEmpty()) {
+            return new PageResponse<>(1, 0, 0, List.of());
+        }
+
+        Set<Integer> classSectionIds = approvedEnrollments.stream()
+                .map(Enrollment::getClassSection)
+                .filter(Objects::nonNull)
+                .map(ClassSection::getId)
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        if (classSectionId != null && !classSectionIds.contains(classSectionId)) {
+            throw new UnauthorizedException("You do not have permission to access this class section");
+        }
+        if (classSectionId != null) {
+            classSectionIds = new LinkedHashSet<>(List.of(classSectionId));
+        }
+        if (classSectionIds.isEmpty()) {
+            return new PageResponse<>(1, 0, 0, List.of());
+        }
+
+        List<ClassContentItem> quizItems = classContentItemRepository.findQuizItemsByClassSectionIds(classSectionIds);
+        if (quizItems.isEmpty()) {
+            return new PageResponse<>(1, 0, 0, List.of());
+        }
+
+        String normalizedKeyword = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase() : null;
+        List<Integer> itemIds = quizItems.stream().map(ClassContentItem::getId).filter(Objects::nonNull).toList();
+
+        Map<Integer, List<QuizAttempt>> attemptsByItem = new LinkedHashMap<>();
+        for (QuizAttempt attempt : quizAttemptRepository.findByStudent_IdAndClassContentItem_IdIn(currentUser.getId(), itemIds)) {
+            if (attempt.getClassContentItem() == null || attempt.getClassContentItem().getId() == null) {
+                continue;
+            }
+            attemptsByItem.computeIfAbsent(attempt.getClassContentItem().getId(), key -> new ArrayList<>()).add(attempt);
+        }
+
+        String normalizedTab = normalizeStudentTab(tab);
+        LocalDateTime now = LocalDateTime.now();
+        List<StudentQuizFeedResponse> items = new ArrayList<>();
+
+        for (ClassContentItem item : quizItems) {
+            Quiz quiz = item.getQuiz();
+            ClassSection section = item.getClassChapter() != null ? item.getClassChapter().getClassSection() : null;
+            if (quiz == null || section == null) {
+                continue;
+            }
+            if (normalizedKeyword != null) {
+                String title = quiz.getTitle() != null ? quiz.getTitle().toLowerCase() : "";
+                String sectionTitle = section.getTitle() != null ? section.getTitle().toLowerCase() : "";
+                if (!title.contains(normalizedKeyword) && !sectionTitle.contains(normalizedKeyword)) {
+                    continue;
+                }
+            }
+
+            List<QuizAttempt> attempts = attemptsByItem.getOrDefault(item.getId(), List.of());
+            int attemptsUsed = 0;
+            Integer bestGrade = null;
+            boolean passed = false;
+            boolean needsReview = false;
+            boolean inProgress = false;
+            for (QuizAttempt attempt : attempts) {
+                if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
+                    inProgress = true;
+                } else {
+                    attemptsUsed++;
+                }
+                if (Boolean.TRUE.equals(attempt.getIsPassed())) {
+                    passed = true;
+                }
+                if (attempt.getGradingStatus() == GradingStatus.NEEDS_REVIEW) {
+                    needsReview = true;
+                }
+                if (attempt.getGrade() != null && (bestGrade == null || attempt.getGrade() > bestGrade)) {
+                    bestGrade = attempt.getGrade();
+                }
+            }
+
+            Integer maxAttempts = quiz.getMaxAttempts();
+            boolean outOfAttempts = maxAttempts != null && attemptsUsed >= maxAttempts;
+            boolean completed = passed || outOfAttempts;
+            LocalDateTime availableUntil = quiz.getAvailableUntil();
+            boolean pastDue = !completed && availableUntil != null && now.isAfter(availableUntil);
+            boolean upcoming = !completed && !pastDue;
+
+            StudentQuizFeedResponse response = new StudentQuizFeedResponse();
+            response.setQuizId(quiz.getId());
+            response.setQuizTitle(quiz.getTitle());
+            response.setClassContentItemId(item.getId());
+            response.setClassSectionId(section.getId());
+            response.setClassSectionTitle(section.getTitle());
+            response.setAvailableFrom(quiz.getAvailableFrom());
+            response.setAvailableUntil(availableUntil);
+            response.setMaxAttempts(maxAttempts);
+            response.setAttemptsUsed(attemptsUsed);
+            response.setMinPassScore(quiz.getMinPassScore());
+            response.setBestGrade(bestGrade);
+            response.setPassed(attempts.isEmpty() ? null : passed);
+            response.setNeedsReview(needsReview);
+            response.setInProgress(inProgress);
+            response.setCompleted(completed);
+            response.setPastDue(pastDue);
+            response.setUpcoming(upcoming);
+
+            if (matchesStudentQuizTab(normalizedTab, response)) {
+                items.add(response);
+            }
+        }
+
+        items.sort(resolveQuizSort(normalizedTab));
+        return new PageResponse<>(1, items.isEmpty() ? 0 : 1, items.size(), items);
+    }
+
+    private String normalizeStudentTab(String tab) {
+        if (!StringUtils.hasText(tab)) {
+            return "UPCOMING";
+        }
+        return tab.trim().toUpperCase();
+    }
+
+    private boolean matchesStudentQuizTab(String tab, StudentQuizFeedResponse item) {
+        return switch (tab) {
+            case "PAST_DUE" -> item.isPastDue();
+            case "COMPLETED" -> item.isCompleted();
+            case "ALL" -> true;
+            default -> item.isUpcoming();
+        };
+    }
+
+    private Comparator<StudentQuizFeedResponse> resolveQuizSort(String tab) {
+        if ("COMPLETED".equals(tab)) {
+            return Comparator.comparing(StudentQuizFeedResponse::getAvailableUntil,
+                    Comparator.nullsLast(Comparator.reverseOrder()));
+        }
+        return Comparator.comparing(StudentQuizFeedResponse::getAvailableUntil,
+                Comparator.nullsLast(Comparator.naturalOrder()));
     }
 
     private User requireCurrentUser() {
@@ -1124,7 +1283,7 @@ public class QuizServiceImpl implements QuizService {
         }
 
         int total = 0;
-        java.util.HashSet<Integer> fixedQuestionIds = new java.util.HashSet<>();
+        HashSet<Integer> fixedQuestionIds = new HashSet<>();
 
         for (QuizBankSource source : bankSources) {
             if (source.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
@@ -1298,7 +1457,6 @@ public class QuizServiceImpl implements QuizService {
         r.setFileUrl(resource.getFileUrl());
         r.setEmbedUrl(resource.getEmbedUrl());
         r.setCloudinaryId(resource.getCloudinaryId());
-        r.setHlsUrl(resource.getHlsUrl());
         r.setDescription(resource.getDescription());
         r.setMimeType(resource.getMimeType());
         r.setFileSize(resource.getFileSize());
@@ -1308,7 +1466,7 @@ public class QuizServiceImpl implements QuizService {
     }
 
     private java.util.Set<Integer> extractResourceIds(List<QuizQuestion> questions) {
-        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        Set<Integer> ids = new HashSet<>();
         if (questions == null) return ids;
         for (QuizQuestion question : questions) {
             if (question.getResource() != null && question.getResource().getId() != null) {
@@ -1333,7 +1491,7 @@ public class QuizServiceImpl implements QuizService {
     }
 
     private java.util.Set<Integer> extractResourceIdsFromRequests(List<QuizQuestionRequest> requests) {
-        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        Set<Integer> ids = new HashSet<>();
         if (requests == null) return ids;
         for (QuizQuestionRequest request : requests) {
             if (request.getResourceId() != null) {

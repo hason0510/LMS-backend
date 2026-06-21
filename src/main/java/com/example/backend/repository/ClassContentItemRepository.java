@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,4 +74,24 @@ public interface ClassContentItemRepository extends JpaRepository<ClassContentIt
             "AND cci.itemType = com.example.backend.constant.ContentItemType.QUIZ " +
             "AND cci.quiz IS NOT NULL")
     long countTrackedQuizzesByClassSectionId(@Param("classSectionId") Integer classSectionId);
+
+    @Query("SELECT COUNT(DISTINCT cci.lesson.id) FROM ClassContentItem cci " +
+            "WHERE cci.classChapter.classSection.id = :classSectionId " +
+            "AND cci.itemType = com.example.backend.constant.ContentItemType.LESSON " +
+            "AND cci.lesson IS NOT NULL")
+    long countTrackedLecturesByClassSectionId(@Param("classSectionId") Integer classSectionId);
+
+    /**
+     * Quiz content items (hiện) của một tập lớp — dùng cho feed quiz của học viên.
+     */
+    @Query("""
+            select cci from ClassContentItem cci
+            where cci.classChapter.classSection.id in :classSectionIds
+              and cci.itemType = com.example.backend.constant.ContentItemType.QUIZ
+              and cci.quiz is not null
+              and cci.isHidden = false
+              and cci.classChapter.isHidden = false
+            order by cci.classChapter.orderIndex asc, cci.orderIndex asc
+            """)
+    List<ClassContentItem> findQuizItemsByClassSectionIds(@Param("classSectionIds") Collection<Integer> classSectionIds);
 }

@@ -337,9 +337,6 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             item.setQuizTemplate(quizTemplate);
             return;
         }
-        if (request.getItemType() == ContentItemType.ASSIGNMENT) {
-            throw new BusinessException("Assignment template is no longer supported");
-        }
         throw new BusinessException("Unsupported content item type");
     }
 
@@ -1248,7 +1245,6 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         response.setFileUrl(resource.getFileUrl());
         response.setEmbedUrl(resource.getEmbedUrl());
         response.setCloudinaryId(resource.getCloudinaryId());
-        response.setHlsUrl(resource.getHlsUrl());
         response.setDescription(resource.getDescription());
         response.setMimeType(resource.getMimeType());
         response.setFileSize(resource.getFileSize());

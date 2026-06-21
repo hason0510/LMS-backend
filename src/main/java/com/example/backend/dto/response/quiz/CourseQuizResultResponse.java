@@ -16,7 +16,6 @@ public class CourseQuizResultResponse {
     // Info Bài Quiz
     private Integer quizId;
     private String quizTitle;
-    private Integer chapterItemId;
 
     // Kết quả cao nhất
     private Integer maxGrade;

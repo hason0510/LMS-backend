@@ -1,6 +1,7 @@
 package com.example.backend.dto.response;
 
 import lombok.*;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -23,4 +24,6 @@ public class EnrollmentResponse {
     private Integer classSectionId;
     private Integer progress;
     private String approvalStatus;
+    private LocalDateTime createdAt;
+    private LocalDateTime approvedAt;
 }

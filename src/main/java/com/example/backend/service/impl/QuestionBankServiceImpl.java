@@ -203,10 +203,10 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
         Set<Integer> newResourceIds = extractResourceIds(request);
 
-        Set<Integer> attachedIds = new java.util.HashSet<>(newResourceIds);
+        Set<Integer> attachedIds = new HashSet<>(newResourceIds);
         attachedIds.removeAll(oldResourceIds);
 
-        Set<Integer> detachedIds = new java.util.HashSet<>(oldResourceIds);
+        Set<Integer> detachedIds = new HashSet<>(oldResourceIds);
         detachedIds.removeAll(newResourceIds);
 
         for (Integer resourceId : attachedIds) {
@@ -1679,7 +1679,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private Set<Integer> extractResourceIds(BankQuestion question) {
-        Set<Integer> ids = new java.util.HashSet<>();
+        Set<Integer> ids = new HashSet<>();
         if (question == null) return ids;
         if (question.getResource() != null && question.getResource().getId() != null) {
             ids.add(question.getResource().getId());
@@ -1702,7 +1702,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     }
 
     private Set<Integer> extractResourceIds(BankQuestionRequest request) {
-        Set<Integer> ids = new java.util.HashSet<>();
+        Set<Integer> ids = new HashSet<>();
         if (request == null) return ids;
         if (request.getResourceId() != null) {
             ids.add(request.getResourceId());
@@ -2181,9 +2181,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         if (currentUser.getRole().getRoleName() != RoleType.TEACHER) {
             throw new UnauthorizedException("You do not have permission to manage this subject");
         }
-        if (subject.getOwner() != null && !subject.getOwner().getId().equals(currentUser.getId())) {
-            throw new UnauthorizedException("You do not own this subject");
-        }
     }
 
     private QuestionBankResponse convertQuestionBank(
@@ -2359,7 +2356,6 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         r.setFileUrl(resource.getFileUrl());
         r.setEmbedUrl(resource.getEmbedUrl());
         r.setCloudinaryId(resource.getCloudinaryId());
-        r.setHlsUrl(resource.getHlsUrl());
         r.setDescription(resource.getDescription());
         r.setMimeType(resource.getMimeType());
         r.setFileSize(resource.getFileSize());

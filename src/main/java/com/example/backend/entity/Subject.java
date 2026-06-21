@@ -44,10 +44,6 @@ public class Subject extends BaseEntity {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    @ManyToOne
-    @JoinColumn(name = "owner_id")
-    private User owner;
-
     @OneToMany(mappedBy = "subject")
     private List<CurriculumTemplate> curriculumTemplates;
 

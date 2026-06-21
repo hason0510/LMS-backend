@@ -12,12 +12,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer>, JpaSpecificationExecutor<QuizAttempt> {
     List<QuizAttempt> findByStudent_Id(Integer studentId);
+
+    /** Tất cả lần làm của một học viên trên nhiều content item (dùng cho feed quiz). */
+    List<QuizAttempt> findByStudent_IdAndClassContentItem_IdIn(Integer studentId, Collection<Integer> classContentItemIds);
 
     Optional<QuizAttempt> findByClassContentItem_IdAndStudent_IdAndStatus(Integer classContentItemId, Integer studentId, AttemptStatus status);
 
@@ -117,5 +121,13 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
             "AND qa.gradingStatus = com.example.backend.constant.GradingStatus.NEEDS_REVIEW " +
             "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED')")
     long countPendingQuizReviewsInClassSections(@Param("classSectionIds") java.util.Collection<Integer> classSectionIds);
+
+    @Query("SELECT qa.quiz.id, qa.grade FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
+            "AND qa.grade IS NOT NULL")
+    List<Object[]> findAllGradesByClassSectionId(@Param("classSectionId") Integer classSectionId);
 }
 

@@ -30,7 +30,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
 import java.util.List;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -56,11 +58,15 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
+        // Kiểm tra khóa tài khoản TRƯỚC khi authenticate. Nếu để loadUserByUsername
+        // ném AccountLockedException trong lúc authenticate, DaoAuthenticationProvider
+        // sẽ bọc nó thành InternalAuthenticationServiceException -> mất type -> client
+        // chỉ nhận lỗi đăng nhập chung. Ném trực tiếp ở đây để giữ đúng ACCOUNT_LOCKED.
+        User currentUser = userService.handleGetUserByUserName(request.getUsername());
+        ensureAccountActive(currentUser);
         UsernamePasswordAuthenticationToken authenticationToken =
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword());
         Authentication authentication = authenticationManagerBuilder.getObject().authenticate(authenticationToken);
-        User currentUser = userService.handleGetUserByUserName(request.getUsername());
-        ensureAccountActive(currentUser);
         LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin();
         userLogin.setId(currentUser.getId());
         userLogin.setUsername(currentUser.getUserName());
@@ -185,7 +191,7 @@ public class AuthServiceImpl implements AuthService {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
             user.getUserName(), 
             null, 
-            java.util.Collections.singletonList(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + roleName))
+            Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + roleName))
         );
 
         return buildLoginResponse(authentication, user);
@@ -290,49 +296,54 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse googleLogin(GoogleLoginRequest request) {
+        String email;
+        String name;
+        // Only the Google token verification is wrapped; everything after must be
+        // allowed to propagate so AccountLockedException reaches GlobalExceptionHandler.
         try {
             Jwt googleJwt = verifyGoogleIdToken(request.getToken());
-            String email = googleJwt.getClaimAsString("email");
-            String name = googleJwt.getClaimAsString("name");
-
-            if (email == null || email.isBlank()) {
-                throw new IllegalArgumentException("Email not found in token");
-            }
-
-            User googleUser = userRepository.findFirstByGmailOrderByIdAsc(email).orElse(null);
-            if (googleUser == null) {
-                googleUser = userService.createGoogleUser(email, name != null ? name : email.split("@")[0]);
-            } else if (!googleUser.isGoogleLinked() || !googleUser.isVerified()) {
-                googleUser.setGoogleLinked(true);
-                googleUser.setVerified(true);
-                userRepository.save(googleUser);
-            }
-            ensureAccountActive(googleUser);
-            
-            // Build response
-            LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin(
-                    googleUser.getId(),
-                    googleUser.getUserName(),
-                    googleUser.getRole().getRoleName().name()
-            );
-            LoginResponse response = new LoginResponse();
-            response.setUser(userLogin);
-            
-            // Generate tokens
-            String accessToken = securityUtil.createAccessToken(email, response);
-            String refreshToken = securityUtil.createRefreshToken(email, response);
-            
-            // Update refresh token in DB
-            userService.updateUserToken(refreshToken, googleUser.getUserName());
-            
-            // Set tokens in response
-            response.setAccessToken(accessToken);
-            response.setRefreshToken(refreshToken);
-            
-            return response;
+            email = googleJwt.getClaimAsString("email");
+            name = googleJwt.getClaimAsString("name");
         } catch (Exception e) {
             throw new RuntimeException("Google login failed: " + e.getMessage(), e);
         }
+
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email not found in token");
+        }
+
+        User googleUser = userRepository.findFirstByGmailOrderByIdAsc(email).orElse(null);
+        if (googleUser == null) {
+            googleUser = userService.createGoogleUser(email, name != null ? name : email.split("@")[0]);
+        } else if (!googleUser.isGoogleLinked() || !googleUser.isVerified()) {
+            googleUser.setGoogleLinked(true);
+            googleUser.setVerified(true);
+            userRepository.save(googleUser);
+        }
+        // Locked accounts must be rejected with ACCOUNT_LOCKED, not a generic failure.
+        ensureAccountActive(googleUser);
+
+        // Build response
+        LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin(
+                googleUser.getId(),
+                googleUser.getUserName(),
+                googleUser.getRole().getRoleName().name()
+        );
+        LoginResponse response = new LoginResponse();
+        response.setUser(userLogin);
+
+        // Generate tokens
+        String accessToken = securityUtil.createAccessToken(email, response);
+        String refreshToken = securityUtil.createRefreshToken(email, response);
+
+        // Update refresh token in DB
+        userService.updateUserToken(refreshToken, googleUser.getUserName());
+
+        // Set tokens in response
+        response.setAccessToken(accessToken);
+        response.setRefreshToken(refreshToken);
+
+        return response;
     }
 
     private void ensureAccountActive(User user) {

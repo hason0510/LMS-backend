@@ -32,20 +32,4 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
     @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName")
     long countByRoleName(@Param("roleName") RoleType roleName);
 
-    @Query("""
-        SELECT u
-        FROM User u
-        WHERE u.role.roleName = :roleName
-        AND NOT EXISTS (
-            SELECT sp.id
-            FROM Enrollment sp
-            WHERE sp.student = u
-            AND sp.courseId = :courseId
-        )
-    """)
-    List<User> findUsersNotInCourseByRole(
-            @Param("courseId") Integer courseId,
-            @Param("roleName") RoleType roleType
-    );
-
 }

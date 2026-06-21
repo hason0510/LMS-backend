@@ -76,7 +76,6 @@ public class UploadController {
         resource.setTitle(file.getOriginalFilename());
         resource.setFileUrl(response.getUrl());
         resource.setCloudinaryId(response.getPublicId());
-        resource.setHlsUrl(response.getHlsUrl());
         resource.setMimeType(file.getContentType());
         resource.setFileSize(file.getSize());
         resource.setType(inferredType);

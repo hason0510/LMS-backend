@@ -28,7 +28,6 @@ public class QuizAttemptResponse {
     private BigDecimal totalPoints;
     private GradingStatus gradingStatus;
     private String instructorFeedback;
-    private Integer chapterItemId;
     private Integer classContentItemId;
     private Integer classSectionId;
     private String quizTitle;

@@ -149,13 +149,24 @@ public class UserServiceImpl implements UserService {
             @CacheEvict(value = CacheNames.USER_PAGE, allEntries = true)
     })
     public void deleteUserById(Integer id) {
-        User user = userRepository.findById(id).orElse(null);
-        if (user == null) {
-            throw new ResourceNotFoundException("User not found");
+        User currentUser = getCurrentUser();
+        User targetUser = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (currentUser == null || currentUser.getRole().getRoleName() != RoleType.ADMIN) {
+            throw new UnauthorizedException("You have no permission");
         }
-        if (isCurrentUser(id) || getCurrentUser().getRole().getRoleName().equals(RoleType.ADMIN)) {
-            userRepository.deleteById(id);
+        if (currentUser.getId().equals(id)) {
+            throw new BusinessException("Bạn không thể tự xóa tài khoản của mình");
         }
+        if (targetUser.getRole() != null && targetUser.getRole().getRoleName() == RoleType.ADMIN) {
+            throw new BusinessException("Không thể xóa tài khoản quản trị viên trong phiên bản này");
+        }
+
+        // Đá phiên đang đăng nhập (nếu có) trước khi xóa mềm
+        targetUser.setRefreshToken(null);
+        userRepository.save(targetUser);
+        userRepository.deleteById(id);
     }
 
     @Override
@@ -579,6 +590,7 @@ public class UserServiceImpl implements UserService {
         userDTO.setJoinDate(user.getJoinDate());
         userDTO.setFieldOfExpertise(user.getFieldOfExpertise());
         userDTO.setBio(user.getBio());
+        userDTO.setCreatedDate(user.getCreatedDate());
         return userDTO;
     }
 
