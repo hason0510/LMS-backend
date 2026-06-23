@@ -84,26 +84,6 @@ public class AuthServiceImpl implements AuthService {
         return response;
     }
 
-   /* @Override
-    public LoginResponse refreshToken(String oldRefreshToken){
-        Jwt decodeToken = securityUtil.checkValidRefreshToken(oldRefreshToken);
-        String userName = decodeToken.getSubject();
-        User user = userService.handleGetUserByUserNameAndRefreshToken(userName, oldRefreshToken);
-        LoginResponse.UserLogin userLogin = new LoginResponse.UserLogin(
-                user.getId(),
-                user.getUserName(),
-                user.getRole().getRoleName().name()
-        );
-        LoginResponse LoginResponse = new LoginResponse();
-        LoginResponse.setUser(userLogin);
-        String accessToken = securityUtil.createAccessToken(userName, LoginResponse);
-        LoginResponse.setAccessToken(accessToken);
-        String newRefreshToken = securityUtil.createRefreshToken(userName, LoginResponse);
-        LoginResponse.setRefreshToken(newRefreshToken); // This field is @JsonIgnore
-        userService.updateUserToken(newRefreshToken, userName);
-        return LoginResponse;
-    }*/
-
     @Override
     public LoginResponse refreshToken(String oldRefreshToken) {
         if (!StringUtils.hasText(oldRefreshToken)) {
@@ -152,8 +132,12 @@ public class AuthServiceImpl implements AuthService {
         response.setAccessToken(newAccessToken);
         response.setRefreshToken(newRefreshToken);
 
-        // 7. Update refresh token (rotate)
-        userService.updateUserToken(newRefreshToken, user.getUserName());
+        // 7. Rotate atomically (compare-and-swap). If another concurrent refresh
+        // already rotated this token, 0 rows are affected -> reject this one.
+        int rotated = userRepository.rotateRefreshToken(user.getId(), oldRefreshToken, newRefreshToken);
+        if (rotated == 0) {
+            throw new BadCredentialsException("Invalid refresh token");
+        }
 
         return response;
     }

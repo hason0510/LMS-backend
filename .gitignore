@@ -26,6 +26,8 @@ run*.log
 *.iml
 *.ipr
 .env
+.env.*
+!.env.production.example
 
 ### NetBeans ###
 /nbproject/private/
