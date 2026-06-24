@@ -306,12 +306,10 @@ public class QuizServiceImpl implements QuizService {
         if (isCreate || request.getMaxAttempts() != null) {
             quiz.setMaxAttempts(request.getMaxAttempts());
         }
-        if (isCreate || request.getAvailableFrom() != null) {
-            quiz.setAvailableFrom(request.getAvailableFrom());
-        }
-        if (isCreate || request.getAvailableUntil() != null) {
-            quiz.setAvailableUntil(request.getAvailableUntil());
-        }
+        // Set thẳng (không guard != null) để cho phép XÓA ngày khi sửa quiz.
+        // FE editor luôn gửi kèm 2 field này, và hành vi này khớp với quiz template.
+        quiz.setAvailableFrom(request.getAvailableFrom());
+        quiz.setAvailableUntil(request.getAvailableUntil());
         if (isCreate || request.getGenerateQuestionsPerAttempt() != null) {
             quiz.setGenerateQuestionsPerAttempt(Boolean.TRUE.equals(request.getGenerateQuestionsPerAttempt()));
         }

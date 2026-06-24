@@ -11,8 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -116,6 +118,24 @@ public class ClassMemberAuthorizationService {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Map userId → vai trò trong lớp (TEACHER/TA) cho toàn bộ thành viên giảng dạy của một lớp.
+     * Dùng để hiển thị badge "Trợ giảng" trên bình luận: TA có role toàn cục là STUDENT nên
+     * không phân biệt được nếu chỉ dựa vào role toàn cục.
+     */
+    public Map<Integer, ClassMemberRole> teachingRoleMap(Integer classSectionId) {
+        Map<Integer, ClassMemberRole> map = new HashMap<>();
+        if (classSectionId == null) {
+            return map;
+        }
+        classMemberRepository.findByClassSection_Id(classSectionId).forEach(member -> {
+            if (member.getUser() != null && member.getRole() != null) {
+                map.put(member.getUser().getId(), member.getRole());
+            }
+        });
+        return map;
     }
 
     public String resolveMyClassRole(ClassSection classSection, User user) {

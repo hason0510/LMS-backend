@@ -25,12 +25,14 @@ import com.example.backend.service.EnrollmentService;
 import com.example.backend.service.QuizAttemptService;
 import com.example.backend.service.UserService;
 import com.example.backend.specification.QuizAttemptSpecification;
+import com.example.backend.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -70,6 +72,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ClassContentAccessService classContentAccessService;
     private final RedisCacheInvalidationService cacheInvalidationService;
+    private final NotificationService notificationService;
 
 
     @Override
@@ -971,6 +974,28 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         Integer passingScore = attempt.getQuiz().getMinPassScore() != null ? attempt.getQuiz().getMinPassScore() : 0;
         attempt.setIsPassed(attempt.getGrade() >= passingScore);
         quizAttemptRepository.save(attempt);
+        // Báo cho học sinh khi bài đã được chấm/đánh giá, kèm ref-link tới trang kết quả.
+        if (attempt.getStudent() != null) {
+            ClassSection reviewedClassSection = resolveClassSection(attempt);
+            Integer reviewedCsId = reviewedClassSection != null ? reviewedClassSection.getId() : null;
+            Integer reviewedQuizId = attempt.getQuiz() != null ? attempt.getQuiz().getId() : null;
+            notificationService.createNotification(
+                    attempt.getStudent(),
+                    "Bài quiz đã được chấm",
+                    "Giảng viên đã chấm/đánh giá bài làm quiz của bạn.",
+                    "QUIZ_REVIEWED",
+                    null,
+                    (reviewedCsId != null && reviewedQuizId != null)
+                            ? "/class-sections/" + reviewedCsId + "/quizzes/" + reviewedQuizId + "/result"
+                            : null,
+                    null,
+                    reviewedCsId,
+                    reviewedClassSection != null ? reviewedClassSection.getTitle() : null,
+                    "QUIZ_ATTEMPT",
+                    attempt.getId(),
+                    null
+            );
+        }
         if (Boolean.TRUE.equals(attempt.getIsPassed())) {
             markProgressIfPassed(attempt);
         }
@@ -1464,6 +1489,30 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     private record InteractionGrade(boolean answered, boolean fullScore, BigDecimal earnedPoints) {
     }
 
+    /**
+     * Tự động hết hạn các bài làm quá giờ (status IN_PROGRESS, quiz CÓ timeLimit).
+     * Chạy mỗi 5 phút, KHÔNG phụ thuộc việc HS có online / chạm vào bài hay không
+     * → tránh attempt "treo" IN_PROGRESS và đảm bảo notif QUIZ_ATTEMPT_EXPIRED gửi đúng lúc.
+     * expireAttempt() set completedTime = startTime + timeLimit nên thời lượng vẫn chính xác dù quét trễ.
+     */
+    @Scheduled(cron = "0 */5 * * * *")
+    @Transactional
+    public void autoExpireTimedOutAttempts() {
+        List<QuizAttempt> candidates =
+                quizAttemptRepository.findByStatusAndQuiz_TimeLimitMinutesNotNull(AttemptStatus.IN_PROGRESS);
+        for (QuizAttempt attempt : candidates) {
+            if (!isAttemptExpired(attempt)) {
+                continue;
+            }
+            // Cô lập từng bài: 1 bài lỗi chỉ bị bỏ qua + log, không kéo cả batch rollback/kẹt
+            try {
+                expireAttempt(attempt);
+            } catch (Exception e) {
+                log.error("Auto-expire thất bại cho quiz attempt {}", attempt.getId(), e);
+            }
+        }
+    }
+
     private boolean isAttemptExpired(QuizAttempt attempt) {
         if (attempt.getQuiz().getTimeLimitMinutes() == null) return false;
         LocalDateTime expirationTime = attempt.getStartTime().plusMinutes(attempt.getQuiz().getTimeLimitMinutes());
@@ -1506,7 +1555,14 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
     private void expireAttempt(QuizAttempt attempt) {
         updateAttemptStatistics(attempt);
-        attempt.setCompletedTime(LocalDateTime.now());
+        // Mốc nộp = thời điểm hết hạn thật (startTime + timeLimit), KHÔNG dùng now():
+        // expire là lazy nên nếu attempt bị phát hiện hết giờ muộn (vài ngày sau),
+        // dùng now() sẽ khiến "thời gian làm bài" hiển thị sai lệch tới vài ngày.
+        Integer timeLimitMinutes = attempt.getQuiz().getTimeLimitMinutes();
+        LocalDateTime expiredAt = timeLimitMinutes != null
+                ? attempt.getStartTime().plusMinutes(timeLimitMinutes)
+                : LocalDateTime.now();
+        attempt.setCompletedTime(expiredAt);
         attempt.setStatus(AttemptStatus.EXPIRED);
         Integer passingScore = attempt.getQuiz().getMinPassScore() != null ? attempt.getQuiz().getMinPassScore() : 0;
         attempt.setIsPassed(attempt.getGrade() >= passingScore);
@@ -1514,6 +1570,33 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         if (Boolean.TRUE.equals(attempt.getIsPassed())) {
             markProgressIfPassed(attempt);
         }
+        notifyAttemptExpired(attempt);
+    }
+
+    /** Báo cho HS khi bài quiz bị hệ thống tự nộp do hết thời gian làm bài. */
+    private void notifyAttemptExpired(QuizAttempt attempt) {
+        if (attempt.getStudent() == null) {
+            return;
+        }
+        ClassSection classSection = resolveClassSection(attempt);
+        Integer csId = classSection != null ? classSection.getId() : null;
+        Integer quizId = attempt.getQuiz() != null ? attempt.getQuiz().getId() : null;
+        notificationService.createNotification(
+                attempt.getStudent(),
+                "Bài quiz đã tự nộp do hết giờ",
+                "Hệ thống đã tự động nộp bài quiz của bạn vì đã hết thời gian làm bài.",
+                "QUIZ_ATTEMPT_EXPIRED",
+                null,
+                (csId != null && quizId != null)
+                        ? "/class-sections/" + csId + "/quizzes/" + quizId + "/result"
+                        : null,
+                null,
+                csId,
+                classSection != null ? classSection.getTitle() : null,
+                "QUIZ_ATTEMPT",
+                attempt.getId(),
+                null
+        );
     }
 
     // Láº¤Y Káº¾T QUáº¢ Cá»¦A Báº¢N THÃ‚N SINH VIÃŠN THEO 1 QUIZ

@@ -58,6 +58,7 @@ import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.ContentItemTemplateRepository;
 import com.example.backend.repository.CurriculumTemplateRepository;
 import com.example.backend.repository.EnrollmentRepository;
+import com.example.backend.repository.CommentRepository;
 import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.LessonTemplateRepository;
 import com.example.backend.repository.ProgressRepository;
@@ -103,6 +104,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     private final ClassSectionRepository classSectionRepository;
     private final ClassChapterRepository classChapterRepository;
     private final ClassContentItemRepository classContentItemRepository;
+    private final CommentRepository commentRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ChapterTemplateRepository chapterTemplateRepository;
     private final ContentItemTemplateRepository contentItemTemplateRepository;
@@ -940,6 +942,14 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 response.setCompleted(assignmentStatus != SubmissionStatus.NOT_SUBMITTED);
                 response.setCompletedAt(submission != null ? submission.getSubmissionTime() : null);
             }
+        }
+
+        // Badge cho teaching staff: số câu hỏi học sinh chưa được trả lời trong bài giảng này.
+        if (!isStudent(currentUser)
+                && classContentItem.getItemType() == ContentItemType.LESSON
+                && classContentItem.getLesson() != null) {
+            response.setUnansweredCommentCount(
+                    commentRepository.countUnansweredStudentThreads(classContentItem.getLesson().getId()));
         }
         return response;
     }

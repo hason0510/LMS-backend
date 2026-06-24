@@ -59,12 +59,13 @@ public class CommentController {
     @GetMapping("/lessons/{lessonId}/comments")
     public ResponseEntity<PageResponse<CommentResponse>> getCommentsByLesson(
             @PathVariable Integer lessonId,
+            @RequestParam(value = "classSectionId", required = false) Integer classSectionId,
             @RequestParam(value = "pageNumber", defaultValue = "1") Integer pageNumber,
             @RequestParam(value = "pageSize", defaultValue = "20") Integer pageSize
     ) {
         Pageable pageable = PageRequest.of(pageNumber - 1, pageSize);
         PageResponse<CommentResponse> response =
-                commentService.getCommentsByLesson(lessonId, pageable);
+                commentService.getCommentsByLesson(lessonId, classSectionId, pageable);
         return ResponseEntity.ok(response);
     }
 }

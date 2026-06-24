@@ -13,7 +13,7 @@ public interface CommentService {
 
     CommentResponse updateComment(Integer id, CommentRequest request);
 
-    PageResponse<CommentResponse> getCommentsByLesson(Integer lessonId, Pageable pageable);
+    PageResponse<CommentResponse> getCommentsByLesson(Integer lessonId, Integer classSectionId, Pageable pageable);
 
     CommentResponse getComment(Integer id);
 

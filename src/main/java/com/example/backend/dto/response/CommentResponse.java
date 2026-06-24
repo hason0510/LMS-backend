@@ -21,6 +21,8 @@ public class CommentResponse {
     private Integer userId;
     private String fullName;
     private String avatar;
+    private String authorRole; // vai trò toàn cục người viết (STUDENT/TEACHER/ADMIN)
+    private String classRole;  // vai trò TRONG LỚP (TEACHER/TA) nếu có — để badge "Trợ giảng"
     private Integer parentId;
     private Boolean isDeleted;
     private List<CommentResponse> replies;

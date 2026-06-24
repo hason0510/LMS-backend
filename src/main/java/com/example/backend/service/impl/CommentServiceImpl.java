@@ -107,7 +107,7 @@ public class CommentServiceImpl implements CommentService {
             if (!parentAuthor.getId().equals(currentUser.getId())) {
                 String msg = String.format("%s %s đã trả lời bình luận của bạn trong bài giảng %s trong lớp %s",
                         getRoleDisplayName(currentRole), currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
-                notificationService.createNotification(parentAuthor, "Có trả lời bình luận mới", msg, "COMMENT", null, null);
+                notifyComment(parentAuthor, "Có trả lời bình luận mới", msg, classSection, lesson);
             }
             return;
         }
@@ -116,7 +116,7 @@ public class CommentServiceImpl implements CommentService {
             String msg = String.format("Người học %s đã bình luận Bài giảng \"%s\" trong Lớp \"%s\"",
                     currentUser.getFullName(), lesson.getTitle(), classSection.getTitle());
             if (teacher != null && !teacher.getId().equals(currentUser.getId())) {
-                notificationService.createNotification(teacher, "Có bình luận mới từ người học", msg, "COMMENT", null, null);
+                notifyComment(teacher, "Có bình luận mới từ người học", msg, classSection, lesson);
             }
             if (classSection.getClassMembers() != null) {
                 classSection.getClassMembers().stream()
@@ -124,7 +124,7 @@ public class CommentServiceImpl implements CommentService {
                         .map(ClassMember::getUser)
                         .filter(u -> teacher == null || !u.getId().equals(teacher.getId()))
                         .filter(u -> !u.getId().equals(currentUser.getId()))
-                        .forEach(u -> notificationService.createNotification(u, "Có bình luận mới từ người học", msg, "COMMENT", null, null));
+                        .forEach(u -> notifyComment(u, "Có bình luận mới từ người học", msg, classSection, lesson));
             }
             return;
         }
@@ -141,12 +141,48 @@ public class CommentServiceImpl implements CommentService {
                     classSection.getTitle()
             );
 
-            enrollments.forEach(e -> notificationService.createNotification(e.getStudent(), "Có thông tin mới từ giảng viên", msg, "COMMENT", null, null));
+            enrollments.forEach(e -> notifyComment(e.getStudent(), "Có thông tin mới từ giảng viên", msg, classSection, lesson));
 
             if (currentRole == RoleType.ADMIN && !teacher.getId().equals(currentUser.getId())) {
-                notificationService.createNotification(teacher, "Có thông báo mới từ quản trị viên", msg, "COMMENT", null, null);
+                notifyComment(teacher, "Có thông báo mới từ quản trị viên", msg, classSection, lesson);
             }
         }
+    }
+
+    /**
+     * Gửi notification bình luận kèm ref-link điều hướng (actionUrl + referenceType/Id + lớp).
+     * actionUrl phụ thuộc vai trò người nhận để trỏ đúng màn có thể xem/trả lời bình luận.
+     */
+    private void notifyComment(User recipient, String title, String msg, ClassSection classSection, Lesson lesson) {
+        if (recipient == null) {
+            return;
+        }
+        notificationService.createNotification(
+                recipient,
+                title,
+                msg,
+                "COMMENT",
+                null,
+                buildCommentActionUrl(recipient, classSection, lesson),
+                null,
+                classSection.getId(),
+                classSection.getTitle(),
+                "LESSON_COMMENT",
+                lesson.getId(),
+                null
+        );
+    }
+
+    private String buildCommentActionUrl(User recipient, ClassSection classSection, Lesson lesson) {
+        Integer classSectionId = classSection.getId();
+        Integer lessonId = lesson.getId();
+        RoleType role = recipient.getRole() != null ? recipient.getRole().getRoleName() : null;
+        // Học sinh: trang bài giảng hiển thị bình luận inline.
+        // Giảng viên/TA: teaching workspace, kèm param để mở đúng drawer bình luận của bài.
+        if (role == RoleType.STUDENT) {
+            return "/class-sections/" + classSectionId + "/lectures/" + lessonId;
+        }
+        return "/teaching/class-sections/" + classSectionId + "/content?commentLessonId=" + lessonId;
     }
 
     private String getRoleDisplayName(RoleType role) {
@@ -183,6 +219,7 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public PageResponse<CommentResponse> getCommentsByLesson(
             Integer lessonId,
+            Integer classSectionId,
             Pageable pageable
     ) {
         User currentUser = userService.getCurrentUser();
@@ -193,9 +230,19 @@ public class CommentServiceImpl implements CommentService {
             return new PageResponse<>(1, 0, 0, List.of());
         }
 
+        // Vai trò trong lớp (TEACHER/TA) theo userId — để gắn badge "Trợ giảng".
+        Map<Integer, ClassMemberRole> classRoleMap =
+                classMemberAuthorizationService.teachingRoleMap(classSectionId);
+
         Map<Integer, CommentResponse> nodeMap = new HashMap<>();
         for (Comment c : comments) {
             CommentResponse dto = convertEntityToDTO(c);
+            if (dto.getUserId() != null) {
+                ClassMemberRole classRole = classRoleMap.get(dto.getUserId());
+                if (classRole != null) {
+                    dto.setClassRole(classRole.name());
+                }
+            }
             nodeMap.put(dto.getCommentId(), dto);
         }
 
@@ -309,6 +356,9 @@ public class CommentServiceImpl implements CommentService {
             response.setUserId(comment.getUser().getId());
             response.setFullName(comment.getUser().getFullName());
             response.setAvatar(comment.getUser().getImageUrl());
+            response.setAuthorRole(comment.getUser().getRole() != null
+                    ? comment.getUser().getRole().getRoleName().name()
+                    : null);
             response.setIsDeleted(false);
         }
         return response;

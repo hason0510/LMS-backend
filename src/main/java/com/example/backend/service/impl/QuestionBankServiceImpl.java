@@ -810,10 +810,14 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             return ParsedGiftQuestion.forOptions(content, QuestionType.TRUE_FALSE, parsedAnswerBlock.generalFeedback(), options);
         }
 
-        if (!StringUtils.hasText(answerBlock)) {
-            return ParsedGiftQuestion.forOptions(content, QuestionType.ESSAY, null, List.of());
+        // Essay: answer block rỗng, hoặc chỉ có general feedback "####..." mà không có
+        // token đáp án. Phải xét rawAnswerSection (phần token, trước "####") chứ không phải
+        // cả answerBlock — nếu không, essay export ra "{####giải thích}" sẽ bị guard numerical
+        // bên dưới nuốt nhầm thành "Unsupported GIFT type: numerical".
+        if (!StringUtils.hasText(parsedAnswerBlock.rawAnswerSection())) {
+            return ParsedGiftQuestion.forOptions(content, QuestionType.ESSAY, parsedAnswerBlock.generalFeedback(), List.of());
         }
-        if (answerBlock.startsWith("#")) {
+        if (parsedAnswerBlock.rawAnswerSection().startsWith("#")) {
             // Numerical questions require dedicated model + scoring logic.
             throw new BusinessException("Unsupported GIFT type: numerical");
         }

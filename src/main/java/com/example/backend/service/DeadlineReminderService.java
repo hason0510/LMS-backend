@@ -23,7 +23,7 @@ public class DeadlineReminderService {
     private final ClassNotificationService classNotificationService;
 
     @Scheduled(cron = "0 0 * * * *")
-    @Transactional(readOnly = true)
+    @Transactional // job này GHI (tạo notification), không phải readOnly
     public void sendDeadlineReminders() {
         LocalDateTime targetStart = LocalDateTime.now().plusHours(23);
         LocalDateTime targetEnd = LocalDateTime.now().plusHours(25);

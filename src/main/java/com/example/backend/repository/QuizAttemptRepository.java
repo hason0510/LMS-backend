@@ -25,6 +25,9 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
 
     Optional<QuizAttempt> findByClassContentItem_IdAndStudent_IdAndStatus(Integer classContentItemId, Integer studentId, AttemptStatus status);
 
+    /** Các lần làm đang diễn ra của quiz CÓ giới hạn thời gian — dùng cho scheduler auto-expire. */
+    List<QuizAttempt> findByStatusAndQuiz_TimeLimitMinutesNotNull(AttemptStatus status);
+
     Optional<QuizAttempt> findTopByClassContentItem_IdAndStudent_IdAndStatusOrderByIdDesc(Integer classContentItemId, Integer studentId, AttemptStatus status);
 
     int countByClassContentItem_IdAndStudent_Id(Integer classContentItemId, Integer studentId);

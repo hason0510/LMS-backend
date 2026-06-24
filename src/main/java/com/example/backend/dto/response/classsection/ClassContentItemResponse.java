@@ -33,4 +33,5 @@ public class ClassContentItemResponse {
     private Boolean completed;
     private java.time.LocalDateTime completedAt;
     private String assignmentStatus;
+    private Long unansweredCommentCount; // số câu hỏi học sinh chưa được GV trả lời (chỉ set cho LESSON, view của teaching staff)
 }

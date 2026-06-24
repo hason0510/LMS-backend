@@ -32,6 +32,7 @@ import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.ResourceService;
 import com.example.backend.service.SubmissionService;
 import com.example.backend.service.UserService;
+import com.example.backend.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,6 +61,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ResourceService resourceService;
     private final RedisCacheInvalidationService cacheInvalidationService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -301,6 +303,27 @@ public class SubmissionServiceImpl implements SubmissionService {
 
         SubmissionResponse response = convertToResponse(submissionRepository.save(submission));
         cacheInvalidationService.evictTeachingAndReportCaches();
+        // Báo cho học sinh khi bài tập đã được chấm, kèm ref-link tới trang bài tập.
+        if (submission.getStudent() != null) {
+            Integer gradedCsId = submission.getClassSection() != null ? submission.getClassSection().getId() : null;
+            Integer gradedAssignmentId = submission.getAssignment() != null ? submission.getAssignment().getId() : null;
+            notificationService.createNotification(
+                    submission.getStudent(),
+                    "Bài tập đã được chấm",
+                    "Giảng viên đã chấm bài tập của bạn.",
+                    "ASSIGNMENT_GRADED",
+                    null,
+                    (gradedCsId != null && gradedAssignmentId != null)
+                            ? "/class-sections/" + gradedCsId + "/assignments/" + gradedAssignmentId
+                            : null,
+                    null,
+                    gradedCsId,
+                    submission.getClassSection() != null ? submission.getClassSection().getTitle() : null,
+                    "ASSIGNMENT",
+                    gradedAssignmentId,
+                    null
+            );
+        }
         return response;
     }
 
