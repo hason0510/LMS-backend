@@ -233,7 +233,7 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
             ClassSection classSection
     ) {
         Specification<QuizAttempt> specification = Specification
-                .where(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
+                .allOf(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
                 .and(QuizAttemptSpecification.hasClassSectionId(classSection.getId()))
                 .and(QuizAttemptSpecification.accessibleFor(
                         currentUser,

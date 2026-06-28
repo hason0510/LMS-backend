@@ -141,7 +141,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
         LocalDate resolvedDateTo = dateTo != null ? dateTo : date;
 
         Specification<Announcement> spec = Specification
-                .where(AnnouncementSpecification.inClassSections(accessibleIds))
+                .allOf(AnnouncementSpecification.inClassSections(accessibleIds))
                 .and(AnnouncementSpecification.createdBetween(resolvedDateFrom, resolvedDateTo));
         if (subjectId != null) {
             spec = spec.and(AnnouncementSpecification.hasSubjectId(subjectId));

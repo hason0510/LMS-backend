@@ -190,7 +190,7 @@ public class SubmissionServiceImpl implements SubmissionService {
 
         boolean onlyNotSubmitted = status == SubmissionStatus.NOT_SUBMITTED;
         Specification<Submission> baseSpec = Specification
-                .where(SubmissionSpecification.hasAssignmentId(assignmentId))
+                .allOf(SubmissionSpecification.hasAssignmentId(assignmentId))
                 .and(SubmissionSpecification.hasClassSectionId(classSection.getId()))
                 .and(SubmissionSpecification.studentContains(keyword));
         Specification<Submission> filteredSpec = baseSpec;

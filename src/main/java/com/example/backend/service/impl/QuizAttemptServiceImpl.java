@@ -900,7 +900,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             String quizKeyword,
             String classKeyword
     ) {
-        return Specification.where(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
+        return Specification.allOf(QuizAttemptSpecification.hasStatuses(List.of(AttemptStatus.COMPLETED, AttemptStatus.EXPIRED)))
                 .and(QuizAttemptSpecification.hasClassSectionId(classSectionId))
                 .and(QuizAttemptSpecification.hasQuizId(quizId))
                 .and(QuizAttemptSpecification.accessibleFor(

@@ -152,7 +152,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             boolean includeChapters
     ) {
         Specification<CurriculumTemplate> specification = Specification
-                .where(CurriculumTemplateSpecification.nameContains(keyword))
+                .allOf(CurriculumTemplateSpecification.nameContains(keyword))
                 .and(CurriculumTemplateSpecification.hasCategoryId(categoryId))
                 .and(CurriculumTemplateSpecification.hasSubjectId(subjectId));
 

@@ -244,7 +244,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 resolveSort(safeRequest.getSortBy(), safeRequest.getSortDirection())
         );
 
-        Specification<ClassSection> spec = Specification.where(ClassSectionSpecification.titleContains(safeRequest.getKeyword()))
+        Specification<ClassSection> spec = Specification.allOf(ClassSectionSpecification.titleContains(safeRequest.getKeyword()))
                 .and(ClassSectionSpecification.teacherNameContains(safeRequest.getTeacherKeyword()))
                 .and(ClassSectionSpecification.subjectCodeContains(safeRequest.getSubjectKeyword()))
                 .and(ClassSectionSpecification.hasCategoryId(safeRequest.getCategoryId()))

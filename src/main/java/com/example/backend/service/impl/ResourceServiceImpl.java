@@ -924,7 +924,7 @@ public class ResourceServiceImpl implements ResourceService {
                 && resourceAuthorizationService.canBrowseScope(safeRequest.getScopeType(), safeRequest.getScopeId());
         boolean skipStrictScopeFilter = ownerLibrary && includeCurrentScope && hasRequestedScope;
 
-        Specification<Resource> spec = Specification.where(
+        Specification<Resource> spec = Specification.allOf(
                 ResourceSpecification.visibilityForBrowse(
                         isAdmin,
                         currentUsername,
@@ -1149,7 +1149,10 @@ public class ResourceServiceImpl implements ResourceService {
             resource.setEmbedUrl(null);
             resource.setCloudinaryId(null);
             resource.setFileUrl(resource.getFileUrl().trim());
-            resource.setType(ResourceType.LINK);
+            // Link trỏ tới ảnh -> lưu đúng type=IMAGE để mọi nơi nhận diện là ảnh.
+            // (FE picker gửi type=IMAGE nhưng nhánh này trước đây ép cứng về LINK,
+            //  khiến ảnh-bằng-link hiển thị thành link sau khi lưu.)
+            resource.setType(isImageUrl(resource.getFileUrl()) ? ResourceType.IMAGE : ResourceType.LINK);
             if (!StringUtils.hasText(resource.getTitle())) {
                 resource.setTitle(buildDefaultTitle(resource.getFileUrl()));
             }
@@ -1226,6 +1229,24 @@ public class ResourceServiceImpl implements ResourceService {
             "vimeo\\.com/(?:video/)?(\\d+)",
             Pattern.CASE_INSENSITIVE
     );
+
+    private static final Pattern IMAGE_URL_PATTERN = Pattern.compile(
+            "\\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)(?:[?#].*)?$",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    // URL có trỏ tới ảnh không (theo đuôi file hoặc URL ảnh Cloudinary).
+    private boolean isImageUrl(String url) {
+        if (!StringUtils.hasText(url)) {
+            return false;
+        }
+        String trimmed = url.trim();
+        if (IMAGE_URL_PATTERN.matcher(trimmed).find()) {
+            return true;
+        }
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        return lower.contains("res.cloudinary.com") && lower.contains("/image/upload/");
+    }
 
     private List<Resource> mergeLegacyAndAttachedResources(
             List<Resource> legacyResources,

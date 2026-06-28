@@ -148,7 +148,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
     @Transactional(readOnly = true)
     public List<QuestionBankResponse> getQuestionBanks(Integer subjectId, String subjectKeyword, boolean includeQuestions) {
         User currentUser = requireCurrentUser();
-        Specification<QuestionBank> spec = Specification.where(null);
+        Specification<QuestionBank> spec = Specification.unrestricted();
         if (subjectId != null) {
             spec = spec.and(QuestionBankSpecification.hasSubjectId(subjectId));
         }
