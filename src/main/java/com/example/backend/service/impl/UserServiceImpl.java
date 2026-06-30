@@ -420,7 +420,7 @@ public class UserServiceImpl implements UserService {
             user.setStudentNumber(request.getStudentNumber());
         }
 
-        user.setRole(getRequiredRole(RoleType.valueOf(request.getRoleName())));
+        user.setRole(getRequiredRole(RoleType.STUDENT));
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setLocalAuthEnabled(true);
         user.setGoogleLinked(false);
@@ -516,8 +516,8 @@ public class UserServiceImpl implements UserService {
         Page<UserInfoResponse> response = userPage.map(this::convertUserInfoToDTO);
         return new PageResponse<>(
                 response.getNumber() + 1,
-                response.getNumberOfElements(),
                 response.getTotalPages(),
+                response.getTotalElements(),
                 response.getContent()
         );
     }

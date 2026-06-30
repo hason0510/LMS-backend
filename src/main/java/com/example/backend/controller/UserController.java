@@ -7,6 +7,8 @@ import com.example.backend.dto.response.CloudinaryResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.user.UserInfoResponse;
 import com.example.backend.entity.User;
+import com.example.backend.constant.RoleType;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.data.domain.PageRequest;
@@ -31,7 +33,14 @@ public class UserController {
     @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN', 'TEACHER')")
     @GetMapping("/users/{id}")
     public ResponseEntity<UserInfoResponse> getUserById(@PathVariable Integer id) {
-        return ResponseEntity.ok((UserInfoResponse) userService.getUserById(id));
+        UserInfoResponse user = (UserInfoResponse) userService.getUserById(id);
+        boolean isSelf = userService.isCurrentUser(id);
+        boolean isAdmin = RoleType.ADMIN.equals(userService.getCurrentUser().getRole().getRoleName());
+        boolean targetIsStudent = "STUDENT".equalsIgnoreCase(user.getRoleName());
+        if (!isSelf && !isAdmin && targetIsStudent) {
+            throw new UnauthorizedException("Bạn không có quyền xem thông tin người dùng này");
+        }
+        return ResponseEntity.ok(user);
     }
 
     @Operation(summary = "Cập nhật thông tin người dùng")

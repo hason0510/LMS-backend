@@ -44,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -71,21 +72,33 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public void addStudentsToClassSection(Integer classSectionId, StudentCourseRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
+        if (!classMemberAuthorizationService.canManageEnrollments(classSection, userService.getCurrentUser())) {
+            throw new UnauthorizedException("Bạn không có quyền quản lý ghi danh của lớp này!");
+        }
 
         List<User> users = userRepository.findAllById(request.getStudentIds());
         ensureUsersAreNotClassStaff(classSection, users);
-        List<Enrollment> enrollments = users.stream()
-                .map(user -> Enrollment.builder()
-                        .student(user)
-                        .classSection(classSection)
-                        .progress(0)
-                        .approvalStatus(EnrollmentStatus.APPROVED)
-                .build())
-                .toList();
+        List<Enrollment> enrollments = new ArrayList<>();
+        List<User> addedUsers = new ArrayList<>();
+        for (User user : users) {
+            Enrollment existing = enrollmentRepository.findByStudent_IdAndClassSection_Id(user.getId(), classSection.getId());
+            if (existing != null && existing.getApprovalStatus() == EnrollmentStatus.APPROVED) {
+                continue;
+            }
+            Enrollment enrollment = existing != null ? existing : Enrollment.builder()
+                    .student(user)
+                    .classSection(classSection)
+                    .progress(0)
+                    .build();
+            enrollment.setApprovalStatus(EnrollmentStatus.APPROVED);
+            enrollment.setApprovedAt(LocalDateTime.now());
+            enrollments.add(enrollment);
+            addedUsers.add(user);
+        }
         enrollmentRepository.saveAll(enrollments);
         cacheInvalidationService.evictAllRedisReadCaches();
 
-        for (User user : users) {
+        for (User user : addedUsers) {
             String message = "Ban đã được thêm vào lớp học " + classSection.getTitle();
             notificationService.createNotification(user, "Được thêm vào lớp học", message, "ENROLLMENT", null, null);
         }
@@ -102,6 +115,9 @@ public class EnrollmentServiceImpl implements EnrollmentService {
     public void removeStudentsFromClassSection(Integer classSectionId, StudentCourseRequest request) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học!"));
+        if (!classMemberAuthorizationService.canManageEnrollments(classSection, userService.getCurrentUser())) {
+            throw new UnauthorizedException("Bạn không có quyền quản lý ghi danh của lớp này!");
+        }
         if (request.getStudentIds() == null || request.getStudentIds().isEmpty()) {
             return;
         }
@@ -382,8 +398,8 @@ public class EnrollmentServiceImpl implements EnrollmentService {
         Page<UserViewResponse> response = userPage.map(userService::convertUserViewToDTO);
         return new PageResponse<>(
                 response.getNumber() + 1,
-                (int) response.getTotalElements(),
                 response.getTotalPages(),
+                response.getTotalElements(),
                 response.getContent()
         );
     }

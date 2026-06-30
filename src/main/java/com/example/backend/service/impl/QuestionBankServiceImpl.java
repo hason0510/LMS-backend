@@ -978,8 +978,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             StringBuilder payload = new StringBuilder();
             while (index < length) {
                 char current = answerBlock.charAt(index);
-                char previous = index > 0 ? answerBlock.charAt(index - 1) : '\0';
-                boolean escaped = previous == '\\';
+                boolean escaped = isEscaped(answerBlock, index);
                 boolean nextMarker = (current == '=' || current == '~')
                         && !escaped;
 

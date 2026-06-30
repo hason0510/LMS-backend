@@ -402,7 +402,7 @@ public class ReportingServiceImpl implements ReportingService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CacheNames.CLASS_REPORT_OVERVIEW, key = "#classSectionId + ':' + #lowThreshold + ':' + #highThreshold")
+    @Cacheable(value = CacheNames.CLASS_REPORT_OVERVIEW, key = "@cacheKeyBuilder.classReportOverviewKey(#classSectionId, #lowThreshold, #highThreshold)")
     public ClassReportOverviewResponse getClassReportOverview(Integer classSectionId,
                                                               int lowThreshold,
                                                               int highThreshold) {
@@ -492,7 +492,7 @@ public class ReportingServiceImpl implements ReportingService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = CacheNames.CLASS_ASSIGNMENT_REPORT, key = "#classSectionId")
+    @Cacheable(value = CacheNames.CLASS_ASSIGNMENT_REPORT, key = "@cacheKeyBuilder.classAssignmentReportKey(#classSectionId)")
     public AssignmentReportResponse getAssignmentReport(Integer classSectionId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));

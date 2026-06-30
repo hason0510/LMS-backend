@@ -4,6 +4,7 @@ import com.example.backend.dto.request.CategoryRequest;
 import com.example.backend.dto.response.CategoryResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.entity.Category;
+import com.example.backend.exception.ResourceNotFoundException;
 import com.example.backend.repository.CategoryRepository;
 import com.example.backend.service.CategoryService;
 import org.springframework.stereotype.Service;
@@ -33,7 +34,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     public CategoryResponse getCategoryById(Integer id) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
         return mapToResponse(category);
     }
 
@@ -48,7 +49,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     public CategoryResponse updateCategory(Integer id, CategoryRequest request) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
         category.setTitle(request.getTitle());
         category.setDescription(request.getDescription());
         return mapToResponse(categoryRepository.save(category));
@@ -57,7 +58,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     public void deleteCategory(Integer id) {
         Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
         categoryRepository.delete(category); // soft delete
     }
 

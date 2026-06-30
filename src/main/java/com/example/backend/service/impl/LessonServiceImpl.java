@@ -2,6 +2,7 @@ package com.example.backend.service.impl;
 
 import com.example.backend.constant.ClassContentAvailabilityStatus;
 import com.example.backend.constant.ContentItemType;
+import com.example.backend.constant.RoleType;
 import com.example.backend.dto.request.LessonRequest;
 import com.example.backend.dto.response.LessonResponse;
 import com.example.backend.dto.response.ResourceResponse;
@@ -44,8 +45,21 @@ public class LessonServiceImpl implements LessonService {
     @Override
     public LessonResponse getLessonById(Integer id, Integer classContentItemId) {
         Lesson lesson = lessonRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
-        if (classContentItemId != null) {
-            validateLessonAccess(lesson, classContentItemId);
+        // BẢO MẬT (chống IDOR): luôn kiểm quyền truy cập, KỂ CẢ khi client không truyền classContentItemId.
+        // Nếu thiếu param, tự suy ra mục nội dung lớp đang chứa bài giảng này để kiểm enrollment/khả dụng.
+        Integer effectiveContentItemId = classContentItemId != null
+                ? classContentItemId
+                : classContentItemRepository.findByLesson_Id(id)
+                        .map(ClassContentItem::getId)
+                        .orElse(null);
+        if (effectiveContentItemId != null) {
+            validateLessonAccess(lesson, effectiveContentItemId);
+        } else {
+            // Bài giảng chưa được gắn vào lớp nào (orphan): chỉ cho nhân sự giảng dạy / quản trị xem.
+            User currentUser = userService.getCurrentUser();
+            if (currentUser == null || currentUser.getRole().getRoleName() == RoleType.STUDENT) {
+                throw new UnauthorizedException("Bạn không có quyền truy cập nội dung này");
+            }
         }
         return convertEntityToDTO(lesson);
     }

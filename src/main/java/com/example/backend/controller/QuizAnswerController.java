@@ -31,14 +31,14 @@ public class QuizAnswerController {
     }
 
     @Operation(summary = "Lấy thông tin câu trả lời quiz theo ID", description = "Retrieve specific quiz answer details by ID")  // ← ENHANCED
-    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping("/{id}")
     public ResponseEntity<QuizAnswerResponse> getQuizAnswerById(@PathVariable Integer id) {
         return ResponseEntity.ok(quizAnswerService.getQuizAnswerById(id));
     }
 
     @Operation(summary = "Lấy danh sách câu trả lời quiz có phân trang", description = "Retrieve paginated list of all quiz answers with filtering options")  // ← ENHANCED
-    @PreAuthorize("hasAnyRole('STUDENT', 'ADMIN', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     @GetMapping
     public ResponseEntity<PageResponse<QuizAnswerResponse>> getAllQuizAnswers(
             @RequestParam(value = "pageNumber", defaultValue = "1", required = false) Integer pageNumber,

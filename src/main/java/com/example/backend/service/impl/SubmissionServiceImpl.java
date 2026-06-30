@@ -99,6 +99,10 @@ public class SubmissionServiceImpl implements SubmissionService {
                     return created;
                 });
 
+        if (submission.getStatus() == SubmissionStatus.GRADED) {
+            throw new BusinessException("Bài đã được chấm điểm, không thể nộp lại. Liên hệ giảng viên nếu cần nộp lại.");
+        }
+
         List<ResourceRequest> requestedResources = resolveRequestedResources(request);
         submission.setDescription(request.getDescription());
         applySubmissionResources(submission, requestedResources);
@@ -346,6 +350,26 @@ public class SubmissionServiceImpl implements SubmissionService {
         submission.setGradedAt(LocalDateTime.now());
         SubmissionResponse response = convertToResponse(submissionRepository.save(submission));
         cacheInvalidationService.evictTeachingAndReportCaches();
+        if (submission.getStudent() != null) {
+            Integer returnedCsId = submission.getClassSection() != null ? submission.getClassSection().getId() : null;
+            Integer returnedAssignmentId = submission.getAssignment() != null ? submission.getAssignment().getId() : null;
+            notificationService.createNotification(
+                    submission.getStudent(),
+                    "Bài tập được trả lại",
+                    "Giảng viên đã trả lại bài tập để bạn chỉnh sửa và nộp lại.",
+                    "ASSIGNMENT_RETURNED",
+                    null,
+                    (returnedCsId != null && returnedAssignmentId != null)
+                            ? "/class-sections/" + returnedCsId + "/assignments/" + returnedAssignmentId
+                            : null,
+                    null,
+                    returnedCsId,
+                    submission.getClassSection() != null ? submission.getClassSection().getTitle() : null,
+                    "ASSIGNMENT",
+                    returnedAssignmentId,
+                    null
+            );
+        }
         return response;
     }
 

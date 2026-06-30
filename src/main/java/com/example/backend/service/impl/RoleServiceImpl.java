@@ -75,8 +75,8 @@ public class RoleServiceImpl implements RoleService {
         Page<RoleResponse> rolePage = roles.map(this::convertToDTO);
         return new PageResponse<>(
                 rolePage.getNumber() + 1,
-                rolePage.getNumberOfElements(),
                 rolePage.getTotalPages(),
+                rolePage.getTotalElements(),
                 rolePage.getContent()
         );
     }

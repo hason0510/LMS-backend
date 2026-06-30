@@ -103,6 +103,17 @@ public class CacheKeyBuilder {
                 + ":class:" + normalize(classSectionId, "ALL");
     }
 
+    public String classReportOverviewKey(Integer classSectionId, Integer lowThreshold, Integer highThreshold) {
+        return "user:" + currentUserId()
+                + ":class:" + normalize(classSectionId, "_")
+                + ":low:" + normalize(lowThreshold, "_")
+                + ":high:" + normalize(highThreshold, "_");
+    }
+
+    public String classAssignmentReportKey(Integer classSectionId) {
+        return "user:" + currentUserId() + ":class:" + normalize(classSectionId, "_");
+    }
+
     private String pageKey(Pageable pageable) {
         if (pageable == null) {
             return ":page:0:size:unpaged:sort:_";

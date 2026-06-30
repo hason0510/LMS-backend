@@ -334,6 +334,15 @@ public class ResourceServiceImpl implements ResourceService {
                 SELECT 'INTERACTION_ITEM' AS entity_type, id AS entity_id, 'interaction.resource' AS field_name
                 FROM question_interaction_items WHERE resource_id = ? AND is_deleted = false
                 UNION ALL
+                SELECT 'QUIZ_TEMPLATE_QUESTION' AS entity_type, id AS entity_id, 'question.resource' AS field_name
+                FROM quiz_template_questions WHERE resource_id = ? AND is_deleted = false
+                UNION ALL
+                SELECT 'QUIZ_TEMPLATE_ANSWER' AS entity_type, id AS entity_id, 'answer.resource' AS field_name
+                FROM quiz_template_answers WHERE resource_id = ? AND is_deleted = false
+                UNION ALL
+                SELECT 'QUIZ_TEMPLATE_ITEM' AS entity_type, id AS entity_id, 'interaction.resource' AS field_name
+                FROM quiz_template_question_items WHERE resource_id = ? AND is_deleted = false
+                UNION ALL
                 SELECT 'CLASS_SECTION' AS entity_type, id AS entity_id, 'cover.resource' AS field_name
                 FROM class_sections WHERE image_resource_id = ? AND is_deleted = false
                 UNION ALL
@@ -364,7 +373,8 @@ public class ResourceServiceImpl implements ResourceService {
                 rs.getString("entity_type"),
                 rs.getInt("entity_id"),
                 rs.getString("field_name")
-        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId);
+        ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId,
+                resourceId, resourceId, resourceId);
     }
 
     private List<ResourceReferenceResponse> loadEnrichedResourceReferences(Integer resourceId) {
@@ -615,6 +625,77 @@ public class ResourceServiceImpl implements ResourceService {
                 LEFT JOIN class_sections cs ON cs.id = COALESCE(sub.class_section_id, a_cch.class_section_id) AND cs.is_deleted = false
                 LEFT JOIN subjects s ON s.id = cs.subject_id AND s.is_deleted = false
                 WHERE rr.resource_id = ? AND rr.is_deleted = false
+                UNION ALL
+                SELECT
+                    rr.entity_type,
+                    rr.entity_id,
+                    rr.field_name,
+                    CONCAT('Câu hỏi quiz mẫu #', qtq.id) AS label,
+                    CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Giáo trình: ', COALESCE(ct.name, '-'), ' -> Quiz mẫu: ', COALESCE(qt.title, '-')) AS context_path,
+                    NULL AS class_section_id,
+                    NULL AS class_section_title,
+                    NULL AS quiz_id,
+                    NULL AS quiz_title,
+                    NULL AS question_bank_id,
+                    NULL AS question_bank_name,
+                    s.id AS subject_id,
+                    s.title AS subject_title
+                FROM resource_references rr
+                JOIN quiz_template_questions qtq ON rr.entity_type = 'QUIZ_TEMPLATE_QUESTION' AND rr.entity_id = qtq.id AND qtq.is_deleted = false
+                JOIN quiz_templates qt ON qt.id = qtq.quiz_template_id AND qt.is_deleted = false
+                LEFT JOIN content_item_templates cit ON cit.quiz_template_id = qt.id AND cit.is_deleted = false
+                LEFT JOIN chapter_templates cht ON cht.id = cit.chapter_template_id AND cht.is_deleted = false
+                LEFT JOIN curriculum_templates ct ON ct.id = cht.curriculum_template_id AND ct.is_deleted = false
+                LEFT JOIN subjects s ON s.id = ct.subject_id AND s.is_deleted = false
+                WHERE rr.resource_id = ? AND rr.is_deleted = false
+                UNION ALL
+                SELECT
+                    rr.entity_type,
+                    rr.entity_id,
+                    rr.field_name,
+                    CONCAT('Đáp án quiz mẫu #', qta.id) AS label,
+                    CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Giáo trình: ', COALESCE(ct.name, '-'), ' -> Quiz mẫu: ', COALESCE(qt.title, '-'), ' -> Câu hỏi #', qtq.id) AS context_path,
+                    NULL AS class_section_id,
+                    NULL AS class_section_title,
+                    NULL AS quiz_id,
+                    NULL AS quiz_title,
+                    NULL AS question_bank_id,
+                    NULL AS question_bank_name,
+                    s.id AS subject_id,
+                    s.title AS subject_title
+                FROM resource_references rr
+                JOIN quiz_template_answers qta ON rr.entity_type = 'QUIZ_TEMPLATE_ANSWER' AND rr.entity_id = qta.id AND qta.is_deleted = false
+                JOIN quiz_template_questions qtq ON qtq.id = qta.quiz_template_question_id AND qtq.is_deleted = false
+                JOIN quiz_templates qt ON qt.id = qtq.quiz_template_id AND qt.is_deleted = false
+                LEFT JOIN content_item_templates cit ON cit.quiz_template_id = qt.id AND cit.is_deleted = false
+                LEFT JOIN chapter_templates cht ON cht.id = cit.chapter_template_id AND cht.is_deleted = false
+                LEFT JOIN curriculum_templates ct ON ct.id = cht.curriculum_template_id AND ct.is_deleted = false
+                LEFT JOIN subjects s ON s.id = ct.subject_id AND s.is_deleted = false
+                WHERE rr.resource_id = ? AND rr.is_deleted = false
+                UNION ALL
+                SELECT
+                    rr.entity_type,
+                    rr.entity_id,
+                    rr.field_name,
+                    CONCAT('Mục tương tác quiz mẫu #', qti.id) AS label,
+                    CONCAT('Môn: ', COALESCE(s.title, '-'), ' -> Giáo trình: ', COALESCE(ct.name, '-'), ' -> Quiz mẫu: ', COALESCE(qt.title, '-'), ' -> Câu hỏi #', qtq.id) AS context_path,
+                    NULL AS class_section_id,
+                    NULL AS class_section_title,
+                    NULL AS quiz_id,
+                    NULL AS quiz_title,
+                    NULL AS question_bank_id,
+                    NULL AS question_bank_name,
+                    s.id AS subject_id,
+                    s.title AS subject_title
+                FROM resource_references rr
+                JOIN quiz_template_question_items qti ON rr.entity_type = 'QUIZ_TEMPLATE_ITEM' AND rr.entity_id = qti.id AND qti.is_deleted = false
+                JOIN quiz_template_questions qtq ON qtq.id = qti.quiz_template_question_id AND qtq.is_deleted = false
+                JOIN quiz_templates qt ON qt.id = qtq.quiz_template_id AND qt.is_deleted = false
+                LEFT JOIN content_item_templates cit ON cit.quiz_template_id = qt.id AND cit.is_deleted = false
+                LEFT JOIN chapter_templates cht ON cht.id = cit.chapter_template_id AND cht.is_deleted = false
+                LEFT JOIN curriculum_templates ct ON ct.id = cht.curriculum_template_id AND ct.is_deleted = false
+                LEFT JOIN subjects s ON s.id = ct.subject_id AND s.is_deleted = false
+                WHERE rr.resource_id = ? AND rr.is_deleted = false
                 ORDER BY entity_type, entity_id
                 """;
 
@@ -635,7 +716,8 @@ public class ResourceServiceImpl implements ResourceService {
                         nullableInt(rs, "subject_id"),
                         rs.getString("subject_title")
                 ),
-                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
+                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId,
+                resourceId, resourceId, resourceId
         );
     }
 
@@ -956,6 +1038,7 @@ public class ResourceServiceImpl implements ResourceService {
     public CloudinaryResponse uploadVideoResource(Integer id, MultipartFile file) {
         final Resource uploadResource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+        resourceAuthorizationService.assertCanManage(uploadResource);
 
         if (uploadResource.getType() != ResourceType.VIDEO) {
             throw new IllegalStateException("Resource is not VIDEO");
@@ -984,6 +1067,7 @@ public class ResourceServiceImpl implements ResourceService {
     public CloudinaryResponse uploadSlideResource(Integer id, MultipartFile file) {
         final Resource uploadResource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+        resourceAuthorizationService.assertCanManage(uploadResource);
 
         if (uploadResource.getType() != ResourceType.PDF) {
             throw new IllegalStateException("Resource is not PDF type");
@@ -1012,6 +1096,7 @@ public class ResourceServiceImpl implements ResourceService {
     public CloudinaryResponse uploadAttachmentResource(Integer id, MultipartFile file) {
         Resource uploadResource = resourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found"));
+        resourceAuthorizationService.assertCanManage(uploadResource);
         if (uploadResource.getSource() != ResourceSource.UPLOAD) {
             throw new BusinessException("Only upload-type resources can receive files");
         }
@@ -1068,12 +1153,18 @@ public class ResourceServiceImpl implements ResourceService {
                     WHERE resource_id = ?
                       AND is_deleted = false
                       AND field_name = 'attached.resource'
-                      AND entity_type IN ('LESSON', 'ASSIGNMENT', 'SUBMISSION'))
+                      AND entity_type IN ('LESSON', 'ASSIGNMENT', 'SUBMISSION')) +
+                  (SELECT COUNT(*) FROM resource_references
+                    WHERE resource_id = ? AND entity_type = 'LESSON_TEMPLATE' AND is_deleted = false) +
+                  (SELECT COUNT(*) FROM quiz_template_questions WHERE resource_id = ? AND is_deleted = false) +
+                  (SELECT COUNT(*) FROM quiz_template_answers WHERE resource_id = ? AND is_deleted = false) +
+                  (SELECT COUNT(*) FROM quiz_template_question_items WHERE resource_id = ? AND is_deleted = false)
                 """;
         Integer count = jdbcTemplate.queryForObject(
                 sql,
                 Integer.class,
-                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId
+                resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId,
+                resourceId, resourceId, resourceId, resourceId
         );
         return count != null ? count : 0;
     }
