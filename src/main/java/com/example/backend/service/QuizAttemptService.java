@@ -5,10 +5,8 @@ import com.example.backend.dto.request.quiz.QuizAttemptReviewRequest;
 import com.example.backend.dto.response.quiz.ClassSectionQuizGradeResponse;
 import com.example.backend.dto.response.quiz.ClassSectionStudentQuizResultResponse;
 import com.example.backend.dto.response.PageResponse;
-import com.example.backend.dto.response.quiz.CourseQuizResultResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptDetailResponse;
 import com.example.backend.dto.response.quiz.QuizAttemptResponse;
-import com.example.backend.dto.response.quiz.StudentQuizResultResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,11 +57,7 @@ public interface QuizAttemptService {
 
     Integer getStudentBestScoreForClassContentItem(Integer classContentItemId);
 
-    List<StudentQuizResultResponse> getMyGradeBook(Integer courseId);
-
     List<ClassSectionStudentQuizResultResponse> getMyGradeBookForClassSection(Integer classSectionId);
-
-    List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId);
 
     List<ClassSectionQuizGradeResponse> getClassSectionGradeBook(Integer classSectionId);
 

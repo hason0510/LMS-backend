@@ -34,6 +34,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -88,8 +89,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean isCurrentUser(Integer userId) {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof Jwt jwt) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
             Integer currentUserId = Integer.valueOf(jwt.getSubject());
             return userId.equals(currentUserId);
         }
@@ -98,8 +99,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User getCurrentUser() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof Jwt jwt) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
             Integer currentUserId = Integer.valueOf(jwt.getSubject());
             return userRepository.findById(currentUserId)
                     .orElseThrow(() -> new ResourceNotFoundException("User not found"));

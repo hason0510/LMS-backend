@@ -77,7 +77,7 @@ public class ReportingServiceImpl implements ReportingService {
 
     @Override
     @Transactional(readOnly = true)
-   // @Cacheable(value = CacheNames.ADMIN_REPORT_SUMMARY)
+    @Cacheable(value = CacheNames.ADMIN_REPORT_SUMMARY)
     public AdminReportSummaryResponse getAdminReportSummary() {
         requireAdmin();
 

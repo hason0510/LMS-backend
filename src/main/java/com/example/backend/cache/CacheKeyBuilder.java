@@ -92,10 +92,6 @@ public class CacheKeyBuilder {
         return "user:" + currentUserId() + ":class:" + normalize(classSectionId, "_");
     }
 
-    public String courseGradeBookKey(Integer courseId) {
-        return "user:" + currentUserId() + ":course:" + normalize(courseId, "_");
-    }
-
     public String teachingAssignmentsKey(String tab, String keyword, Integer classSectionId) {
         return "user:" + currentUserId()
                 + ":tab:" + normalize(tab, "ALL")

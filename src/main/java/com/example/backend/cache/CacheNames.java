@@ -22,17 +22,11 @@ public final class CacheNames {
     public static final String ENROLLMENT_PENDING_CLASS_SECTION = "enrollment_pending_class_section";
 
     public static final String QUIZ_GRADEBOOK_CLASS_SECTION = "quiz_gradebook_class_section";
-    public static final String QUIZ_GRADEBOOK_COURSE = "quiz_gradebook_course";
     public static final String ASSIGNMENT_TEACHING_OVERVIEW = "assignment_teaching_overview";
 
     public static final String ADMIN_REPORT_SUMMARY = "admin_report_summary";
     public static final String CLASS_REPORT_OVERVIEW = "class_report_overview";
     public static final String CLASS_ASSIGNMENT_REPORT = "class_assignment_report";
-
-    public static final List<String> USER_CACHES = List.of(
-            USER,
-            USER_PAGE
-    );
 
     public static final List<String> TEACHING_CACHES = List.of(
             TEACHING_CONTEXT,
@@ -42,19 +36,11 @@ public final class CacheNames {
             TEACHING_CLASS_PEOPLE
     );
 
-    public static final List<String> CLASS_SECTION_CACHES = List.of(
-            CLASS_SECTION_DETAIL,
-            CLASS_SECTION_LIST,
-            CLASS_SECTION_SEARCH,
-            STUDENT_CLASS_SECTION_LIST
-    );
-
     public static final List<String> REPORT_CACHES = List.of(
             ENROLLMENT_TEACHER,
             ENROLLMENT_APPROVED_CLASS_SECTION,
             ENROLLMENT_PENDING_CLASS_SECTION,
             QUIZ_GRADEBOOK_CLASS_SECTION,
-            QUIZ_GRADEBOOK_COURSE,
             ASSIGNMENT_TEACHING_OVERVIEW,
             ADMIN_REPORT_SUMMARY,
             CLASS_REPORT_OVERVIEW,
@@ -77,7 +63,6 @@ public final class CacheNames {
             ENROLLMENT_APPROVED_CLASS_SECTION,
             ENROLLMENT_PENDING_CLASS_SECTION,
             QUIZ_GRADEBOOK_CLASS_SECTION,
-            QUIZ_GRADEBOOK_COURSE,
             ASSIGNMENT_TEACHING_OVERVIEW,
             ADMIN_REPORT_SUMMARY,
             CLASS_REPORT_OVERVIEW,

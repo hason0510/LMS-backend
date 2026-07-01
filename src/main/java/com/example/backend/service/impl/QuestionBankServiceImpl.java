@@ -173,7 +173,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         BankQuestion question = new BankQuestion();
         question.setQuestionBank(questionBank);
         applyQuestionRequest(question, request);
-        TagResolutionResult tagResolution = resolveTags(questionBank, request.getTagNames(), request.getDifficultyLevel(), true);
+        TagResolutionResult tagResolution = resolveTags(questionBank, request.getTagNames(), request.getDifficultyLevel(), true, false);
         question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
         syncQuestionTags(question, tagResolution.tagNames(), currentRole, true);
@@ -196,7 +196,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         Set<Integer> oldResourceIds = extractResourceIds(question);
 
         applyQuestionRequest(question, request);
-        TagResolutionResult tagResolution = resolveTags(question.getQuestionBank(), request.getTagNames(), request.getDifficultyLevel(), true);
+        TagResolutionResult tagResolution = resolveTags(question.getQuestionBank(), request.getTagNames(), request.getDifficultyLevel(), true, false);
         question.setDifficultyLevel(tagResolution.difficultyLevel());
         question = bankQuestionRepository.save(question);
         syncQuestionTags(question, tagResolution.tagNames(), currentRole, false);
@@ -273,6 +273,7 @@ public class QuestionBankServiceImpl implements QuestionBankService {
                         questionBank,
                         extractGiftMetadataTags(block),
                         null,
+                        true,
                         true
                 );
 
@@ -1948,7 +1949,8 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             QuestionBank questionBank,
             List<String> rawTagNames,
             DifficultyLevel requestDifficulty,
-            boolean allowCreateTag
+            boolean allowCreateTag,
+            boolean absorbDifficultyAliases
     ) {
         Set<String> normalizedTagNames = normalizeTagNames(rawTagNames);
         DifficultyLevel resolvedDifficulty = requestDifficulty;
@@ -1957,14 +1959,16 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         Set<String> contentTags = new LinkedHashSet<>();
 
         for (String normalizedTagName : normalizedTagNames) {
-            DifficultyLevel byTag = difficultyTagResolver.resolve(normalizedTagName).orElse(null);
-            if (byTag != null) {
-                difficultyCount++;
-                if (difficultyCount > 1) {
-                    hasMultipleDifficultyTags = true;
+            if (absorbDifficultyAliases) {
+                DifficultyLevel byTag = difficultyTagResolver.resolve(normalizedTagName).orElse(null);
+                if (byTag != null) {
+                    difficultyCount++;
+                    if (difficultyCount > 1) {
+                        hasMultipleDifficultyTags = true;
+                    }
+                    resolvedDifficulty = byTag;
+                    continue;
                 }
-                resolvedDifficulty = byTag;
-                continue;
             }
             if (allowCreateTag) {
                 contentTags.add(normalizedTagName);

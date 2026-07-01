@@ -1501,6 +1501,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     public void autoExpireTimedOutAttempts() {
         List<QuizAttempt> candidates =
                 quizAttemptRepository.findByStatusAndQuiz_TimeLimitMinutesNotNull(AttemptStatus.IN_PROGRESS);
+        boolean anyExpired = false;
         for (QuizAttempt attempt : candidates) {
             if (!isAttemptExpired(attempt)) {
                 continue;
@@ -1508,9 +1509,13 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             // Cô lập từng bài: 1 bài lỗi chỉ bị bỏ qua + log, không kéo cả batch rollback/kẹt
             try {
                 expireAttempt(attempt);
+                anyExpired = true;
             } catch (Exception e) {
                 log.error("Auto-expire thất bại cho quiz attempt {}", attempt.getId(), e);
             }
+        }
+        if (anyExpired) {
+            cacheInvalidationService.evictTeachingAndReportCaches();
         }
     }
 
@@ -1702,14 +1707,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
     // =========================================================================
 
     /**
-     * API cho Sinh viÃªn xem báº£ng Ä‘iá»ƒm cÃ¡ nhÃ¢n cá»§a mÃ¬nh (Táº¥t cáº£ quiz Ä‘Ã£ lÃ m)
-     */
-
-    @Override
-    public List<StudentQuizResultResponse> getMyGradeBook(Integer courseId) {
-        throw new UnsupportedOperationException("Legacy course gradebook flow has been removed");
-    }
-    /**
      * API cho GiÃ¡o viÃªn/Admin xem báº£ng Ä‘iá»ƒm cá»§a khÃ³a há»c
      */
     @Override
@@ -1725,12 +1722,6 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         return quizAttemptRepository.findMaxGradesByStudentAndClassSection(currentUser.getId(), classSectionId);
     }
 
-
-    @Override
-    @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_COURSE, key = "@cacheKeyBuilder.courseGradeBookKey(#courseId)", sync = true)
-    public List<CourseQuizResultResponse> getCourseGradeBook(Integer courseId) {
-        throw new UnsupportedOperationException("Legacy course gradebook flow has been removed");
-    }
 
     @Override
     @Cacheable(value = CacheNames.QUIZ_GRADEBOOK_CLASS_SECTION, key = "@cacheKeyBuilder.classSectionGradeBookKey(#classSectionId)", sync = true)
