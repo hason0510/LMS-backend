@@ -1000,6 +1000,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
             markProgressIfPassed(attempt);
         }
 
+        cacheInvalidationService.evictTeachingAndReportCaches();
         return convertToDetailResponse(attempt);
     }
 
