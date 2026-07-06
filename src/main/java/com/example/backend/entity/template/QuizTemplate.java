@@ -67,6 +67,6 @@ public class QuizTemplate extends BaseEntity {
     @OrderBy("orderIndex ASC")
     private List<QuizTemplateBankSource> bankSources;
 
-    @OneToMany(mappedBy = "quizTemplate")
-    private List<ContentItemTemplate> contentItemTemplates;
+    @OneToOne(mappedBy = "quizTemplate")
+    private ContentItemTemplate contentItemTemplate;
 }

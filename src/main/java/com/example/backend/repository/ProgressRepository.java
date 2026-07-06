@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,15 @@ public interface ProgressRepository extends JpaRepository<Progress, Integer> {
     Optional<Progress> findByStudent_IdAndClassContentItem_Id(Integer studentId, Integer classContentItemId);
 
     List<Progress> findByStudent_IdAndClassContentItem_IdIn(Integer studentId, Collection<Integer> classContentItemIds);
+
+    @Modifying
+    @Query(value = "INSERT INTO progress (student_id, class_content_item_id, is_completed, completed_at) " +
+            "VALUES (:studentId, :classContentItemId, true, :completedAt) " +
+            "ON DUPLICATE KEY UPDATE is_completed = true, completed_at = COALESCE(completed_at, :completedAt)",
+            nativeQuery = true)
+    void upsertCompletedProgress(@Param("studentId") Integer studentId,
+                                 @Param("classContentItemId") Integer classContentItemId,
+                                 @Param("completedAt") LocalDateTime completedAt);
 
     @Query("""
             SELECT p

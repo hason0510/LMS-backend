@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +23,8 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
     Optional<User> findFirstByUserNameAndRefreshTokenOrderByIdAsc(String userName, String refreshToken);
 
     Optional<User> findFirstByStudentNumberOrderByIdAsc(String studentNumber);
+
+    List<User> findByUserNameIn(Collection<String> userNames);
 
     boolean existsByGmail(String gmail);
 

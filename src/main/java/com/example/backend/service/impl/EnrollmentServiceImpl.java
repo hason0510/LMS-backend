@@ -18,7 +18,6 @@ import com.example.backend.dto.response.user.UserViewResponse;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Enrollment;
-import com.example.backend.entity.Progress;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
@@ -199,18 +198,13 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             throw new UnauthorizedException("Bạn chưa đăng ký hoặc chưa được duyệt vào lớp học này");
         }
 
-        Progress progress = progressRepository
+        boolean alreadyCompleted = progressRepository
                 .findByStudent_IdAndClassContentItem_Id(currentUser.getId(), classContentItemId)
-                .orElse(Progress.builder()
-                        .student(currentUser)
-                        .classContentItem(classContentItem)
-                        .isCompleted(false)
-                        .build());
+                .map(existing -> Boolean.TRUE.equals(existing.getIsCompleted()))
+                .orElse(false);
 
-        if (!Boolean.TRUE.equals(progress.getIsCompleted())) {
-            progress.setIsCompleted(true);
-            progress.setCompletedAt(LocalDateTime.now());
-            progressRepository.save(progress);
+        if (!alreadyCompleted) {
+            progressRepository.upsertCompletedProgress(currentUser.getId(), classContentItemId, LocalDateTime.now());
             recalculateAndSaveProgressForClassSection(currentUser.getId(), classSectionId);
             cacheInvalidationService.evictAllRedisReadCaches();
         }

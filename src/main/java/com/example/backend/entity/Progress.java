@@ -6,7 +6,10 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "progress")
+@Table(name = "progress",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_progress_student_item",
+                columnNames = {"student_id", "class_content_item_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,6 +21,7 @@ public class Progress {
     private Integer id;
 
     @ManyToOne
+    @JoinColumn(name = "student_id")
     private User student;
 
     @ManyToOne

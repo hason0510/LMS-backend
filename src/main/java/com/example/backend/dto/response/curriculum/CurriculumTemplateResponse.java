@@ -16,6 +16,8 @@ public class CurriculumTemplateResponse {
     private String name;
     private String description;
     private Boolean isDefault;
+    private String createdBy;
+    private String createdByName;
     private Integer subjectId;
     private String subjectTitle;
     private Integer categoryId;

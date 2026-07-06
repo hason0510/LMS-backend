@@ -23,7 +23,7 @@ public class Lesson extends BaseEntity{
     private String title;
     @Column(name = "content", columnDefinition = "LONGTEXT")
     private String content;
-    @Column(name = "video_url")
+    @Column(name = "video_url", columnDefinition = "MEDIUMTEXT")
     private String videoUrl;
     @Column(name = "notes", columnDefinition = "LONGTEXT")
     private String notes;

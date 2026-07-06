@@ -9,8 +9,6 @@ import lombok.Setter;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
-import java.util.List;
-
 @Entity
 @Table(name = "lesson_templates")
 @Getter
@@ -30,12 +28,12 @@ public class LessonTemplate extends BaseEntity {
     @Column(columnDefinition = "LONGTEXT")
     private String content;
 
-    @Column(name = "video_url")
+    @Column(name = "video_url", columnDefinition = "MEDIUMTEXT")
     private String videoUrl;
 
     @Column(name = "notes", columnDefinition = "LONGTEXT")
     private String notes;
 
-    @OneToMany(mappedBy = "lessonTemplate")
-    private List<ContentItemTemplate> contentItemTemplates;
+    @OneToOne(mappedBy = "lessonTemplate")
+    private ContentItemTemplate contentItemTemplate;
 }

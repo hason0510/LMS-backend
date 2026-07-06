@@ -37,6 +37,7 @@ import com.example.backend.entity.template.QuizTemplateBankSource;
 import com.example.backend.entity.template.QuizTemplateQuestion;
 import com.example.backend.entity.template.QuizTemplateQuestionItem;
 import com.example.backend.entity.Subject;
+import com.example.backend.entity.User;
 import com.example.backend.entity.quiz.BankQuestion;
 import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
@@ -57,6 +58,7 @@ import com.example.backend.repository.QuizTemplateQuestionRepository;
 import com.example.backend.repository.QuizTemplateRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.repository.SubjectRepository;
+import com.example.backend.repository.UserRepository;
 import com.example.backend.service.CurriculumTemplateService;
 import com.example.backend.service.ResourceService;
 import com.example.backend.specification.CurriculumTemplateSpecification;
@@ -73,6 +75,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
@@ -102,6 +105,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     private final BankQuestionRepository bankQuestionRepository;
     private final ResourceRepository resourceRepository;
     private final ResourceService resourceService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -158,8 +162,22 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
 
         List<CurriculumTemplate> templates = curriculumTemplateRepository.findAll(specification);
 
+        Set<String> creatorUsernames = templates.stream()
+                .map(CurriculumTemplate::getCreatedBy)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+        Map<String, String> fullNameByUsername = creatorUsernames.isEmpty()
+                ? Map.of()
+                : userRepository.findByUserNameIn(creatorUsernames).stream()
+                        .filter(u -> StringUtils.hasText(u.getUserName()) && StringUtils.hasText(u.getFullName()))
+                        .collect(Collectors.toMap(User::getUserName, User::getFullName, (a, b) -> a));
+
         return templates.stream()
-                .map(template -> convertToResponse(template, includeChapters))
+                .map(template -> {
+                    CurriculumTemplateResponse response = convertToResponse(template, includeChapters);
+                    response.setCreatedByName(fullNameByUsername.get(template.getCreatedBy()));
+                    return response;
+                })
                 .toList();
     }
 
@@ -373,6 +391,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         response.setName(template.getName());
         response.setDescription(template.getDescription());
         response.setIsDefault(template.isDefault());
+        response.setCreatedBy(template.getCreatedBy());
         response.setSubjectId(template.getSubject() != null ? template.getSubject().getId() : null);
         response.setSubjectTitle(template.getSubject() != null ? template.getSubject().getTitle() : null);
         if (template.getSubject() != null && template.getSubject().getCategory() != null) {
