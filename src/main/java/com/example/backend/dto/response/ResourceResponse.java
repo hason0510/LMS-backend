@@ -34,6 +34,7 @@ public class ResourceResponse {
     private LocalDateTime createdDate;
     private LocalDateTime lastUsedAt;
     private String createdBy;
+    private String createdByName;
     private boolean canManage;
     private String scopeTargetName;
     private String lessonTitle;

@@ -15,10 +15,11 @@ import java.util.Set;
 @UtilityClass
 public class FileUploadUtil {
 
-    public static final long MAX_IMAGE_SIZE = 20 * 1024 * 1024;  // 20MB
-    public static final long MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
-    public static final long MAX_PDF_SIZE   = 20 * 1024 * 1024;  // 20MB
-    public static final long MAX_RESOURCE_SIZE = 500L * 1024 * 1024; // 500MB
+    // Trần khớp Cloudinary gói free: video/âm thanh (resource_type=video) 100MB, ảnh/PDF/raw 10MB.
+    public static final long MAX_IMAGE_SIZE = 10L * 1024 * 1024;  // 10MB
+    public static final long MAX_VIDEO_SIZE = 100L * 1024 * 1024; // 100MB
+    public static final long MAX_PDF_SIZE   = 10L * 1024 * 1024;  // 10MB
+    public static final long MAX_RESOURCE_SIZE = 10L * 1024 * 1024; // 10MB (raw/attachment)
 
     public static final Set<String> IMAGE_EXTENSIONS =
             Set.of("jpg", "jpeg", "png", "gif", "bmp", "webp");
@@ -44,7 +45,7 @@ public class FileUploadUtil {
     public static final Map<String, Long> MAX_SIZE_BY_TYPE = Map.of(
             "image", MAX_IMAGE_SIZE,
             "video", MAX_VIDEO_SIZE,
-            "audio", MAX_RESOURCE_SIZE,
+            "audio", MAX_VIDEO_SIZE,
             "pdf", MAX_PDF_SIZE,
             "resource", MAX_RESOURCE_SIZE
     );
@@ -75,28 +76,39 @@ public class FileUploadUtil {
         switch (type.toLowerCase()) {
             case "image" -> {
                 if (size > MAX_IMAGE_SIZE)
-                    throw new BusinessException("Image size must be <= 20MB");
+                    throw new BusinessException("Ảnh vượt giới hạn: tối đa 10MB (gói Cloudinary free)");
                 if (isInvalidExtension(fileName, IMAGE_EXTENSIONS))
                     throw new BusinessException("Invalid image file");
             }
             case "video" -> {
                 if (size > MAX_VIDEO_SIZE)
-                    throw new BusinessException("Video size must be <= 100MB");
+                    throw new BusinessException("Video vượt giới hạn: tối đa 100MB");
                 if (isInvalidExtension(fileName, VIDEO_EXTENSIONS))
                     throw new BusinessException("Invalid video file");
             }
+            case "audio" -> {
+                if (size > MAX_VIDEO_SIZE)
+                    throw new BusinessException("Âm thanh vượt giới hạn: tối đa 100MB");
+                if (isInvalidExtension(fileName, AUDIO_EXTENSIONS))
+                    throw new BusinessException("Invalid audio file");
+            }
             case "pdf" -> {
                 if (size > MAX_PDF_SIZE)
-                    throw new BusinessException("PDF size must be <= 20MB");
+                    throw new BusinessException("PDF vượt giới hạn: tối đa 10MB (gói Cloudinary free)");
                 if (isInvalidExtension(fileName, PDF_EXTENSIONS))
                     throw new BusinessException("Invalid PDF file");
             }
             case "resource", "attachment" -> {
-                if (size > MAX_RESOURCE_SIZE) {
-                    throw new BusinessException("Attachment size must be <= 500MB");
-                }
                 if (isInvalidExtension(fileName, RESOURCE_EXTENSIONS)) {
                     throw new BusinessException("Invalid attachment file");
+                }
+                ResourceType resolved = resolveResourceType(fileName);
+                boolean isVideoLike = resolved == ResourceType.VIDEO || resolved == ResourceType.AUDIO;
+                long max = isVideoLike ? MAX_VIDEO_SIZE : MAX_RESOURCE_SIZE;
+                if (size > max) {
+                    throw new BusinessException(isVideoLike
+                            ? "Video/âm thanh vượt giới hạn: tối đa 100MB"
+                            : "Tệp vượt giới hạn: tối đa 10MB (ảnh/PDF/tài liệu, gói Cloudinary free)");
                 }
             }
             default -> throw new BusinessException("Unsupported file type");

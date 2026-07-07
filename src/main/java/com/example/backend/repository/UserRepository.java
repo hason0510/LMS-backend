@@ -26,6 +26,9 @@ public interface UserRepository extends JpaRepository<User,Integer>, JpaSpecific
 
     List<User> findByUserNameIn(Collection<String> userNames);
 
+    @Query("SELECT u.userName FROM User u WHERE LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+    List<String> findUserNamesByFullNameKeyword(@Param("keyword") String keyword);
+
     boolean existsByGmail(String gmail);
 
     boolean existsByUserName(String userName);
