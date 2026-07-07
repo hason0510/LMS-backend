@@ -30,15 +30,16 @@ public class ResourceSpecification {
         if (ownerLibrary) {
             return (root, query, cb) -> {
                 var ownResource = cb.equal(root.get("createdBy"), currentUsername);
+                var institutionResource = cb.equal(root.get("visibility"), ResourceVisibility.INSTITUTION);
                 if (includeCurrentScope && canBrowseRequestedScope) {
                     var sharedInRequestedScope = cb.and(
                             cb.equal(root.get("scopeType"), requestedScopeType),
                             cb.equal(root.get("scopeId"), requestedScopeId),
                             cb.equal(root.get("visibility"), ResourceVisibility.SHARED)
                     );
-                    return cb.or(ownResource, sharedInRequestedScope);
+                    return cb.or(ownResource, institutionResource, sharedInRequestedScope);
                 }
-                return ownResource;
+                return cb.or(ownResource, institutionResource);
             };
         }
         return (root, query, cb) -> {
@@ -128,5 +129,17 @@ public class ResourceSpecification {
 
     public static Specification<Resource> alwaysTrue() {
         return (root, query, cb) -> cb.conjunction();
+    }
+
+    public static Specification<Resource> alwaysFalse() {
+        return (root, query, cb) -> cb.disjunction();
+    }
+
+    public static Specification<Resource> idIn(java.util.Collection<Integer> ids) {
+        return (root, query, cb) -> root.get("id").in(ids);
+    }
+
+    public static Specification<Resource> idNotIn(java.util.Collection<Integer> ids) {
+        return (root, query, cb) -> cb.not(root.get("id").in(ids));
     }
 }

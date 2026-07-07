@@ -23,6 +23,7 @@ import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.assignment.Submission;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.AssignmentRepository;
 import com.example.backend.repository.ClassSectionRepository;
 import com.example.backend.repository.CurriculumTemplateRepository;
@@ -375,6 +376,76 @@ public class ResourceServiceImpl implements ResourceService {
                 rs.getString("field_name")
         ), resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId, resourceId,
                 resourceId, resourceId, resourceId);
+    }
+
+    private List<Integer> findResourceIdsUsedInClass(Integer classSectionId) {
+        String sql = """
+                SELECT DISTINCT rid FROM (
+                    SELECT r.id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN resource r ON r.lesson_id = cci.lesson_id AND r.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.lesson_id IS NOT NULL
+                    UNION
+                    SELECT rr.resource_id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN resource_references rr ON rr.entity_type = 'LESSON' AND rr.entity_id = cci.lesson_id AND rr.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.lesson_id IS NOT NULL
+                    UNION
+                    SELECT qq.resource_id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN quiz_question qq ON qq.quiz_id = cci.quiz_id AND qq.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.quiz_id IS NOT NULL AND qq.resource_id IS NOT NULL
+                    UNION
+                    SELECT qa.resource_id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN quiz_question qq ON qq.quiz_id = cci.quiz_id AND qq.is_deleted = false
+                    JOIN quiz_answer qa ON qa.quiz_question_id = qq.id AND qa.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.quiz_id IS NOT NULL AND qa.resource_id IS NOT NULL
+                    UNION
+                    SELECT qii.resource_id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN quiz_question qq ON qq.quiz_id = cci.quiz_id AND qq.is_deleted = false
+                    JOIN question_interaction_items qii ON qii.quiz_question_id = qq.id AND qii.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.quiz_id IS NOT NULL AND qii.resource_id IS NOT NULL
+                    UNION
+                    SELECT r.id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN resource r ON r.assignment_id = cci.assignment_id AND r.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.assignment_id IS NOT NULL
+                    UNION
+                    SELECT rr.resource_id AS rid
+                    FROM class_content_items cci
+                    JOIN class_chapters cch ON cch.id = cci.class_chapter_id AND cch.is_deleted = false
+                    JOIN resource_references rr ON rr.entity_type = 'ASSIGNMENT' AND rr.entity_id = cci.assignment_id AND rr.is_deleted = false
+                    WHERE cch.class_section_id = ? AND cci.is_deleted = false AND cci.assignment_id IS NOT NULL
+                    UNION
+                    SELECT cs.image_resource_id AS rid
+                    FROM class_sections cs
+                    WHERE cs.id = ? AND cs.is_deleted = false AND cs.image_resource_id IS NOT NULL
+                    UNION
+                    SELECT r.id AS rid
+                    FROM resource r
+                    WHERE r.scope_type = 'CLASS_SECTION' AND r.scope_id = ? AND r.is_deleted = false
+                ) t WHERE rid IS NOT NULL
+                """;
+        return jdbcTemplate.queryForList(sql, Integer.class,
+                classSectionId, classSectionId, classSectionId, classSectionId, classSectionId,
+                classSectionId, classSectionId, classSectionId, classSectionId);
+    }
+
+    private List<Integer> findResourceIdsAttachedToSubmissions() {
+        String sql = """
+                SELECT id AS rid FROM resource WHERE submission_id IS NOT NULL AND is_deleted = false
+                UNION
+                SELECT resource_id AS rid FROM resource_references WHERE entity_type = 'SUBMISSION' AND is_deleted = false
+                """;
+        return jdbcTemplate.queryForList(sql, Integer.class);
     }
 
     private List<ResourceReferenceResponse> loadEnrichedResourceReferences(Integer resourceId) {
@@ -1029,7 +1100,25 @@ public class ResourceServiceImpl implements ResourceService {
         spec = spec.and(ResourceSpecification.hasSource(safeRequest.getSource()));
         spec = spec.and(safeRequest.getStatus() != null
                 ? ResourceSpecification.hasStatus(safeRequest.getStatus())
-                : ResourceSpecification.activeByDefault());
+                : Boolean.TRUE.equals(safeRequest.getAllStatuses())
+                        ? ResourceSpecification.hasStatus(null)
+                        : ResourceSpecification.activeByDefault());
+        if (safeRequest.getUsedInClassId() != null) {
+            Integer usedInClassId = safeRequest.getUsedInClassId();
+            if (!isAdmin && !resourceAuthorizationService.canBrowseScope(ResourceScopeType.CLASS_SECTION, usedInClassId)) {
+                throw new UnauthorizedException("Bạn không có quyền xem tài nguyên của lớp này");
+            }
+            List<Integer> usedResourceIds = findResourceIdsUsedInClass(usedInClassId);
+            spec = spec.and(usedResourceIds.isEmpty()
+                    ? ResourceSpecification.alwaysFalse()
+                    : ResourceSpecification.idIn(usedResourceIds));
+        }
+        if (Boolean.TRUE.equals(safeRequest.getExcludeSubmissions())) {
+            List<Integer> submissionResourceIds = findResourceIdsAttachedToSubmissions();
+            if (!submissionResourceIds.isEmpty()) {
+                spec = spec.and(ResourceSpecification.idNotIn(submissionResourceIds));
+            }
+        }
         spec = spec.and(ResourceSpecification.searchContains(safeRequest.getSearch()));
         return spec;
     }

@@ -15,11 +15,14 @@ public class ResourceSearchRequest {
     private ResourceType type;
     private ResourceSource source;
     private ResourceStatus status;
+    private Boolean allStatuses;
     private String search;
     private String owner;
     private Boolean createdByMe;
     private Boolean ownerLibrary;
     private Boolean includeCurrentScope;
+    private Integer usedInClassId;
+    private Boolean excludeSubmissions;
     private Boolean recent;
     private String sortBy;
 }
