@@ -23,6 +23,8 @@ import java.util.Set;
 public class ClassMemberAuthorizationService {
     public static final String CAP_VIEW_CLASS = "VIEW_CLASS";
     public static final String CAP_VIEW_PEOPLE = "VIEW_PEOPLE";
+    // Đã gộp vào VIEW_PEOPLE — không còn là quyền gán riêng cho TA; giữ hằng số để giá trị cũ trong DB map an toàn.
+    @Deprecated
     public static final String CAP_VIEW_PROGRESS = "VIEW_PROGRESS";
     public static final String CAP_MANAGE_ASSIGNMENTS = "MANAGE_ASSIGNMENTS";
     @Deprecated
@@ -52,7 +54,6 @@ public class ClassMemberAuthorizationService {
     private static final List<String> TA_CAPABILITIES = List.of(
             CAP_VIEW_CLASS,
             CAP_VIEW_PEOPLE,
-            CAP_VIEW_PROGRESS,
             CAP_MANAGE_ASSIGNMENTS,
             CAP_REVIEW_QUIZZES,
             CAP_POST_ANNOUNCEMENTS,

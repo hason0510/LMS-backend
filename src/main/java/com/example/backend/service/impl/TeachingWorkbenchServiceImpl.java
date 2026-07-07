@@ -52,6 +52,10 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
+    // Đồng nhất với báo cáo lớp (ReportingController.getClassReportOverview lowThreshold mặc định = 40):
+    // "cần chú ý" = học viên đã duyệt có tiến độ < 40%.
+    private static final int AT_RISK_PROGRESS_THRESHOLD = 40;
+
     private final ClassSectionRepository classSectionRepository;
     private final ClassMemberRepository classMemberRepository;
     private final EnrollmentRepository enrollmentRepository;
@@ -95,11 +99,6 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
                 classIds,
                 ClassMemberAuthorizationService.CAP_VIEW_PEOPLE
         );
-        Set<Integer> progressClassIds = filterClassIdsByCapability(
-                currentUser,
-                classIds,
-                ClassMemberAuthorizationService.CAP_VIEW_PROGRESS
-        );
         Set<Integer> reviewClassIds = filterReviewClassIds(currentUser, classIds);
 
         long totalStudents = peopleClassIds.stream()
@@ -108,11 +107,10 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
         List<TeachingReviewQueueItemResponse> queue = buildReviewQueue(currentUser, reviewClassIds);
         long pendingSubmissions = queue.stream().filter(item -> "ASSIGNMENT".equals(item.getType())).count();
         long pendingQuizReviews = queue.stream().filter(item -> "QUIZ".equals(item.getType())).count();
-        long upcomingAssignments = countUpcomingAssignments(progressClassIds);
-        long atRiskStudents = progressClassIds.stream()
-                .flatMap(id -> buildPeopleRows(currentUser, id, null).stream())
-                .filter(row -> row.getMissingAssignments() > 0 || row.getProgress() == null || row.getProgress() < 50)
-                .count();
+        long upcomingAssignments = countUpcomingAssignments(peopleClassIds);
+        long atRiskStudents = peopleClassIds.isEmpty()
+                ? 0
+                : enrollmentRepository.countAtRiskStudentsInClassSections(peopleClassIds, AT_RISK_PROGRESS_THRESHOLD);
 
         return new TeachingWorkbenchSummaryResponse(
                 classIds.size(),
@@ -271,6 +269,8 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
                 : enrollmentRepository.findByClassSection_IdAndApprovalStatus(classSectionId, requestedStatus);
 
         List<Assignment> assignments = findAssignmentsByClassSection(classSectionId);
+        long totalAssignments = assignments.size();
+        long totalQuizzes = classContentItemRepository.countTrackedQuizzesByClassSectionId(classSectionId);
         LocalDateTime now = LocalDateTime.now();
         List<ClassPeopleRowResponse> rows = new ArrayList<>();
         for (Enrollment enrollment : enrollments) {
@@ -294,6 +294,12 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
                     .filter(assignment -> assignment.getDueAt() != null && now.isAfter(assignment.getDueAt()))
                     .filter(assignment -> !isCompletedSubmission(latestByAssignment.get(assignment.getId())))
                     .count();
+            long submittedAssignments = assignments.stream()
+                    .filter(assignment -> isCompletedSubmission(latestByAssignment.get(assignment.getId())))
+                    .count();
+            long notSubmittedAssignments = totalAssignments - submittedAssignments;
+            long passedQuizzes = quizAttemptRepository.countPassedQuizzesByStudentAndClassSection(
+                    classSectionId, student.getId());
             long pendingReviews = latestByAssignment.values().stream()
                     .filter(this::isCompletedSubmission)
                     .filter(submission -> !isGradedSubmission(submission))
@@ -321,6 +327,11 @@ public class TeachingWorkbenchServiceImpl implements TeachingWorkbenchService {
             row.setMissingAssignments(missing);
             row.setPendingReviews(pendingReviews);
             row.setLatestScore(latestScore);
+            row.setTotalAssignments(totalAssignments);
+            row.setSubmittedAssignments(submittedAssignments);
+            row.setNotSubmittedAssignments(notSubmittedAssignments);
+            row.setTotalQuizzes(totalQuizzes);
+            row.setPassedQuizzes(passedQuizzes);
             row.setLastActivity(lastActivity);
             row.setSelf(student.getId().equals(currentUser.getId()));
             rows.add(row);

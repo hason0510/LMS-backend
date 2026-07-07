@@ -593,6 +593,11 @@ public class ReportingServiceImpl implements ReportingService {
         long totalNotPassed = 0;
         long totalWaitingReview = 0;
 
+        Map<Integer, Long> passedStudentsByQuiz = new HashMap<>();
+        for (Object[] r : quizAttemptRepository.countDistinctPassedStudentsPerQuizByClassSection(classSectionId)) {
+            passedStudentsByQuiz.put((Integer) r[0], ((Number) r[1]).longValue());
+        }
+
         for (Object[] row : quizAttemptRepository.aggregateQuizSummariesByClassSection(classSectionId)) {
             Integer quizId = (Integer) row[0];
             Integer classContentItemId = (Integer) row[1];
@@ -613,6 +618,7 @@ public class ReportingServiceImpl implements ReportingService {
             item.setTotalAttempts(attempts);
             item.setUniqueStudents(uniqueStudents);
             item.setPassedCount(passed);
+            item.setPassedStudents(passedStudentsByQuiz.getOrDefault(classContentItemId, 0L));
             item.setNotPassedCount(notPassed);
             item.setWaitingReviewCount(waitingReview);
             item.setAverageScore(Math.round(avgGrade * 10.0) / 10.0);
@@ -655,6 +661,8 @@ public class ReportingServiceImpl implements ReportingService {
         response.setTotalPassed(totalPassed);
         response.setTotalNotPassed(totalNotPassed);
         response.setTotalWaitingReview(totalWaitingReview);
+        response.setParticipantStudents(quizAttemptRepository.countDistinctQuizParticipantsByClassSection(classSectionId));
+        response.setPassedStudents(quizAttemptRepository.countDistinctPassedStudentsByClassSection(classSectionId));
         return response;
     }
 

@@ -125,7 +125,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
 
         int currentAttempt = quizAttemptRepository.countByClassContentItem_IdAndStudent_Id(classContentItemId, currentUser.getId());
         if (chosenQuiz.getMaxAttempts() != null && currentAttempt >= chosenQuiz.getMaxAttempts()) {
-            throw new BusinessException("Da vuot qua so lan lam bai!");
+            throw new BusinessException("Đã vượt quá số lần làm bài!");
         }
 
         QuizAttempt attempt = QuizAttempt.builder()
@@ -986,7 +986,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                     "QUIZ_REVIEWED",
                     null,
                     (reviewedCsId != null && reviewedQuizId != null)
-                            ? "/class-sections/" + reviewedCsId + "/quizzes/" + reviewedQuizId + "/result"
+                            ? "/class-sections/" + reviewedCsId + "/quizzes/" + reviewedQuizId + "/attempts/" + attempt.getId()
                             : null,
                     null,
                     reviewedCsId,
@@ -1594,7 +1594,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 "QUIZ_ATTEMPT_EXPIRED",
                 null,
                 (csId != null && quizId != null)
-                        ? "/class-sections/" + csId + "/quizzes/" + quizId + "/result"
+                        ? "/class-sections/" + csId + "/quizzes/" + quizId + "/attempts/" + attempt.getId()
                         : null,
                 null,
                 csId,
@@ -1730,7 +1730,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
 
-        if (!classMemberAuthorizationService.canViewProgress(classSection, currentUser)
+        if (!classMemberAuthorizationService.canViewPeople(classSection, currentUser)
                 && currentUser.getRole().getRoleName() != RoleType.ADMIN) {
             throw new UnauthorizedException("Bạn không có quyền xem bảng điểm của lớp học này");
         }
@@ -1866,6 +1866,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
         response.setQuizTitle(attempt.getQuiz() != null ? attempt.getQuiz().getTitle() : null);
         response.setStudentName(attempt.getStudent() != null ? attempt.getStudent().getFullName() : null);
         response.setStudentEmail(attempt.getStudent() != null ? attempt.getStudent().getGmail() : null);
+        response.setStudentNumber(attempt.getStudent() != null ? attempt.getStudent().getStudentNumber() : null);
         if (attempt.getClassContentItem() != null
                 && attempt.getClassContentItem().getClassChapter() != null
                 && attempt.getClassContentItem().getClassChapter().getClassSection() != null) {
@@ -2187,6 +2188,7 @@ public class QuizAttemptServiceImpl implements QuizAttemptService {
                 .quizTitle(attempt.getQuiz() != null ? attempt.getQuiz().getTitle() : null)
                 .studentName(attempt.getStudent() != null ? attempt.getStudent().getFullName() : null)
                 .studentEmail(attempt.getStudent() != null ? attempt.getStudent().getGmail() : null)
+                .studentNumber(attempt.getStudent() != null ? attempt.getStudent().getStudentNumber() : null)
                 .classSectionTitle(attempt.getClassContentItem() != null
                         && attempt.getClassContentItem().getClassChapter() != null
                         && attempt.getClassContentItem().getClassChapter().getClassSection() != null

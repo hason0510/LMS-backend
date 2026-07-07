@@ -65,6 +65,8 @@ public interface ClassSectionService {
 
     void deleteClassContentItem(Integer classSectionId, Integer classContentItemId);
 
+    void moveClassContentItem(Integer classSectionId, Integer classContentItemId, String direction);
+
     List<ClassSectionResponse> getApprovedClassSectionsForStudent();
 
     List<ClassSectionResponse> getPendingClassSectionsForStudent();

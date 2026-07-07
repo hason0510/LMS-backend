@@ -26,6 +26,12 @@ public class CurriculumTemplateSpecification {
         };
     }
 
+    public static Specification<CurriculumTemplate> createdBy(String username) {
+        return (root, query, cb) -> username == null
+                ? cb.conjunction()
+                : cb.equal(root.get("createdBy"), username);
+    }
+
     public static Specification<CurriculumTemplate> hasSubjectId(Integer subjectId) {
         return (root, query, cb) -> {
             query.distinct(true);

@@ -176,10 +176,12 @@ public class CommentServiceImpl implements CommentService {
     private String buildCommentActionUrl(User recipient, ClassSection classSection, Lesson lesson) {
         Integer classSectionId = classSection.getId();
         Integer lessonId = lesson.getId();
-        RoleType role = recipient.getRole() != null ? recipient.getRole().getRoleName() : null;
-        // Học sinh: trang bài giảng hiển thị bình luận inline.
+        // Phân nhánh theo TƯ CÁCH TRONG LỚP, không theo role toàn cục:
+        // TA có role toàn cục = STUDENT nên phải kiểm isTeacherOrTa để trỏ đúng teaching workspace.
+        boolean isManager = classMemberAuthorizationService.isTeacherOrTa(classSection, recipient);
+        // Học viên thật: trang bài giảng hiển thị bình luận inline.
         // Giảng viên/TA: teaching workspace, kèm param để mở đúng drawer bình luận của bài.
-        if (role == RoleType.STUDENT) {
+        if (!isManager) {
             return "/class-sections/" + classSectionId + "/lectures/" + lessonId;
         }
         return "/teaching/class-sections/" + classSectionId + "/content?commentLessonId=" + lessonId;

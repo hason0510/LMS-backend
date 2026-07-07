@@ -197,7 +197,7 @@ public class ClassSectionController {
     }
 
     @Operation(summary = "Create class content item")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/{classSectionId}/chapters/{classChapterId}/content-items")
     public ResponseEntity<ClassContentItemResponse> createClassContentItem(
             @PathVariable Integer classSectionId,
@@ -210,7 +210,7 @@ public class ClassSectionController {
     }
 
     @Operation(summary = "Update class content item")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @PatchMapping("/{classSectionId}/content-items/{classContentItemId}")
     public ResponseEntity<ClassContentItemResponse> updateClassContentItem(
             @PathVariable Integer classSectionId,
@@ -223,13 +223,25 @@ public class ClassSectionController {
     }
 
     @Operation(summary = "Delete class content item")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @DeleteMapping("/{classSectionId}/content-items/{classContentItemId}")
     public ResponseEntity<Void> deleteClassContentItem(
             @PathVariable Integer classSectionId,
             @PathVariable Integer classContentItemId
     ) {
         classSectionService.deleteClassContentItem(classSectionId, classContentItemId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Move class content item order")
+    @PreAuthorize("isAuthenticated()")
+    @PatchMapping("/{classSectionId}/content-items/{classContentItemId}/move")
+    public ResponseEntity<Void> moveClassContentItem(
+            @PathVariable Integer classSectionId,
+            @PathVariable Integer classContentItemId,
+            @RequestParam String direction
+    ) {
+        classSectionService.moveClassContentItem(classSectionId, classContentItemId, direction);
         return ResponseEntity.noContent().build();
     }
 

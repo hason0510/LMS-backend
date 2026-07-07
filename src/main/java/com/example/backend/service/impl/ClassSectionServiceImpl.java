@@ -141,6 +141,10 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Curriculum template not found"));
 
         User currentUser = userService.getCurrentUser();
+        boolean isAdmin = currentUser.getRole() != null && currentUser.getRole().getRoleName() == RoleType.ADMIN;
+        if (!isAdmin && !Objects.equals(curriculumTemplate.getCreatedBy(), currentUser.getUserName())) {
+            throw new UnauthorizedException("Bạn không có quyền tạo lớp từ chương trình học này");
+        }
         User teacher = resolveTeacherForClassCreation(request.getTeacherId(), currentUser);
 
         ClassSection classSection = new ClassSection();
@@ -613,6 +617,47 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     }
 
     @Override
+    @Transactional
+    public void moveClassContentItem(Integer classSectionId, Integer classContentItemId, String direction) {
+        ClassSection classSection = classSectionRepository.findById(classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
+
+        ClassContentItem movedItem = classContentItemRepository
+                .findByIdAndClassChapter_ClassSection_Id(classContentItemId, classSectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class content item not found in this class section"));
+        requireContentMutationPermission(classSection, movedItem.getItemType());
+
+        boolean moveUp = "UP".equalsIgnoreCase(direction);
+        if (!moveUp && !"DOWN".equalsIgnoreCase(direction)) {
+            throw new BusinessException("Invalid move direction");
+        }
+
+        List<ClassContentItem> siblings = classContentItemRepository
+                .findByClassChapter_IdOrderByOrderIndexAsc(movedItem.getClassChapter().getId());
+        int index = -1;
+        for (int i = 0; i < siblings.size(); i++) {
+            if (siblings.get(i).getId().equals(movedItem.getId())) {
+                index = i;
+                break;
+            }
+        }
+        int swapIndex = moveUp ? index - 1 : index + 1;
+        if (index < 0 || swapIndex < 0 || swapIndex >= siblings.size()) {
+            return;
+        }
+
+        ClassContentItem neighbor = siblings.get(swapIndex);
+        Integer movedOrder = movedItem.getOrderIndex();
+        Integer neighborOrder = neighbor.getOrderIndex();
+        movedItem.setOrderIndex(neighborOrder);
+        neighbor.setOrderIndex(movedOrder);
+        classContentItemRepository.save(movedItem);
+        classContentItemRepository.save(neighbor);
+        recalculateLearningProgressForApprovedStudents(classSectionId);
+        cacheInvalidationService.evictAllRedisReadCaches();
+    }
+
+    @Override
     @Cacheable(value = CacheNames.STUDENT_CLASS_SECTION_LIST, key = "@cacheKeyBuilder.studentClassSectionListKey('approved')", sync = true)
     public List<ClassSectionResponse> getApprovedClassSectionsForStudent() {
         User currentUser = userService.getCurrentUser();
@@ -684,7 +729,7 @@ public class ClassSectionServiceImpl implements ClassSectionService {
     public List<ClassContentCompletionRowResponse> getClassContentCompletion(Integer classSectionId, Integer classContentItemId) {
         ClassSection classSection = classSectionRepository.findById(classSectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
-        requireCapability(classSection, ClassMemberAuthorizationService.CAP_VIEW_PROGRESS, false);
+        requireCapability(classSection, ClassMemberAuthorizationService.CAP_VIEW_PEOPLE, false);
 
         ClassContentItem classContentItem = classContentItemRepository.findByIdAndClassChapter_ClassSection_Id(
                         classContentItemId,
@@ -949,7 +994,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 && classContentItem.getItemType() == ContentItemType.LESSON
                 && classContentItem.getLesson() != null) {
             response.setUnansweredCommentCount(
-                    commentRepository.countUnansweredStudentThreads(classContentItem.getLesson().getId()));
+                    commentRepository.countUnansweredStudentThreads(
+                            classContentItem.getLesson().getId(),
+                            classContentItem.getClassChapter().getClassSection().getId()));
         }
         return response;
     }

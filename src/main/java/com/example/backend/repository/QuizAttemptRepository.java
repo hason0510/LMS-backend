@@ -18,12 +18,8 @@ import java.util.Optional;
 
 @Repository
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer>, JpaSpecificationExecutor<QuizAttempt> {
-    List<QuizAttempt> findByStudent_Id(Integer studentId);
-
     /** Tất cả lần làm của một học viên trên nhiều content item (dùng cho feed quiz). */
     List<QuizAttempt> findByStudent_IdAndClassContentItem_IdIn(Integer studentId, Collection<Integer> classContentItemIds);
-
-    Optional<QuizAttempt> findByClassContentItem_IdAndStudent_IdAndStatus(Integer classContentItemId, Integer studentId, AttemptStatus status);
 
     /** Các lần làm đang diễn ra của quiz CÓ giới hạn thời gian — dùng cho scheduler auto-expire. */
     List<QuizAttempt> findByStatusAndQuiz_TimeLimitMinutesNotNull(AttemptStatus status);
@@ -93,10 +89,10 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
     /**
      * Quiz-level aggregate (per quizId) for a class section. Each row:
      * [quizId, classContentItemId, quizTitle, totalAttempts, distinctStudents, avgGrade, maxGrade,
-     *  passedCount, notPassedCount, waitingReviewCount, minPassScore]
-     *
-     * passedCount counts attempts where isPassed=true and gradingStatus<>NEEDS_REVIEW.
+     *  passedCount, notPassedCount, waitingReviewCount, minPassScore].
+     * passedCount counts attempts where isPassed=true and gradingStatus&lt;&gt;NEEDS_REVIEW;
      * waitingReviewCount counts attempts where gradingStatus=NEEDS_REVIEW.
+     * Số HỌC VIÊN distinct đã đạt / mỗi quiz lấy riêng qua countDistinctPassedStudentsPerQuizByClassSection.
      */
     @Query("SELECT qa.quiz.id, qa.classContentItem.id, qa.quiz.title, " +
             "COUNT(qa), COUNT(DISTINCT qa.student.id), " +
@@ -113,6 +109,35 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
             "GROUP BY qa.quiz.id, qa.classContentItem.id, qa.quiz.title, qa.quiz.minPassScore " +
             "ORDER BY qa.classContentItem.id ASC")
     List<Object[]> aggregateQuizSummariesByClassSection(@Param("classSectionId") Integer classSectionId);
+
+    /** Số HỌC VIÊN (distinct) đã ĐẠT / mỗi quiz trong lớp. Mỗi row: [classContentItemId, distinctPassedStudents]. */
+    @Query("SELECT qa.classContentItem.id, COUNT(DISTINCT qa.student.id) FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
+            "AND qa.isPassed = true " +
+            "AND qa.gradingStatus <> com.example.backend.constant.GradingStatus.NEEDS_REVIEW " +
+            "GROUP BY qa.classContentItem.id")
+    List<Object[]> countDistinctPassedStudentsPerQuizByClassSection(@Param("classSectionId") Integer classSectionId);
+
+    /** Số HỌC VIÊN (distinct) đã tham gia quiz trong lớp (có lượt COMPLETED/EXPIRED). */
+    @Query("SELECT COUNT(DISTINCT qa.student.id) FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED')")
+    long countDistinctQuizParticipantsByClassSection(@Param("classSectionId") Integer classSectionId);
+
+    /** Số HỌC VIÊN (distinct) đã ĐẠT ít nhất 1 quiz trong lớp ("passed" cùng định nghĩa với aggregate). */
+    @Query("SELECT COUNT(DISTINCT qa.student.id) FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
+            "AND qa.isPassed = true " +
+            "AND qa.gradingStatus <> com.example.backend.constant.GradingStatus.NEEDS_REVIEW")
+    long countDistinctPassedStudentsByClassSection(@Param("classSectionId") Integer classSectionId);
 
     /**
      * Total attempts pending teacher review across given class section IDs (teacher scope).
@@ -132,5 +157,20 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt,Integer
             "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
             "AND qa.grade IS NOT NULL")
     List<Object[]> findAllGradesByClassSectionId(@Param("classSectionId") Integer classSectionId);
+
+    /**
+     * Số quiz (distinct) mà 1 học viên đã ĐẠT trong lớp — cùng định nghĩa "passed" với
+     * {@link #aggregateQuizSummariesByClassSection}: isPassed=true và gradingStatus<>NEEDS_REVIEW.
+     */
+    @Query("SELECT COUNT(DISTINCT qa.quiz.id) FROM QuizAttempt qa " +
+            "JOIN qa.classContentItem cci " +
+            "JOIN cci.classChapter cc " +
+            "WHERE cc.classSection.id = :classSectionId " +
+            "AND qa.student.id = :studentId " +
+            "AND (qa.status = 'COMPLETED' OR qa.status = 'EXPIRED') " +
+            "AND qa.isPassed = true " +
+            "AND qa.gradingStatus <> com.example.backend.constant.GradingStatus.NEEDS_REVIEW")
+    long countPassedQuizzesByStudentAndClassSection(@Param("classSectionId") Integer classSectionId,
+                                                    @Param("studentId") Integer studentId);
 }
 

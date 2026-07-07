@@ -22,6 +22,11 @@ public class ClassPeopleRowResponse {
     private long missingAssignments;
     private long pendingReviews;
     private Number latestScore;
+    private long totalAssignments;
+    private long submittedAssignments;
+    private long notSubmittedAssignments;
+    private long totalQuizzes;
+    private long passedQuizzes;
     private String lastActivity;
     private boolean self;
 }

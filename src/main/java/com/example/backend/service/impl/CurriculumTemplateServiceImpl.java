@@ -1,6 +1,7 @@
 package com.example.backend.service.impl;
 
 import com.example.backend.constant.ContentItemType;
+import com.example.backend.constant.RoleType;
 import com.example.backend.constant.QuestionInteractionItemRole;
 import com.example.backend.constant.QuestionType;
 import com.example.backend.constant.QuizSourceSelectionMode;
@@ -43,6 +44,7 @@ import com.example.backend.entity.quiz.BankQuestionOption;
 import com.example.backend.entity.quiz.QuestionInteractionItem;
 import com.example.backend.exception.BusinessException;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.AssignmentRepository;
 import com.example.backend.repository.BankQuestionRepository;
 import com.example.backend.repository.ChapterTemplateRepository;
@@ -61,6 +63,7 @@ import com.example.backend.repository.SubjectRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.CurriculumTemplateService;
 import com.example.backend.service.ResourceService;
+import com.example.backend.service.UserService;
 import com.example.backend.specification.CurriculumTemplateSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -106,6 +109,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     private final ResourceRepository resourceRepository;
     private final ResourceService resourceService;
     private final UserRepository userRepository;
+    private final UserService userService;
 
     @Override
     @Transactional
@@ -125,8 +129,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public CurriculumTemplateResponse updateTemplate(Integer id, CurriculumTemplateRequest request) {
-        CurriculumTemplate template = curriculumTemplateRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Curriculum template not found"));
+        CurriculumTemplate template = getManageableTemplate(id);
 
         Subject subject = subjectRepository.findById(request.getSubjectId())
                 .orElseThrow(() -> new ResourceNotFoundException("Subject not found"));
@@ -144,6 +147,9 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     public CurriculumTemplateResponse getTemplateById(Integer id) {
         CurriculumTemplate template = curriculumTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curriculum template not found"));
+        if (!isOwnerOrAdmin(template.getCreatedBy())) {
+            throw new UnauthorizedException("Bạn không có quyền xem chương trình học này");
+        }
         return convertToResponse(template, true);
     }
 
@@ -159,6 +165,12 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
                 .allOf(CurriculumTemplateSpecification.nameContains(keyword))
                 .and(CurriculumTemplateSpecification.hasCategoryId(categoryId))
                 .and(CurriculumTemplateSpecification.hasSubjectId(subjectId));
+
+        User current = userService.getCurrentUser();
+        boolean isAdmin = current.getRole() != null && current.getRole().getRoleName() == RoleType.ADMIN;
+        if (!isAdmin) {
+            specification = specification.and(CurriculumTemplateSpecification.createdBy(current.getUserName()));
+        }
 
         List<CurriculumTemplate> templates = curriculumTemplateRepository.findAll(specification);
 
@@ -184,7 +196,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public ChapterTemplateResponse createChapter(Integer templateId, ChapterTemplateUpsertRequest request) {
-        CurriculumTemplate template = getTemplate(templateId);
+        CurriculumTemplate template = getManageableTemplate(templateId);
 
         ChapterTemplate chapter = new ChapterTemplate();
         chapter.setCurriculumTemplate(template);
@@ -198,7 +210,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public ChapterTemplateResponse updateChapter(Integer templateId, Integer chapterId, ChapterTemplateUpsertRequest request) {
-        getTemplate(templateId);
+        getManageableTemplate(templateId);
         ChapterTemplate chapter = chapterTemplateRepository.findByIdAndCurriculumTemplate_Id(chapterId, templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter template not found in this curriculum template"));
 
@@ -214,7 +226,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public void deleteChapter(Integer templateId, Integer chapterId) {
-        getTemplate(templateId);
+        getManageableTemplate(templateId);
         ChapterTemplate chapter = chapterTemplateRepository.findByIdAndCurriculumTemplate_Id(chapterId, templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter template not found in this curriculum template"));
         chapterTemplateRepository.delete(chapter);
@@ -227,7 +239,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             Integer chapterId,
             ContentItemTemplateRequest request
     ) {
-        getTemplate(templateId);
+        getManageableTemplate(templateId);
         ChapterTemplate chapter = chapterTemplateRepository.findByIdAndCurriculumTemplate_Id(chapterId, templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter template not found in this curriculum template"));
 
@@ -248,7 +260,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
             Integer contentItemId,
             ContentItemTemplateRequest request
     ) {
-        getTemplate(templateId);
+        getManageableTemplate(templateId);
         chapterTemplateRepository.findByIdAndCurriculumTemplate_Id(chapterId, templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter template not found in this curriculum template"));
 
@@ -267,7 +279,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public void deleteContentItem(Integer templateId, Integer chapterId, Integer contentItemId) {
-        getTemplate(templateId);
+        getManageableTemplate(templateId);
         chapterTemplateRepository.findByIdAndCurriculumTemplate_Id(chapterId, templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chapter template not found in this curriculum template"));
 
@@ -279,13 +291,43 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     @Override
     @Transactional
     public void deleteTemplate(Integer id) {
-        CurriculumTemplate template = getTemplate(id);
+        CurriculumTemplate template = getManageableTemplate(id);
         curriculumTemplateRepository.delete(template);
     }
 
     private CurriculumTemplate getTemplate(Integer id) {
         return curriculumTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curriculum template not found"));
+    }
+
+    private boolean isOwnerOrAdmin(String createdBy) {
+        User current = userService.getCurrentUser();
+        boolean isAdmin = current.getRole() != null && current.getRole().getRoleName() == RoleType.ADMIN;
+        return isAdmin || Objects.equals(createdBy, current.getUserName());
+    }
+
+    private void assertOwnerOrAdmin(String createdBy) {
+        if (!isOwnerOrAdmin(createdBy)) {
+            throw new UnauthorizedException("Bạn không có quyền chỉnh sửa chương trình học này");
+        }
+    }
+
+    private void assertQuizTemplateReadable(String createdBy) {
+        if (!isOwnerOrAdmin(createdBy)) {
+            throw new UnauthorizedException("Bạn không có quyền xem nội dung bài kiểm tra mẫu này");
+        }
+    }
+
+    private void assertLessonTemplateReadable(String createdBy) {
+        if (!isOwnerOrAdmin(createdBy)) {
+            throw new UnauthorizedException("Bạn không có quyền xem nội dung bài giảng mẫu này");
+        }
+    }
+
+    private CurriculumTemplate getManageableTemplate(Integer id) {
+        CurriculumTemplate template = getTemplate(id);
+        assertOwnerOrAdmin(template.getCreatedBy());
+        return template;
     }
 
     private Integer resolveChapterOrderIndex(Integer templateId, Integer requestedOrderIndex) {
@@ -451,6 +493,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     public LessonTemplateResponse getLessonTemplateById(Integer id) {
         LessonTemplate lessonTemplate = lessonTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson template not found"));
+        assertLessonTemplateReadable(lessonTemplate.getCreatedBy());
         return convertLessonTemplateToResponse(lessonTemplate);
     }
 
@@ -459,6 +502,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     public LessonTemplateResponse updateLessonTemplate(Integer id, LessonTemplateRequest request) {
         LessonTemplate lessonTemplate = lessonTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson template not found"));
+        assertOwnerOrAdmin(lessonTemplate.getCreatedBy());
         lessonTemplate.setTitle(request.getTitle().trim());
         lessonTemplate.setContent(request.getContent());
         lessonTemplate.setVideoUrl(request.getVideoUrl());
@@ -499,6 +543,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     public QuizTemplateResponse getQuizTemplateById(Integer id) {
         QuizTemplate quizTemplate = quizTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz template not found"));
+        assertQuizTemplateReadable(quizTemplate.getCreatedBy());
         return convertQuizTemplateToResponse(quizTemplate);
     }
 
@@ -507,6 +552,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
     public QuizTemplateResponse getQuizTemplatePreviewSample(Integer id, Long seed) {
         QuizTemplate quizTemplate = quizTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz template not found"));
+        assertQuizTemplateReadable(quizTemplate.getCreatedBy());
         QuizTemplateResponse response = convertQuizTemplateToResponse(quizTemplate);
 
         long effectiveSeed = seed != null ? seed : (20_000L + id);
@@ -523,6 +569,7 @@ public class CurriculumTemplateServiceImpl implements CurriculumTemplateService 
         validateQuizStructureRequest(request);
         QuizTemplate quizTemplate = quizTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Quiz template not found"));
+        assertOwnerOrAdmin(quizTemplate.getCreatedBy());
         applyQuizTemplateMetadata(quizTemplate, request);
         QuizTemplate savedTemplate = quizTemplateRepository.save(quizTemplate);
         syncQuizTemplateContent(savedTemplate, request);

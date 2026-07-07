@@ -33,6 +33,7 @@ public class QuizAttemptResponse {
     private String quizTitle;
     private String studentName;
     private String studentEmail;
+    private String studentNumber;
     private String classSectionTitle;
     private Long remainingTimeSeconds;
 }

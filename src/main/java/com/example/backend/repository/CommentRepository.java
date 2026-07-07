@@ -21,8 +21,11 @@ public interface CommentRepository extends JpaRepository<Comment,Integer> {
     List<Comment> findAllByLesson_Id(Integer lessonId);
 
     /**
-     * Đếm số "thread câu hỏi của học sinh chưa được giảng viên trả lời" trong 1 bài giảng:
-     * bình luận gốc do STUDENT viết, chưa xoá, và không có reply nào của TEACHER/ADMIN.
+     * Đếm số "thread câu hỏi của học sinh chưa được đội ngũ giảng dạy trả lời" trong 1 bài giảng:
+     * bình luận gốc do STUDENT viết, chưa xoá, và không có reply nào từ đội ngũ giảng dạy —
+     * tức reply của TEACHER/ADMIN (role toàn cục) HOẶC của trợ giảng/giảng viên là thành viên
+     * lớp này ({@link com.example.backend.entity.ClassMember}, chỉ gồm role TEACHER/TA).
+     * TA có role toàn cục STUDENT nên phải nhận diện qua tư cách thành viên lớp.
      */
     @Query("""
             SELECT COUNT(c) FROM Comment c
@@ -34,9 +37,17 @@ public interface CommentRepository extends JpaRepository<Comment,Integer> {
                   SELECT r.id FROM Comment r
                   WHERE r.parent = c
                     AND r.is_deleted = false
-                    AND r.user.role.roleName IN (com.example.backend.constant.RoleType.TEACHER, com.example.backend.constant.RoleType.ADMIN)
+                    AND (
+                        r.user.role.roleName IN (com.example.backend.constant.RoleType.TEACHER, com.example.backend.constant.RoleType.ADMIN)
+                        OR EXISTS (
+                            SELECT m.id FROM ClassMember m
+                            WHERE m.classSection.id = :classSectionId
+                              AND m.user.id = r.user.id
+                        )
+                    )
               )
             """)
-    long countUnansweredStudentThreads(@Param("lessonId") Integer lessonId);
+    long countUnansweredStudentThreads(@Param("lessonId") Integer lessonId,
+                                       @Param("classSectionId") Integer classSectionId);
 
 }

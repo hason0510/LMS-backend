@@ -18,6 +18,8 @@ public class QuizReportResponse {
     private long totalPassed;
     private long totalNotPassed;
     private long totalWaitingReview;
+    private long passedStudents;
+    private long participantStudents;
 
     private List<HistogramBin> histogram;
     private List<QuizSummaryRow> rows;
@@ -32,6 +34,7 @@ public class QuizReportResponse {
         private long totalAttempts;
         private long uniqueStudents;
         private long passedCount;
+        private long passedStudents;
         private long notPassedCount;
         private long waitingReviewCount;
         private double averageScore;
