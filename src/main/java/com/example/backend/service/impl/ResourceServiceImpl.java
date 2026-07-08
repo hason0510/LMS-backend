@@ -1635,10 +1635,6 @@ public class ResourceServiceImpl implements ResourceService {
         if (resource.getSource() == ResourceSource.LINK && !StringUtils.hasText(resource.getFileUrl())) {
             throw new BusinessException("File URL is required");
         }
-
-        if (resource.getSource() == ResourceSource.UPLOAD && !StringUtils.hasText(resource.getFileUrl())) {
-            throw new BusinessException("File URL is required");
-        }
     }
 
     private Integer nullableInt(ResultSet rs, String column) throws SQLException {
