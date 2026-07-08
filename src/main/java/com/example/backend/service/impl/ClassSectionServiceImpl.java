@@ -322,8 +322,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
                 : null);
         response.setJoinMode(classSection.getStatus() == ClassSectionStatus.PUBLIC ? "INSTANT" : "REQUEST");
         response.setJoinMessage(classSection.getStatus() == ClassSectionStatus.PUBLIC
-                ? "Bất kỳ ai cũng có thể tham gia."
-                : "Yêu cầu của bạn sẽ được giảng viên phê duyệt.");
+                ? "Bất kỳ ai cũng có thể tham gia!"
+                : "Yêu cầu của bạn sẽ được giảng viên phê duyệt!");
         return response;
     }
 

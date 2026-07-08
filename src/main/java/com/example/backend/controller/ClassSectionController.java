@@ -97,7 +97,7 @@ public class ClassSectionController {
     }
 
     @Operation(summary = "Get lesson completion status by class content item")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/{classSectionId}/content-items/{classContentItemId}/completion")
     public ResponseEntity<List<ClassContentCompletionRowResponse>> getClassContentCompletion(
             @PathVariable Integer classSectionId,
