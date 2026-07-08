@@ -474,8 +474,7 @@ public class QuizServiceImpl implements QuizService {
     }
 
     private void validateBankSourcesCanProvideQuestions(Quiz quiz, List<QuizBankSourceRequest> sourceRequests) {
-        boolean hasAtLeastOneQuestion = false;
-
+        List<QuizSourcePlan> plans = new ArrayList<>();
         for (QuizBankSourceRequest sourceRequest : sourceRequests) {
             if (sourceRequest.getQuestionBankId() == null) {
                 throw new BusinessException("questionBankId is required for each question bank source");
@@ -498,24 +497,54 @@ public class QuizServiceImpl implements QuizService {
                     ? sourceRequest.getTagMatchMode()
                     : QuizTagMatchMode.ANY);
 
-            List<BankQuestion> matchedQuestions = resolveMatchedQuestions(previewSource);
+            List<Integer> matchedIds = resolveMatchedQuestions(previewSource).stream()
+                    .map(BankQuestion::getId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.toCollection(ArrayList::new));
+            plans.add(new QuizSourcePlan(sourceRequest.getSelectionMode(), sourceRequest.getQuestionCount(), matchedIds));
+        }
 
-            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
-                hasAtLeastOneQuestion = hasAtLeastOneQuestion || !matchedQuestions.isEmpty();
+        Set<Integer> excluded = new HashSet<>();
+        boolean hasAtLeastOneQuestion = false;
+        for (int i = 0; i < plans.size(); i++) {
+            QuizSourcePlan plan = plans.get(i);
+            List<Integer> available = plan.matchedIds().stream()
+                    .filter(id -> !excluded.contains(id))
+                    .collect(Collectors.toCollection(ArrayList::new));
+
+            if (plan.selectionMode() == QuizSourceSelectionMode.ALL_MATCHED) {
+                if (!available.isEmpty()) {
+                    hasAtLeastOneQuestion = true;
+                }
+                excluded.addAll(available);
                 continue;
             }
 
-            if (sourceRequest.getSelectionMode() == QuizSourceSelectionMode.RANDOM) {
-                if (matchedQuestions.size() < sourceRequest.getQuestionCount()) {
-                    throw new BusinessException("Not enough questions in question bank source to satisfy questionCount");
+            if (plan.selectionMode() == QuizSourceSelectionMode.RANDOM) {
+                int need = plan.questionCount();
+                if (available.size() < need) {
+                    throw new BusinessException("Quy tắc #" + (i + 1) + ": cần " + need
+                            + " câu nhưng chỉ còn " + available.size()
+                            + " câu khả dụng sau khi loại các câu đã dùng ở quy tắc trước (trùng ngân hàng/độ khó/thẻ). "
+                            + "Hãy giảm số câu, đổi ngân hàng/độ khó/thẻ, hoặc bổ sung câu hỏi.");
                 }
                 hasAtLeastOneQuestion = true;
+                Set<Integer> laterUnion = new HashSet<>();
+                for (int k = i + 1; k < plans.size(); k++) {
+                    laterUnion.addAll(plans.get(k).matchedIds());
+                }
+                available.sort((a, b) -> (laterUnion.contains(a) ? 0 : 1) - (laterUnion.contains(b) ? 0 : 1));
+                excluded.addAll(available.subList(0, need));
             }
         }
 
         if (!hasAtLeastOneQuestion) {
             throw new BusinessException("Quiz must contain at least one question");
         }
+    }
+
+    private record QuizSourcePlan(QuizSourceSelectionMode selectionMode, Integer questionCount, List<Integer> matchedIds) {
     }
 
     private void ensureQuizHasNoAttempts(Quiz quiz) {
