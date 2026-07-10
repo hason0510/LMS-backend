@@ -18,10 +18,13 @@ public interface ProgressRepository extends JpaRepository<Progress, Integer> {
             "AND p.classContentItem.classChapter.classSection.id = :classSectionId " +
             "AND p.classContentItem.classChapter.isHidden = false " +
             "AND p.classContentItem.isHidden = false AND p.classContentItem.is_deleted = false " +
+            "AND p.classContentItem.isLocked = false " +
+            "AND (p.classContentItem.availableFrom IS NULL OR p.classContentItem.availableFrom <= :now) " +
             "AND p.classContentItem.itemType IN (com.example.backend.constant.ContentItemType.LESSON, com.example.backend.constant.ContentItemType.QUIZ) " +
             "AND p.isCompleted = true")
     Integer countCompletedClassItemsByStudentAndClassSection(@Param("studentId") Integer studentId,
-                                                             @Param("classSectionId") Integer classSectionId);
+                                                             @Param("classSectionId") Integer classSectionId,
+                                                             @Param("now") LocalDateTime now);
 
     Optional<Progress> findByStudent_IdAndClassContentItem_Id(Integer studentId, Integer classContentItemId);
 

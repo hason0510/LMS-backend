@@ -416,14 +416,15 @@ public class EnrollmentServiceImpl implements EnrollmentService {
             return;
         }
 
-        long totalItems = classContentItemRepository.countLearningItemsByClassSectionId(classSectionId);
+        LocalDateTime now = LocalDateTime.now();
+        long totalItems = classContentItemRepository.countLearningItemsByClassSectionId(classSectionId, now);
         if (totalItems == 0) {
             enrollment.setProgress(0);
             enrollmentRepository.save(enrollment);
             return;
         }
 
-        long completedItems = progressRepository.countCompletedClassItemsByStudentAndClassSection(studentId, classSectionId);
+        long completedItems = progressRepository.countCompletedClassItemsByStudentAndClassSection(studentId, classSectionId, now);
         int percent = (int) Math.round(((double) completedItems / totalItems) * 100);
         if (percent > 100) {
             percent = 100;

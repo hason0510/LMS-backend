@@ -14,16 +14,19 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.security.SecureRandom;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.Random;
 
 @Service
 @RequiredArgsConstructor
 public class OtpServiceImpl implements OtpService {
     private static final int OTP_LENGTH = 6;
+    private static final String OTP_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int OTP_EXPIRATION_MINUTES = 5;
     private static final int OTP_RESEND_INTERVAL_SECONDS = 30;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final JavaMailSender mailSender;
     private final OtpRepository otpRepository;
 
@@ -44,10 +47,9 @@ public class OtpServiceImpl implements OtpService {
 
 
     public String generateOtp() {
-        Random random = new Random();
         StringBuilder otp = new StringBuilder();
         for (int i = 0; i < OTP_LENGTH; i++) {
-            otp.append(random.nextInt(10));
+            otp.append(OTP_CHARS.charAt(SECURE_RANDOM.nextInt(OTP_CHARS.length())));
         }
         return otp.toString();
     }
@@ -70,9 +72,13 @@ public class OtpServiceImpl implements OtpService {
 
     @Override
     public boolean validateOtp(User user, String code, OtpType type) {
+        if (code == null) {
+            return false;
+        }
+        String normalizedCode = code.trim().toUpperCase(Locale.ROOT);
         LocalDateTime now = LocalDateTime.now();
         Optional<Otp> otpOptional = otpRepository.findByCodeAndUser_IdAndTypeAndVerifiedIsFalseAndExpiresAtAfter(
-                code, user.getId(), type, now);
+                normalizedCode, user.getId(), type, now);
         if (otpOptional.isPresent()) {
             Otp otp = otpOptional.get();
             otp.setVerified(true);

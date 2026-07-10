@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -29,8 +30,11 @@ public interface ClassContentItemRepository extends JpaRepository<ClassContentIt
             "WHERE ci.classChapter.classSection.id = :classSectionId " +
             "AND ci.classChapter.isHidden = false " +
             "AND ci.isHidden = false AND ci.is_deleted = false " +
+            "AND ci.isLocked = false " +
+            "AND (ci.availableFrom IS NULL OR ci.availableFrom <= :now) " +
             "AND ci.itemType IN (com.example.backend.constant.ContentItemType.LESSON, com.example.backend.constant.ContentItemType.QUIZ)")
-    long countLearningItemsByClassSectionId(@Param("classSectionId") Integer classSectionId);
+    long countLearningItemsByClassSectionId(@Param("classSectionId") Integer classSectionId,
+                                            @Param("now") LocalDateTime now);
 
     Optional<ClassContentItem> findByQuiz_Id(Integer quizId);
 
