@@ -996,7 +996,9 @@ public class ClassSectionServiceImpl implements ClassSectionService {
             response.setUnansweredCommentCount(
                     commentRepository.countUnansweredStudentThreads(
                             classContentItem.getLesson().getId(),
-                            classContentItem.getClassChapter().getClassSection().getId()));
+                            classContentItem.getClassChapter().getClassSection().getId(),
+                            RoleType.STUDENT,
+                            List.of(RoleType.TEACHER, RoleType.ADMIN)));
         }
         return response;
     }
