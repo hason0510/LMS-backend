@@ -4,13 +4,20 @@ import com.example.backend.dto.request.quiz.QuizQuestionRequest;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.quiz.QuizAnswerResponse;
 import com.example.backend.dto.response.quiz.QuizQuestionResponse;
+import com.example.backend.entity.ClassContentItem;
+import com.example.backend.entity.ClassSection;
+import com.example.backend.entity.User;
 import com.example.backend.entity.quiz.Quiz;
 import com.example.backend.entity.quiz.QuizQuestion;
 import com.example.backend.exception.ResourceNotFoundException;
+import com.example.backend.exception.UnauthorizedException;
 import com.example.backend.repository.BankQuestionRepository;
+import com.example.backend.repository.ClassContentItemRepository;
 import com.example.backend.repository.QuizQuestionRepository;
 import com.example.backend.repository.QuizRepository;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.QuizQuestionService;
+import com.example.backend.service.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,15 +32,41 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizRepository quizRepository;
     private final BankQuestionRepository bankQuestionRepository;
+    private final ClassContentItemRepository classContentItemRepository;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
+    private final UserService userService;
 
     public QuizQuestionServiceImpl(
             QuizQuestionRepository quizQuestionRepository,
             QuizRepository quizRepository,
-            BankQuestionRepository bankQuestionRepository
+            BankQuestionRepository bankQuestionRepository,
+            ClassContentItemRepository classContentItemRepository,
+            ClassMemberAuthorizationService classMemberAuthorizationService,
+            UserService userService
     ) {
         this.quizQuestionRepository = quizQuestionRepository;
         this.quizRepository = quizRepository;
         this.bankQuestionRepository = bankQuestionRepository;
+        this.classContentItemRepository = classContentItemRepository;
+        this.classMemberAuthorizationService = classMemberAuthorizationService;
+        this.userService = userService;
+    }
+
+    private void assertCanEditQuizContent(Quiz quiz) {
+        if (quiz == null || quiz.getId() == null) {
+            return;
+        }
+        ClassSection classSection = classContentItemRepository.findByQuiz_Id(quiz.getId())
+                .map(ClassContentItem::getClassChapter)
+                .map(chapter -> chapter.getClassSection())
+                .orElse(null);
+        if (classSection == null) {
+            return;
+        }
+        User currentUser = userService.getCurrentUser();
+        if (!classMemberAuthorizationService.canEditContent(classSection, currentUser)) {
+            throw new UnauthorizedException("Bạn không có quyền chỉnh sửa nội dung quiz này");
+        }
     }
 
     @Override
@@ -78,6 +111,7 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
     public QuizQuestionResponse getQuizQuestionById(Integer id) {
         QuizQuestion question = quizQuestionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Question not found with id: " + id));
+        assertCanEditQuizContent(question.getQuiz());
         return convertQuizQuestionToDTO(question);
     }
 
@@ -86,6 +120,7 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
     public QuizQuestionResponse createQuizQuestion(Integer quizId, QuizQuestionRequest request) {
         Quiz quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> new RuntimeException("Quiz not found with id: " + quizId));
+        assertCanEditQuizContent(quiz);
 
         QuizQuestion question = new QuizQuestion();
         question.setContent(request.getContent());
@@ -105,6 +140,7 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
     public QuizQuestionResponse updateQuizQuestion(Integer id, QuizQuestionRequest request) {
         QuizQuestion question = quizQuestionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Question not found"));
+        assertCanEditQuizContent(question.getQuiz());
         if(request.getContent() != null){
             question.setContent(request.getContent());
         }
@@ -126,6 +162,7 @@ public class QuizQuestionServiceImpl implements QuizQuestionService{
     public void deleteQuizQuestion(Integer id) {
         QuizQuestion question = quizQuestionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Question not found"));
+        assertCanEditQuizContent(question.getQuiz());
         quizQuestionRepository.delete(question);
     }
 }

@@ -11,7 +11,6 @@ import com.example.backend.constant.ContentItemType;
 import com.example.backend.constant.RoleType;
 import com.example.backend.constant.SubmissionStatus;
 import com.example.backend.dto.request.AssignmentRequest;
-import com.example.backend.dto.request.ResourceRequest;
 import com.example.backend.dto.response.AssignmentResponse;
 import com.example.backend.dto.response.PageResponse;
 import com.example.backend.dto.response.assignment.StudentAssignmentFeedResponse;
@@ -20,7 +19,6 @@ import com.example.backend.entity.assignment.Assignment;
 import com.example.backend.entity.ClassContentItem;
 import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Enrollment;
-import com.example.backend.entity.resource.Resource;
 import com.example.backend.entity.User;
 import com.example.backend.entity.assignment.Submission;
 import com.example.backend.exception.BusinessException;
@@ -339,6 +337,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new BusinessException("Assignment is not linked to any class section");
         }
         requireAssignmentManagementPermission(classSection);
+        assignment.getSubmissions().forEach(submissionRepository::delete);
         assignmentRepository.delete(assignment);
         cacheInvalidationService.evictAllRedisReadCaches();
     }
@@ -353,39 +352,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setMaxScore(request.getMaxScore());
         assignment.setDueAt(request.getDueAt());
         assignment.setCloseAt(request.getCloseAt());
-
-        if ((request.getResourceIds() == null || request.getResourceIds().isEmpty())
-                && (createMode || request.getResources() != null)) {
-            replaceAssignmentResources(assignment, request.getResources());
-            return;
-        }
-
-        if (request.getResourceIds() != null) {
-            if (assignment.getResources() == null) {
-                assignment.setResources(new ArrayList<>());
-            } else {
-                assignment.getResources().clear();
-            }
-        }
-    }
-
-    private void replaceAssignmentResources(Assignment assignment, List<ResourceRequest> resourceRequests) {
-        if (assignment.getResources() == null) {
-            assignment.setResources(new ArrayList<>());
-        }
-        assignment.getResources().clear();
-
-        if (resourceRequests == null || resourceRequests.isEmpty()) {
-            return;
-        }
-
-        for (ResourceRequest resourceRequest : resourceRequests) {
-            Resource resource = resourceService.buildDetachedResource(resourceRequest);
-            resource.setAssignment(assignment);
-            resource.setLesson(null);
-            resource.setSubmission(null);
-            assignment.getResources().add(resource);
-        }
     }
 
     private void syncAssignmentAttachedResources(Assignment assignment, AssignmentRequest request) {

@@ -280,13 +280,8 @@ public class QuizServiceImpl implements QuizService {
         Quiz quiz = quizRepository.findById(id).orElseThrow();
         requireEditContentPermission(resolveClassSectionForQuiz(quiz));
         quizBankSourceRepository.findByQuiz_IdOrderByOrderIndexAsc(id).forEach(quizBankSourceRepository::delete);
-        quizQuestionRepository.findByQuiz_IdOrderByIdAsc(id).forEach(question -> {
-            if (question.getAnswers() != null) {
-                question.getAnswers().forEach(answer -> answer.set_deleted(true));
-            }
-            question.set_deleted(true);
-        });
-        quiz.getAttempts().forEach(attempt -> attempt.set_deleted(true));
+        quizQuestionRepository.findByQuiz_IdOrderByIdAsc(id).forEach(quizQuestionRepository::delete);
+        quiz.getAttempts().forEach(quizAttemptRepository::delete);
         quiz.set_deleted(true);
     }
 

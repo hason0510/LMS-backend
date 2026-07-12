@@ -1592,6 +1592,8 @@ public class ClassSectionServiceImpl implements ClassSectionService {
         ClassSection classSection = classSectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Class section not found"));
         requireCapability(classSection, ClassMemberAuthorizationService.CAP_MANAGE_CLASS_SETTINGS);
+        classMemberRepository.deleteAll(classSection.getClassMembers());
+        classSection.getEnrollments().forEach(enrollmentRepository::delete);
         classSectionRepository.delete(classSection);
         cacheInvalidationService.evictAllRedisReadCaches();
     }

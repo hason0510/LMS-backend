@@ -15,6 +15,11 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Integer>
 
     List<Assignment> findByCloseAtBetween(LocalDateTime start, LocalDateTime end);
 
+    @Query("SELECT a FROM Assignment a WHERE a.dueAt IS NOT NULL AND a.dueAt < :horizon "
+            + "AND (a.closeAt IS NULL OR a.closeAt > :now)")
+    List<Assignment> findAdaptiveReminderCandidates(@Param("now") LocalDateTime now,
+                                                    @Param("horizon") LocalDateTime horizon);
+
     @Query("SELECT DISTINCT a FROM ClassContentItem i JOIN i.classChapter c JOIN i.assignment a WHERE c.classSection.id = :classSectionId ORDER BY a.dueAt ASC, a.createdDate ASC")
     List<Assignment> findByClassSectionId(@Param("classSectionId") Integer classSectionId);
 

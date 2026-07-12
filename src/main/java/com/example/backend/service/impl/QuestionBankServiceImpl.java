@@ -130,6 +130,12 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         QuestionBank questionBank = questionBankRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Question bank not found"));
         requireOwnerPermission(questionBank);
+        questionBank.getQuestions().forEach(question -> {
+            bankQuestionTagRepository.deleteByBankQuestion_Id(question.getId());
+            bankQuestionRepository.delete(question);
+        });
+        questionBank.getQuizSources().forEach(quizBankSourceRepository::delete);
+        questionBank.getQuestionTags().forEach(questionTagRepository::delete);
         questionBankRepository.delete(questionBank);
     }
 

@@ -34,6 +34,7 @@ import com.example.backend.repository.ResourceReferenceRepository;
 import com.example.backend.repository.ResourceRepository;
 import com.example.backend.repository.SubmissionRepository;
 import com.example.backend.repository.UserRepository;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.CloudinaryService;
 import com.example.backend.service.ResourceAuthorizationService;
 import com.example.backend.service.ResourceService;
@@ -87,6 +88,7 @@ public class ResourceServiceImpl implements ResourceService {
     private final CloudinaryService cloudinaryService;
     private final UserService userService;
     private final ResourceAuthorizationService resourceAuthorizationService;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
 
     @Override
     public ResourceResponse getResourceById(Integer id) {
@@ -130,6 +132,7 @@ public class ResourceServiceImpl implements ResourceService {
     public ResourceResponse createSubmissionResource(Integer submissionId, ResourceRequest request) {
         Submission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
+        assertOwnsSubmission(submission);
 
         Resource newResource = buildDetachedResource(request);
         newResource.setSubmission(submission);
@@ -913,6 +916,9 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> getResourcesBySubmissionId(Integer submissionId) {
+        Submission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
+        assertCanViewSubmission(submission);
         List<Resource> resources = mergeLegacyAndAttachedResources(
                 resourceRepository.findBySubmission_Id(submissionId),
                 resourceReferenceRepository.findByEntityTypeAndEntityIdAndFieldNameOrderByIdDesc(
@@ -1535,6 +1541,28 @@ public class ResourceServiceImpl implements ResourceService {
         }
         String lower = trimmed.toLowerCase(Locale.ROOT);
         return lower.contains("res.cloudinary.com") && lower.contains("/image/upload/");
+    }
+
+    private void assertCanViewSubmission(Submission submission) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            throw new UnauthorizedException("Unauthorized");
+        }
+        boolean isOwner = submission.getStudent() != null
+                && submission.getStudent().getId().equals(currentUser.getId());
+        if (isOwner || classMemberAuthorizationService.isTeacherOrTa(submission.getClassSection(), currentUser)) {
+            return;
+        }
+        throw new UnauthorizedException("Bạn không có quyền xem bài nộp này");
+    }
+
+    private void assertOwnsSubmission(Submission submission) {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null
+                || submission.getStudent() == null
+                || !submission.getStudent().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedException("Bạn không có quyền chỉnh sửa bài nộp này");
+        }
     }
 
     private List<Resource> mergeLegacyAndAttachedResources(

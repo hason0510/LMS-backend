@@ -99,10 +99,6 @@ public class SubmissionServiceImpl implements SubmissionService {
                     return created;
                 });
 
-        if (submission.getStatus() == SubmissionStatus.GRADED) {
-            throw new BusinessException("Bài đã được chấm điểm, không thể nộp lại. Liên hệ giảng viên nếu cần nộp lại.");
-        }
-
         List<ResourceRequest> requestedResources = resolveRequestedResources(request);
         submission.setDescription(request.getDescription());
         applySubmissionResources(submission, requestedResources);

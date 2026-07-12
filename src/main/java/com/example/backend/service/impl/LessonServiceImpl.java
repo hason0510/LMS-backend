@@ -7,6 +7,7 @@ import com.example.backend.dto.request.LessonRequest;
 import com.example.backend.dto.response.LessonResponse;
 import com.example.backend.dto.response.ResourceResponse;
 import com.example.backend.entity.ClassContentItem;
+import com.example.backend.entity.ClassSection;
 import com.example.backend.entity.Lesson;
 import com.example.backend.entity.User;
 import com.example.backend.exception.BusinessException;
@@ -17,6 +18,7 @@ import com.example.backend.repository.LessonRepository;
 import com.example.backend.repository.ProgressRepository;
 import com.example.backend.service.ClassContentAccessResult;
 import com.example.backend.service.ClassContentAccessService;
+import com.example.backend.service.ClassMemberAuthorizationService;
 import com.example.backend.service.LessonService;
 import com.example.backend.service.ResourceService;
 import com.example.backend.service.UserService;
@@ -35,6 +37,7 @@ public class LessonServiceImpl implements LessonService {
     private final ClassContentItemRepository classContentItemRepository;
     private final UserService userService;
     private final ClassContentAccessService classContentAccessService;
+    private final ClassMemberAuthorizationService classMemberAuthorizationService;
     private final ResourceService resourceService;
 
     @Override
@@ -81,6 +84,7 @@ public class LessonServiceImpl implements LessonService {
     @Override
     public LessonResponse updateLesson(Integer id, LessonRequest request) {
         Lesson lesson = lessonRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+        assertCanEditLesson(lesson);
         String previousTitle = lesson.getTitle();
         if(request.getTitle() != null){
             lesson.setTitle(request.getTitle());
@@ -105,6 +109,7 @@ public class LessonServiceImpl implements LessonService {
     @Override
     public void deleteLesson(Integer id) {
         Lesson lesson = lessonRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+        assertCanEditLesson(lesson);
         lesson.getResources().forEach(r -> r.set_deleted(true));
         lesson.getComments().forEach(c -> c.set_deleted(true));
         //lessonRepository.delete(lesson);
@@ -135,6 +140,20 @@ public class LessonServiceImpl implements LessonService {
                 classContentItemRepository.save(classContentItem);
             }
         });
+    }
+
+    private void assertCanEditLesson(Lesson lesson) {
+        ClassSection classSection = classContentItemRepository.findByLesson_Id(lesson.getId())
+                .map(ClassContentItem::getClassChapter)
+                .map(chapter -> chapter.getClassSection())
+                .orElse(null);
+        if (classSection == null) {
+            return;
+        }
+        User currentUser = userService.getCurrentUser();
+        if (!classMemberAuthorizationService.canEditContent(classSection, currentUser)) {
+            throw new UnauthorizedException("Bạn không có quyền chỉnh sửa bài giảng này");
+        }
     }
 
     private void validateLessonAccess(Lesson lesson, Integer classContentItemId) {
