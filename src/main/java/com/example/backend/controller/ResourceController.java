@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -218,10 +219,10 @@ public class ResourceController {
 
     @Operation(summary = "Upload video for resource")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    @PostMapping("/resources/{id}/video")
+    @PostMapping(value = "/resources/{id}/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CloudinaryResponse> uploadVideo(
             @PathVariable Integer id,
-            @RequestPart MultipartFile file
+            @RequestPart("file") MultipartFile file
     ) {
         CloudinaryResponse response = resourceService.uploadVideoResource(id, file);
         return ResponseEntity.ok(response);
@@ -229,10 +230,10 @@ public class ResourceController {
 
     @Operation(summary = "Upload slide for resource")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
-    @PostMapping("/resources/{id}/slide")
+    @PostMapping(value = "/resources/{id}/slide", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CloudinaryResponse> uploadSlide(
             @PathVariable Integer id,
-            @RequestPart MultipartFile file
+            @RequestPart("file") MultipartFile file
     ) {
         CloudinaryResponse response = resourceService.uploadSlideResource(id, file);
         return ResponseEntity.ok(response);
@@ -240,10 +241,10 @@ public class ResourceController {
 
     @Operation(summary = "Upload file attachment for resource")
     @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
-    @PostMapping("/resources/{id}/file")
+    @PostMapping(value = "/resources/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CloudinaryResponse> uploadAttachment(
             @PathVariable Integer id,
-            @RequestPart MultipartFile file
+            @RequestPart("file") MultipartFile file
     ) {
         CloudinaryResponse response = resourceService.uploadAttachmentResource(id, file);
         return ResponseEntity.ok(response);

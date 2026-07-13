@@ -17,6 +17,7 @@ import com.example.backend.service.UserService;
 import com.example.backend.utils.FileUploadUtil;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.io.FilenameUtils;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,9 +39,9 @@ public class UploadController {
     private final UserService userService;
 
     @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
-    @PostMapping("/upload/image")
+    @PostMapping(value = "/upload/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CloudinaryResponse> uploadImage(
-            @RequestPart MultipartFile file
+            @RequestPart("file") MultipartFile file
     ) {
         CloudinaryResponse response =
                 cloudinaryService.uploadEditorImage(file);
@@ -48,9 +49,9 @@ public class UploadController {
     }
 
     @PreAuthorize("isAuthenticated()")
-    @PostMapping("/upload/resource")
+    @PostMapping(value = "/upload/resource", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CloudinaryResponse> uploadResource(
-            @RequestPart MultipartFile file,
+            @RequestPart("file") MultipartFile file,
             @RequestParam(value = "scopeType", required = false) ResourceScopeType scopeType,
             @RequestParam(value = "scopeId", required = false) Integer scopeId
     ) {
